@@ -1,0 +1,1542 @@
+    body {
+        font-family: 'Prompt', sans-serif;
+        background-color: #f4f7f6;
+        color: #333;
+        overflow-x: hidden;
+        transition: background 0.5s;
+        background-size: cover;
+        background-attachment: fixed;
+    }
+
+    .header-box {
+        background: linear-gradient(135deg, #0d6efd, #0dcaf0);
+        color: white;
+        padding: 20px 0;
+        border-radius: 0 0 20px 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        position: relative;
+    }
+
+    .top-menu-btn {
+        color: white;
+        background: rgba(255,255,255,0.2);
+        border: none;
+        padding: 8px 15px;
+        border-radius: 20px;
+        transition: 0.3s;
+        margin-left: 5px;
+    }
+
+    .top-menu-btn:hover {
+        background: rgba(255,255,255,0.4);
+    }
+
+    .top-menu-btn-danger {
+        background: rgba(220, 53, 69, 0.8);
+    }
+
+    .nav-pills .nav-link {
+        color: #555;
+        font-weight: 500;
+        border-radius: 10px;
+        padding: 10px 20px;
+        margin: 0 5px;
+        transition: 0.3s;
+        cursor: pointer;
+    }
+
+    .nav-pills .nav-link.active {
+        background-color: #0d6efd;
+        box-shadow: 0 4px 10px rgba(13,110,253,0.3);
+        color: white !important;
+    }
+
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        margin-top: 15px;
+    }
+
+    .table th {
+        background-color: #f1f3f5;
+        font-weight: 500;
+    }
+
+    .table td {
+        vertical-align: middle;
+    }
+
+    .room-card {
+        transition: 0.3s;
+        cursor: pointer;
+        border: 2px solid transparent;
+    }
+
+    .room-card:hover {
+        transform: translateY(-5px);
+        border-color: #0d6efd;
+        box-shadow: 0 8px 25px rgba(13,110,253,0.2);
+    }
+
+    .stat-card {
+        border-radius: 15px;
+        color: white;
+        padding: 20px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    .hidden {
+        display: none !important;
+    }
+
+    .search-input {
+        border-radius: 20px;
+        padding: 10px 20px;
+        border: 1px solid #ced4da;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .search-input:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13,110,253,0.25);
+        outline: none;
+    }
+
+    .student-box {
+        max-width: 800px;
+        margin: 40px auto;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        padding: 40px;
+        border-radius: 25px;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        border: 1px solid rgba(255,255,255,0.5);
+    }
+
+    .glass-card {
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 8px 32px rgba(31, 38, 135, 0.05);
+        backdrop-filter: blur(4px);
+    }
+
+    .deadline-widget {
+        background: linear-gradient(135deg, #ff4757, #ff6b81);
+        border-radius: 20px;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 10px 20px rgba(255, 71, 87, 0.3);
+        margin-bottom: 25px;
+        position: relative;
+        overflow: hidden;
+        border: none;
+    }
+
+    .deadline-widget::after {
+        content: '⏳';
+        position: absolute;
+        font-size: 8rem;
+        opacity: 0.1;
+        right: -20px;
+        top: -20px;
+        transform: rotate(15deg);
+    }
+
+    .timer-display {
+        font-size: 2.2rem;
+        font-weight: 800;
+        font-family: monospace;
+        letter-spacing: 2px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        margin: 10px 0;
+        background: rgba(0,0,0,0.15);
+        padding: 10px;
+        border-radius: 15px;
+        display: inline-block;
+    }
+
+    .urgent-pulse {
+        animation: pulseWarning 1.5s infinite;
+    }
+
+    @keyframes pulseWarning {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); box-shadow: 0 0 20px rgba(255, 255, 255, 0.5); }
+        100% { transform: scale(1); }
+    }
+
+    .progress-bar-custom {
+        height: 12px;
+        border-radius: 10px;
+        background-color: rgba(0,0,0,0.05);
+        overflow: hidden;
+        margin-top: 8px;
+    }
+
+    .progress-fill {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 1s ease-in-out;
+    }
+
+    .select-card {
+        border: 2px solid #dee2e6;
+        border-radius: 15px;
+        padding: 15px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: 0.3s;
+        background: white;
+    }
+
+    .select-card:hover {
+        border-color: #0d6efd;
+        background: #f8fbff;
+        transform: translateX(5px);
+    }
+
+    .task-item {
+        border-left: 5px solid #dee2e6;
+        transition: 0.3s;
+        border-radius: 15px;
+        margin-bottom: 10px;
+        background: white;
+        border-top: 1px solid #eee;
+        border-right: 1px solid #eee;
+        border-bottom: 1px solid #eee;
+    }
+
+    .task-item:hover {
+        background: #f8f9fa;
+        border-left-color: #0d6efd;
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    }
+
+    /* CSS Chibi Full-Body Pet System */
+    #draggable-avatar {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 9999;
+        cursor: grab;
+        width: 150px;
+        height: 180px;
+        touch-action: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        filter: drop-shadow(2px 5px 10px rgba(0,0,0,0.3));
+        border-radius: 10px;
+        padding-bottom: 10px;
+        background: transparent;
+    }
+
+    #draggable-avatar:active {
+        cursor: grabbing;
+    }
+
+    .status-bubble {
+        position: absolute;
+        top: -40px;
+        right: -20px;
+        background: white;
+        border-radius: 15px 15px 15px 0;
+        padding: 8px 15px;
+        font-size: 0.9rem;
+        font-weight: bold;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        pointer-events: none;
+        white-space: nowrap;
+        animation: popIn 0.3s;
+        z-index: 10;
+        border: 2px solid #eee;
+        color: #333;
+    }
+
+    .chibi-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform-origin: bottom center;
+        pointer-events: none;
+        transform: scale(0.75);
+        position: relative;
+        z-index: 2;
+    }
+
+    .chibi-head {
+        width: 95px;
+        height: 95px;
+        z-index: 3;
+        position: relative;
+    }
+
+    .chibi-head img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+        border: none;
+        background: transparent;
+    }
+
+    .chibi-body {
+        width: 44px;
+        height: 35px;
+        background: #fff;
+        border-radius: 10px 10px 0 0;
+        position: relative;
+        margin-top: -15px;
+        z-index: 2;
+        border: 1px solid #ddd;
+        border-bottom: none;
+        box-shadow: inset 0 -3px 5px rgba(0,0,0,0.05);
+    }
+
+    .chibi-arm {
+        width: 14px;
+        height: 32px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        position: absolute;
+        top: 5px;
+        z-index: 1;
+    }
+
+    .chibi-arm.left {
+        left: -10px;
+        transform-origin: top right;
+        transform: rotate(20deg);
+    }
+
+    .chibi-arm.right {
+        right: -10px;
+        transform-origin: top left;
+        transform: rotate(-20deg);
+    }
+
+    .chibi-lower {
+        width: 44px;
+        height: 25px;
+        position: relative;
+        z-index: 2;
+        display: flex;
+        justify-content: center;
+    }
+
+    /* ชุดนักเรียนแบบต่างๆ */
+    .chibi-lower.male {
+        background: #003366;
+        border-radius: 0 0 10px 10px;
+        box-shadow: inset 0 -3px 5px rgba(0,0,0,0.2);
+    }
+
+    .chibi-lower.male .chibi-leg {
+        background: #111;
+    }
+
+    .chibi-lower.female {
+        background: #003366;
+        border-radius: 0;
+        width: 58px;
+        clip-path: polygon(15% 0, 85% 0, 100% 100%, 0 100%);
+        margin-top: -1px;
+    }
+
+    .chibi-lower.female .chibi-leg {
+        background: #ffe0bd;
+    }
+
+    .chibi-lower.casual {
+        background: #5D9CEC;
+        border-radius: 0 0 10px 10px;
+        box-shadow: inset 0 -3px 5px rgba(0,0,0,0.2);
+    }
+
+    .chibi-lower.casual .chibi-leg {
+        background: #555;
+    }
+
+    .chibi-leg {
+        width: 14px;
+        height: 25px;
+        border-radius: 8px;
+        position: absolute;
+        bottom: -20px;
+        z-index: 1;
+    }
+
+    .chibi-leg.left {
+        left: 6px;
+    }
+
+    .chibi-leg.right {
+        right: 6px;
+    }
+
+    .chibi-lower.female .chibi-leg.left {
+        left: 12px;
+    }
+
+    .chibi-lower.female .chibi-leg.right {
+        right: 12px;
+    }
+
+    /* ไอเท็มและชุดสวมใส่ */
+    .chibi-item-layer {
+        position: absolute;
+        top: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 3rem;
+        z-index: 4;
+        pointer-events: none;
+    }
+
+    .chibi-clothes-layer {
+        position: absolute;
+        top: 75px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 3.5rem;
+        z-index: 5;
+        pointer-events: none;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        display: none;
+    }
+
+    /* เมื่อสวมชุดแต่งกาย ให้ซ่อนชุดนักเรียนเดิม */
+    .wearing-custom .chibi-clothes-layer {
+        display: block;
+    }
+
+    .wearing-custom .chibi-body {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .wearing-custom .chibi-lower {
+        background: transparent !important;
+        box-shadow: none !important;
+        clip-path: none !important;
+        width: 44px !important;
+        margin-top: 0 !important;
+    }
+
+    /* Pet Menu */
+    .pet-menu {
+        position: absolute;
+        top: -60px;
+        left: -30px;
+        background: rgba(255,255,255,0.95);
+        padding: 5px;
+        border-radius: 15px;
+        display: flex;
+        gap: 5px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        z-index: 15;
+        opacity: 0;
+        pointer-events: none;
+        transition: 0.2s;
+        border: 2px solid #0d6efd;
+    }
+
+    .pet-menu.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .pet-menu-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: 0.2s;
+        padding: 5px 10px;
+        border-radius: 10px;
+    }
+
+    .pet-menu-btn:hover {
+        background: #e9ecef;
+        transform: scale(1.1);
+    }
+
+    /* Chibi Animations */
+    .anim-happy .chibi-container { animation: floatHappy 2.5s ease-in-out infinite; }
+    .anim-happy .chibi-arm.left { animation: swingArmLeft 1s infinite alternate ease-in-out; }
+    .anim-happy .chibi-arm.right { animation: swingArmRight 1s infinite alternate ease-in-out; }
+    .anim-happy .chibi-lower .chibi-leg.left { animation: walkLegLeft 0.5s infinite alternate; }
+    .anim-happy .chibi-lower .chibi-leg.right { animation: walkLegRight 0.5s infinite alternate; }
+
+    .anim-panic .chibi-container { animation: shakePanic 0.3s infinite; }
+    .anim-panic .chibi-arm { transform: rotate(150deg); top: -10px; animation: panicArm 0.2s infinite alternate; }
+    .anim-panic .chibi-lower .chibi-leg { animation: panicLeg 0.1s infinite alternate; }
+    .anim-panic .chibi-head { animation: shakePanicHead 0.1s infinite alternate; }
+
+    .anim-sleepy .chibi-container { animation: swaySleepy 4s ease-in-out infinite; filter: grayscale(30%); }
+    .anim-sleepy .chibi-arm { transform: rotate(0deg); top: 15px; }
+    .anim-sleepy .chibi-head img { opacity: 0.8; }
+
+    .anim-absent .chibi-container { animation: pulseAbsent 2s infinite; filter: grayscale(80%) sepia(50%) hue-rotate(-50deg); }
+    .anim-absent .chibi-arm { transform: rotate(0deg); top: 10px; }
+    .anim-absent .chibi-head img { opacity: 0.6; box-shadow: 0 0 15px red; }
+
+    .anim-feed .chibi-container { animation: jumpFeed 0.5s ease-in-out 3; }
+
+    @keyframes floatHappy {
+        0%, 100% { transform: translateY(0) scale(0.75); }
+        50% { transform: translateY(-15px) scale(0.78); }
+    }
+
+    @keyframes swingArmLeft {
+        0% { transform: rotate(20deg); }
+        100% { transform: rotate(-40deg); }
+    }
+
+    @keyframes swingArmRight {
+        0% { transform: rotate(-20deg); }
+        100% { transform: rotate(40deg); }
+    }
+
+    @keyframes walkLegLeft {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-10px); }
+    }
+
+    @keyframes walkLegRight {
+        0% { transform: translateY(-10px); }
+        100% { transform: translateY(0); }
+    }
+
+    @keyframes shakePanic {
+        0%, 100% { transform: translateX(0) rotate(0deg) scale(0.75); }
+        25% { transform: translateX(-3px) rotate(-2deg) scale(0.75); }
+        50% { transform: translateX(3px) rotate(2deg) scale(0.75); }
+        75% { transform: translateX(-3px) rotate(-2deg) scale(0.75); }
+    }
+
+    @keyframes shakePanicHead {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(2px); }
+    }
+
+    @keyframes panicArm {
+        0% { transform: rotate(140deg); }
+        100% { transform: rotate(170deg); }
+    }
+
+    @keyframes panicLeg {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-5px); }
+    }
+
+    @keyframes swaySleepy {
+        0%, 100% { transform: rotate(-8deg) translateY(5px) scale(0.75); }
+        50% { transform: rotate(8deg) translateY(5px) scale(0.75); }
+    }
+
+    @keyframes pulseAbsent {
+        0%, 100% { transform: scale(0.71); opacity: 0.5; }
+        50% { transform: scale(0.75); opacity: 0.9; }
+    }
+
+    @keyframes jumpFeed {
+        0%, 100% { transform: translateY(0) scale(0.75); }
+        50% { transform: translateY(-30px) scale(0.8); }
+    }
+
+    /* Post-it Board */
+    .board-bg {
+        background-color: #2c3e50;
+        background-image: radial-gradient(#34495e 1px, transparent 1px);
+        background-size: 20px 20px;
+        padding: 30px 20px;
+        min-height: 70vh;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 25px;
+        align-content: flex-start;
+        overflow-y: auto;
+    }
+
+    .post-it {
+        width: 220px;
+        padding: 20px 15px 15px 15px;
+        border-radius: 5px 15px 15px 15px;
+        box-shadow: 4px 6px 12px rgba(0,0,0,0.4);
+        font-family: 'Prompt', sans-serif;
+        color: #212529;
+        position: relative;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        animation: popIn 0.4s ease-out;
+    }
+
+    .post-it:hover {
+        transform: scale(1.05) !important;
+        z-index: 10;
+        box-shadow: 6px 12px 25px rgba(0,0,0,0.5);
+    }
+
+    .post-it::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        border-width: 0 15px 15px 0;
+        border-style: solid;
+        border-color: rgba(0,0,0,0.15) rgba(255,255,255,0.3);
+        display: block;
+        width: 0;
+    }
+
+    .pi-avatar {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        border: 3px solid white;
+        position: absolute;
+        top: -20px;
+        right: -15px;
+        background: #fff;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+    }
+
+    .pi-text {
+        min-height: 90px;
+        font-size: 1.1rem;
+        word-wrap: break-word;
+        line-height: 1.4;
+        margin-bottom: 15px;
+        text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+        font-weight: 500;
+    }
+
+    .pi-actions {
+        display: flex;
+        justify-content: space-between;
+        border-top: 1px dashed rgba(0,0,0,0.3);
+        padding-top: 8px;
+    }
+
+    .btn-react {
+        background: rgba(255,255,255,0.5);
+        border: 1px solid rgba(255,255,255,0.6);
+        border-radius: 20px;
+        padding: 2px 10px;
+        cursor: pointer;
+        transition: 0.2s;
+        font-size: 0.95rem;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .btn-react:hover {
+        background: rgba(255,255,255,0.9);
+        transform: scale(1.1);
+    }
+
+    .style-picker-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 10px;
+        padding: 10px 5px;
+        margin-bottom: 10px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.1);
+    }
+
+    .style-picker-container::-webkit-scrollbar {
+        height: 6px;
+    }
+
+    .style-picker-container::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.3);
+        border-radius: 10px;
+    }
+
+    .style-item {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        cursor: pointer;
+        flex-shrink: 0;
+        border: 2px solid transparent;
+        transition: 0.2s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .style-item:hover {
+        transform: scale(1.1);
+    }
+
+    .style-item.active {
+        border-color: #fff;
+        transform: scale(1.15);
+        box-shadow: 0 0 10px rgba(255,255,255,0.8);
+    }
+
+    .style-item.locked {
+        filter: grayscale(100%);
+        opacity: 0.3;
+        cursor: not-allowed;
+        position: relative;
+    }
+
+    .style-item.locked::after {
+        content: '🔒';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 1rem;
+    }
+
+    .avatar-item {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 3px solid transparent;
+        transition: 0.2s;
+        background: #e9ecef;
+        padding: 2px;
+    }
+
+    .avatar-item:hover {
+        transform: scale(1.15);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .avatar-item.active {
+        border-color: #0d6efd;
+        box-shadow: 0 0 15px rgba(13,110,253,0.5);
+        transform: scale(1.15);
+        background: #fff;
+    }
+
+    .avatar-hover-container {
+        position: relative;
+        display: inline-block;
+        cursor: pointer;
+    }
+
+    .avatar-hover-container:hover .avatar-edit-overlay {
+        display: flex;
+    }
+
+    .avatar-edit-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        border-radius: 50%;
+        display: none;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-size: 2rem;
+        transition: 0.3s;
+        border: 4px solid transparent;
+    }
+
+    .level-badge {
+        background: linear-gradient(45deg, #f5af19, #f12711);
+        color: white;
+        padding: 8px 20px;
+        border-radius: 30px;
+        font-size: 1.2rem;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(241, 39, 17, 0.4);
+        display: inline-block;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .level-badge:hover {
+        transform: scale(1.05);
+    }
+
+    .profile-info-label {
+        font-size: 0.85rem;
+        color: #6c757d;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }
+
+    .profile-info-value {
+        font-size: 1.05rem;
+        font-weight: 500;
+        color: #212529;
+        border-bottom: 1px dashed #dee2e6;
+        padding-bottom: 5px;
+        margin-bottom: 15px;
+    }
+
+    .category-box {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        border: 1px solid #e9ecef;
+        margin-bottom: 15px;
+    }
+
+    .category-title {
+        font-size: 0.95rem;
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #dee2e6;
+        padding-bottom: 5px;
+    }
+
+    /* Shop/Bag Item Card */
+    .shop-item-card {
+        border: 2px solid #eee;
+        border-radius: 15px;
+        padding: 15px;
+        text-align: center;
+        transition: 0.3s;
+        background: white;
+        cursor: pointer;
+    }
+
+    .shop-item-card:hover {
+        border-color: #0d6efd;
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(13,110,253,0.2);
+    }
+
+    .shop-item-card.owned {
+        border-color: #198754;
+        background: #f8fff9;
+    }
+
+    .shop-icon {
+        font-size: 3rem;
+        margin-bottom: 10px;
+        display: inline-block;
+    }
+
+    .shop-price {
+        color: #f5af19;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+
+    .bg-preview {
+        width: 100%;
+        height: 80px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+    }
+
+    /* Multiple DM Alert Cards Styling */
+    .dm-alert-card {
+        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+        border-radius: 15px;
+        padding: 20px 20px 20px 35px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        margin-bottom: 15px;
+        border-left: 8px solid #ff0844;
+        position: relative;
+        animation: popIn 0.4s ease-out;
+    }
+
+    .dm-icon {
+        font-size: 2rem;
+        color: #ff0844;
+        position: absolute;
+        top: -15px;
+        left: -15px;
+        background: white;
+        border-radius: 50%;
+        width: 45px;
+        height: 45px;
+        text-align: center;
+        line-height: 45px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        z-index: 2;
+    }
+
+    @keyframes popIn {
+        0% { transform: scale(0.9); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* =========================================
+       ระบบพิมพ์ Auto E-Portfolio (A4)
+       ========================================= */
+    @media print {
+        @page { 
+            size: A4 portrait; 
+            margin: 10mm; 
+        }
+        body * { 
+            visibility: hidden; 
+        }
+        #print-area, #print-area * { 
+            visibility: visible; 
+        }
+        #print-area { 
+            position: absolute; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            min-height: 100vh;
+            background: #ffffff !important;
+        }
+        * { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
+            color-adjust: exact !important; 
+        }
+
+        /* โครงสร้าง E-Portfolio */
+        .portfolio-container { 
+            width: 100%; 
+            max-width: 190mm; /* เผื่อขอบ A4 */
+            margin: 0 auto; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: 'Prompt', sans-serif;
+        }
+        .port-header { 
+            display: flex; 
+            align-items: center; 
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0) !important;
+            padding: 25px; 
+            border-radius: 20px;
+            margin-bottom: 20px; 
+            border: 1px solid #cbd5e1;
+        }
+        .port-avatar { 
+            width: 110px; 
+            height: 110px; 
+            border-radius: 50%; 
+            border: 5px solid #0d6efd; 
+            margin-right: 25px; 
+            background: #fff; 
+        }
+        .port-info h1 { 
+            margin: 0 0 5px 0; 
+            color: #0f172a; 
+            font-size: 26pt; 
+            font-weight: 800; 
+        }
+        .port-info p { 
+            margin: 0 0 10px 0; 
+            color: #475569; 
+            font-size: 12pt; 
+        }
+        .port-level-badge { 
+            background: linear-gradient(45deg, #f5af19, #f12711) !important; 
+            color: white !important; 
+            padding: 6px 18px; 
+            border-radius: 20px; 
+            display: inline-block; 
+            font-weight: bold; 
+            font-size: 11pt; 
+            box-shadow: 0 4px 10px rgba(241, 39, 17, 0.2);
+        }
+        .port-stats { 
+            display: flex; 
+            gap: 15px; 
+            margin-bottom: 25px; 
+        }
+        .port-stat-box { 
+            flex: 1; 
+            background: #fff !important; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 16px; 
+            padding: 15px; 
+            text-align: center; 
+        }
+        .port-stat-box h4 { 
+            margin: 0 0 5px 0; 
+            font-size: 11pt; 
+            color: #64748b; 
+        }
+        .port-stat-box .val { 
+            font-size: 22pt; 
+            font-weight: 800; 
+            margin: 0; 
+        }
+        .port-title-divider {
+            margin-bottom: 15px; 
+            border-left: 6px solid #0ea5e9; 
+            padding-left: 12px;
+        }
+        .port-title-divider h2 {
+            margin: 0; 
+            color: #1e293b; 
+            font-size: 18pt; 
+            font-weight: 700;
+        }
+        .port-gallery { 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 20px; 
+        }
+        .port-item { 
+            border: 2px solid #f1f5f9; 
+            border-radius: 16px; 
+            overflow: hidden; 
+            page-break-inside: avoid; 
+            display: flex; 
+            flex-direction: column; 
+            background: #fff !important; 
+        }
+        .port-item img { 
+            width: 100%; 
+            height: 220px; 
+            object-fit: cover; 
+            border-bottom: 2px solid #f1f5f9; 
+        }
+        .port-item-info { 
+            padding: 15px; 
+            flex-grow: 1; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+        }
+        .port-item-title { 
+            font-weight: 700; 
+            font-size: 13pt; 
+            color: #1e293b; 
+            margin: 0 0 10px 0; 
+            line-height: 1.3;
+        }
+        .port-item-score { 
+            align-self: flex-start; 
+            background: #dcfce7 !important; 
+            color: #166534 !important; 
+            padding: 6px 12px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            font-size: 11pt; 
+        }
+        .port-footer {
+            margin-top: 30px; 
+            text-align: right; 
+            color: #94a3b8; 
+            font-size: 9pt; 
+            border-top: 1px solid #e2e8f0; 
+            padding-top: 10px;
+        }
+    }
+
+    /* =========================================
+       AI Chat Interface Styles 💬 (ระบบเพื่อนคุย)
+       ========================================= */
+    .ai-chat-card {
+        transition: all 0.3s ease;
+    }
+    
+    .ai-chat-header:hover {
+        opacity: 0.9;
+    }
+
+    #aiChatCollapse.show ~ .ai-chat-header #aiChatToggleIcon {
+        transform: rotate(180deg);
+    }
+
+    /* Scrollbar สำหรับกล่องแชทให้ดูเนียนตา */
+    #aiChatHistory::-webkit-scrollbar {
+        width: 6px;
+    }
+    #aiChatHistory::-webkit-scrollbar-thumb {
+        background-color: rgba(0,0,0,0.15);
+        border-radius: 10px;
+    }
+
+    /* Bubble Containers */
+    .chat-msg-row {
+        display: flex;
+        margin-bottom: 12px;
+        width: 100%;
+    }
+
+    .chat-msg-row.bot {
+        justify-content: flex-start;
+    }
+
+    .chat-msg-row.user {
+        justify-content: flex-end;
+    }
+
+    /* Chat Bubbles */
+    .chat-bubble {
+        max-width: 85%;
+        padding: 10px 16px;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        position: relative;
+        word-wrap: break-word;
+        animation: fadeInChat 0.3s ease-out forwards;
+    }
+
+    .chat-bubble.bot {
+        background-color: #ffffff;
+        color: #333;
+        border-radius: 15px 15px 15px 5px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border: 1px solid #eaeaea;
+    }
+
+    .chat-bubble.user {
+        background-color: #0d6efd;
+        color: #ffffff;
+        border-radius: 15px 15px 5px 15px;
+        box-shadow: 0 2px 8px rgba(13,110,253,0.25);
+    }
+
+    /* Typing Indicator (แอนิเมชันตอนจีมินกำลังพิมพ์) */
+    .typing-indicator {
+        display: flex;
+        gap: 5px;
+        padding: 8px 12px;
+        align-items: center;
+        height: 30px;
+    }
+
+    .typing-dot {
+        width: 7px;
+        height: 7px;
+        background-color: #a18cd1;
+        border-radius: 50%;
+        animation: typingBounce 1.4s infinite ease-in-out both;
+    }
+
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes typingBounce {
+        0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+        40% { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes fadeInChat {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* =========================================
+       ⚔️ RPG Boss Fight Styles (AI Quick Quiz) ⚔️
+       ========================================= */
+
+    /* เอฟเฟกต์ปุ่มตอบคำถาม (เวลาเอาเมาส์ชี้ปุ่มจะเด้งขึ้นมานิดนึง) */
+    .boss-opt-btn {
+        transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+        background-color: #ffffff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    .boss-opt-btn:hover:not(:disabled) {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        border-color: #0d6efd !important;
+        background-color: #f8fbff;
+        color: #0d6efd !important;
+        z-index: 2;
+    }
+
+    .boss-opt-btn:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+
+    /* สีปุ่มถูก/ผิด ให้ดูชัดเจนขึ้นเวลาเฉลย */
+    .boss-opt-btn.btn-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+        border-color: #11998e !important;
+        box-shadow: 0 5px 15px rgba(56, 239, 125, 0.4);
+    }
+
+    .boss-opt-btn.btn-danger {
+        background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%) !important;
+        border-color: #ff416c !important;
+        box-shadow: 0 5px 15px rgba(255, 65, 108, 0.4);
+    }
+
+    /* กล่องแจ้งเตือนบอสหน้าแดชบอร์ด ให้ดูอลังการน่ากด */
+    #bossAlertWidget .btn-danger {
+        background: linear-gradient(45deg, #ff0844 0%, #ffb199 100%);
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.4);
+        box-shadow: 0 8px 25px rgba(255, 8, 68, 0.5) !important;
+        letter-spacing: 1px;
+    }
+
+    #bossAlertWidget .btn-danger:hover {
+        transform: scale(1.03);
+        background: linear-gradient(45deg, #ffb199 0%, #ff0844 100%);
+    }
+
+    /* แอนิเมชันหน้าจอสั่นตอนตอบผิด (บอสโจมตีสวนกลับ) */
+    .anim-panic .modal-content {
+        animation: shakePanic 0.4s ease-in-out;
+        border-color: #ff416c !important;
+        box-shadow: 0 0 50px rgba(255, 65, 108, 0.6) !important;
+    }
+
+    /* รูปแบบ Emoji บอส */
+    .boss-emoji-icon {
+        font-size: 8rem; /* ใหญ่สะใจ */
+        line-height: 1;
+        text-shadow: 0 10px 15px rgba(0,0,0,0.5);
+        transition: all 0.2s ease-out;
+        display: inline-block;
+        user-select: none;
+    }
+
+/* =========================================
+       ⚡ Live Quiz Battle Styles (Kahoot Style)
+       ========================================= */
+
+    .kahoot-modal-content {
+        background-color: #f2f2f2;
+        background-image: radial-gradient(#d1d1d1 1px, transparent 1px);
+        background-size: 20px 20px;
+        border: none;
+        border-radius: 0;
+        min-height: 100vh;
+    }
+
+        /* --- START FIX: QUIZ SAFE AREA TOP --- */
+    .kahoot-modal-content .modal-body {
+        padding-top: 60px !important; /* ผลักเนื้อหาลงมาจากขอบบน 60px กันการแจ้งเตือนบัง */
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start !important; /* เปลี่ยนจาก center เป็น start เพื่อให้คุมระยะด้านบนได้แม่นยำ */
+    }
+
+    /* ปรับแต่งให้ตอนมือถือแนวนอนหรือจอเล็ก ไม่ให้มันดันลงมาเยอะเกินไป */
+    @media (max-width: 768px) {
+        .kahoot-modal-content .modal-body {
+            padding-top: 50px !important;
+        }
+    }
+    /* --- END FIX: QUIZ SAFE AREA TOP --- */
+
+    #sqWaitScreen {
+        background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+    }
+
+    #sqResultScreen {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 20;
+        transition: background 0.3s;
+    }
+
+    .quiz-btn-gigantic {
+        width: 100%;
+        min-height: 140px;
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 1.3rem;
+        font-weight: bold;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 8px 0 rgba(0,0,0,0.2);
+        transition: transform 0.1s, box-shadow 0.1s, filter 0.2s;
+        cursor: pointer;
+        padding: 15px;
+        word-wrap: break-word;
+        line-height: 1.3;
+    }
+
+    .quiz-btn-gigantic:hover:not(:disabled) {
+        filter: brightness(1.1);
+    }
+
+    .quiz-btn-gigantic:active:not(:disabled) {
+        transform: translateY(8px);
+        box-shadow: 0 0 0 rgba(0,0,0,0.2);
+    }
+
+    .quiz-btn-gigantic:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+        transform: translateY(8px);
+        box-shadow: 0 0 0 rgba(0,0,0,0.2);
+    }
+
+    /* 4 สียอดฮิต */
+    .quiz-color-1 { background-color: #e21b3c; box-shadow: 0 8px 0 #b0102b; }
+    .quiz-color-2 { background-color: #1368ce; box-shadow: 0 8px 0 #0c4a96; }
+    .quiz-color-3 { background-color: #d89e00; box-shadow: 0 8px 0 #a37700; }
+    .quiz-color-4 { background-color: #26890c; box-shadow: 0 8px 0 #1b6308; }
+
+    .quiz-shape-icon {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+        opacity: 0.9;
+        line-height: 1;
+    }
+
+    /* แอนิเมชันตอนเฉลย */
+    .anim-correct {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+        animation: popIn 0.5s ease-out;
+    }
+
+    .anim-wrong {
+        background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%) !important;
+        animation: shakePanic 0.4s ease-in-out;
+    }
+
+/* =========================================
+       🏆 Leaderboard Podium Styles
+       ========================================= */
+    #sqLeaderboardScreen:not(.hidden) {
+        display: flex;
+    }
+    
+    .podium-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        width: 30%;
+        border-radius: 15px 15px 0 0;
+        color: white;
+        font-weight: bold;
+        box-shadow: 0 -5px 15px rgba(0,0,0,0.2);
+        animation: riseUp 1s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+        transform-origin: bottom;
+        opacity: 0;
+        position: relative;
+    }
+    .podium-1 { background: linear-gradient(to top, #ffd700, #ffdf00); height: 230px; animation-delay: 1s; z-index: 3;}
+    .podium-2 { background: linear-gradient(to top, #c0c0c0, #e0e0e0); height: 160px; animation-delay: 0.5s; z-index: 2;}
+    .podium-3 { background: linear-gradient(to top, #cd7f32, #d4a373); height: 110px; animation-delay: 0s; z-index: 1;}
+
+    .podium-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 3px solid white;
+        background: white;
+        margin-bottom: 5px;
+        box-shadow: 0 5px 10px rgba(0,0,0,0.3);
+    }
+    .podium-name {
+        font-size: 0.9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 90%;
+        padding: 0 5px;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    .podium-score {
+        font-size: 1rem;
+        background: rgba(0,0,0,0.3);
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+    }
+
+    .runner-up-item {
+        background: rgba(255,255,255,0.95);
+        border-radius: 12px;
+        padding: 10px 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        animation: fadeInChat 0.5s ease forwards;
+        opacity: 0;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
+    .runner-up-item:nth-child(1) { animation-delay: 1.5s; }
+    .runner-up-item:nth-child(2) { animation-delay: 1.7s; }
+
+    @keyframes riseUp {
+        0% { transform: scaleY(0); opacity: 0; }
+        100% { transform: scaleY(1); opacity: 1; }
+    }
+
+/* =========================================
+       📱 รองรับหน้าจอมือถือ (Mobile Responsive)
+       ========================================= */
+    @media (max-width: 768px) {
+        /* ปรับปุ่ม Live Quiz ให้เล็กลงพอดีจอมือถือ */
+        .quiz-btn-gigantic {
+            min-height: 90px;
+            font-size: 1rem;
+            padding: 8px;
+        }
+        .quiz-shape-icon {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+        }
+        #sqQuestionText {
+            font-size: 1.3rem !important;
+            margin-bottom: 15px !important;
+        }
+
+        /* ปรับหน้าจอ Boss Battle ให้ไม่ล้น */
+        .boss-opt-btn {
+            font-size: 0.95rem !important;
+            padding: 10px !important;
+        }
+        .boss-emoji-icon {
+            font-size: 5rem; 
+        }
+        #bbQuestionText {
+            font-size: 1.1rem !important;
+        }
+
+        /* ปรับหน้าสรุปอันดับ (Podium) ไม่ให้ทะลุขอบ */
+        .podium-avatar {
+            width: 45px;
+            height: 45px;
+        }
+        .podium-name {
+            font-size: 0.75rem;
+        }
+        .podium-1 { height: 180px; }
+        .podium-2 { height: 130px; }
+        .podium-3 { height: 90px; }
+
+        /* ย่อขนาดสัตว์เลี้ยงตอนเล่นมือถือเพื่อไม่ให้บังปุ่ม */
+        #draggable-avatar {
+            transform: scale(0.8);
+            transform-origin: bottom right;
+            bottom: 10px;
+            right: 10px;
+        }
+    }
+
+/* --- START GIFT FEATURE STYLES --- */
+.gift-item-label {
+    cursor: pointer;
+    border: 2px solid #eee;
+    border-radius: 15px;
+    transition: all 0.2s;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+}
+
+.btn-check:checked + .gift-item-label {
+    background-color: #fff5f6;
+    border-color: #ff4757;
+    box-shadow: 0 4px 12px rgba(255, 71, 87, 0.2);
+    transform: scale(1.05);
+}
+
+.gift-item-label:hover {
+    border-color: #ff4757;
+    background: #fff8f9;
+}
+
+#giftItemList::-webkit-scrollbar {
+    width: 6px;
+}
+
+#giftItemList::-webkit-scrollbar-thumb {
+    background-color: #ff4757;
+    border-radius: 10px;
+}
+
+/* สไตล์ปุ่มเลือกเพื่อนเข้าปาร์ตี้ */
+#partySelectionArea .btn-outline-primary {
+    border-style: dashed;
+    border-width: 2px;
+    background: #f8f9fa;
+    color: #0d6efd;
+}
+
+#partySelectionArea .btn-check:checked + .btn-outline-primary {
+    border-style: solid;
+    background: #0d6efd;
+    color: white;
+    box-shadow: 0 4px 10px rgba(13,110,253,0.4);
+    transform: scale(1.1);
+}
+
+#partySelectionArea .btn:active {
+    transform: scale(0.95);
+}
+
+/* --- แก้ไขปัญหาจอดืด/ดีด บนมือถือ --- */
+#partySelectionArea {
+    overflow-anchor: none; /* กฎเหล็ก: ห้ามเลื่อนหน้าจออัตโนมัติเมื่อเนื้อหาเปลี่ยน */
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    min-height: 250px; /* ล็อกความสูงขั้นต่ำไว้ จอจะได้ไม่ยุบแล้วเด้ง */
+}
+
+.party-list-item label {
+    touch-action: manipulation; /* ลดการหน่วงและกันการซูม/เลื่อนตอนกด */
+}
+
+/* --- กฎเหล็กล็อกหน้าจอปาร์ตี้ฉบับเด็ดขาด --- */
+#studentLiveQuizModal .modal-body {
+    display: block !important; /* เลิกใช้ Flex Center ที่ทำให้จอกระตุก */
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding-top: 50px !important;
+}
+
+#partySelectionArea {
+    height: 300px !important; /* ล็อกความสูงกล่องรายชื่อ */
+    overflow-y: auto !important;
+    border-radius: 15px;
+    background: #f8f9fa;
+    padding: 10px;
+    border: 1px solid #ddd;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* สไตล์แถวรายชื่อเพื่อนแบบใหม่ (ไม่ใช้ปุ่มจริง กันจอดีด) */
+.party-item-row {
+    background: white;
+    margin-bottom: 8px;
+    padding: 12px 15px;
+    border-radius: 10px;
+    border: 1px solid #eee;
+    cursor: pointer;
+    transition: 0.2s;
+    color: #0d6efd;
+}
+
+.party-item-row.active-party {
+    background: #0d6efd !important;
+    color: white !important;
+    border-color: #0d6efd;
+    box-shadow: 0 4px 10px rgba(13,110,253,0.3);
+}
+
+.party-item-row:active {
+    transform: scale(0.98);
+}

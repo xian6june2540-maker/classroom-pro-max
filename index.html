@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ระบบจัดการชั้นเรียน Pro Max</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/material_blue.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <div id="print-area" class="hidden"></div>
+
+  <div id="draggable-avatar" class="hidden" onclick="togglePetMenu()">
+      <div class="pet-menu" id="petMenu">
+          <button class="pet-menu-btn" title="ร้านค้า" onclick="event.stopPropagation(); openShopModal()"><i class="bi bi-shop text-primary"></i></button>
+          <button class="pet-menu-btn" title="ส่งของขวัญให้เพื่อน" onclick="event.stopPropagation(); openGiftModal()"><i class="bi bi-gift-fill text-danger"></i></button>
+          <button class="pet-menu-btn" title="กระเป๋ามิติ" onclick="event.stopPropagation(); openInventoryModal()"><i class="bi bi-backpack-fill text-success"></i></button>
+          <button class="pet-menu-btn" title="ซ่อนสัตว์เลี้ยง" onclick="event.stopPropagation(); togglePetVisibility()"><i class="bi bi-eye-slash-fill text-danger"></i></button>
+          
+      </div>
+      <div class="status-bubble" id="drag-bubble">...</div>
+      <div class="chibi-container" id="chibi-container">
+          <div class="chibi-item-layer" id="chibi-item"></div>
+          <div class="chibi-clothes-layer" id="chibi-clothes-icon"></div>
+          <div class="chibi-head">
+              <img id="drag-avatar-img" src="" alt="avatar">
+          </div>
+          <div class="chibi-body">
+              <div class="chibi-arm left"></div>
+              <div class="chibi-arm right"></div>
+          </div>
+          <div class="chibi-lower" id="chibi-lower">
+              <div class="chibi-leg left"></div>
+              <div class="chibi-leg right"></div>
+          </div>
+      </div>
+  </div>
+
+  <div id="main-app">
+    <div class="header-box text-center mb-4">
+      <h2 class="mb-0"><i class="bi bi-mortarboard-fill"></i> ระบบจัดการชั้นเรียน</h2>
+      <p class="mb-2 opacity-75">Smart Classroom Management</p>
+      <div class="position-absolute" style="top: 15px; right: 20px;">
+        <button class="top-menu-btn" onclick="loginTeacher()" id="btnLock"><i class="bi bi-lock-fill"></i> สำหรับครู</button>
+        <button class="top-menu-btn hidden" onclick="openTeacherConfigModal()" id="btnTeacherConfig"><i class="bi bi-gear-wide-connected"></i> ตั้งค่าครู</button>
+        <button class="top-menu-btn top-menu-btn-danger hidden" onclick="logoutTeacher()" id="btnLogout"><i class="bi bi-box-arrow-right"></i> ออกจากระบบ</button>
+      </div>
+    </div>
+
+    <div id="student-search-view" class="container pb-5">
+      <div class="student-box border-top border-4 border-primary text-center">
+        <h3 class="text-primary fw-bold mb-3"><i class="bi bi-search"></i> ตรวจสอบสถานะการเรียน</h3>
+        <p class="text-muted mb-4">กรุณากรอกเลขที่/รหัส (พิมพ์แค่บางส่วนก็เจอ) หรือ ชื่อ-นามสกุล ของตนเอง</p>
+        <div class="mb-3"><input type="text" id="portalStudentId" class="form-control form-control-lg search-input text-center fw-bold" placeholder="เลขที่/รหัส หรือ ชื่อ-นามสกุล" onkeypress="if(event.key === 'Enter') searchStudent()"></div>
+        <button class="btn btn-primary btn-lg w-100 fw-bold rounded-pill shadow-sm" onclick="searchStudent()" id="btnSearch"><i class="bi bi-search"></i> ค้นหาข้อมูล</button>
+        <div id="selectResultBox" class="mt-4 text-start hidden"><h6 class="text-muted fw-bold mb-3">คลิกเลือกชื่อของคุณเพื่อเข้าสู่ระบบ:</h6><div id="matchListContainer"></div></div>
+      </div>
+    </div>
+
+    <div id="student-dashboard-view" class="container hidden pb-5">
+      <div class="student-box">
+        
+        <div id="dmContainer" class="mb-4"></div>
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 border-bottom pb-4 gap-3">
+            <div class="d-flex align-items-center">
+                <div class="avatar-hover-container me-4" onclick="openAvatarModal()" title="คลิกเพื่อเปลี่ยนอวตาร">
+                    <img id="mainAvatarImg" src="" style="width: 100px; height: 100px; border-radius: 50%; border: 4px solid #0d6efd; background: #fff; box-shadow: 0 5px 15px rgba(13,110,253,0.3);">
+                    <div class="avatar-edit-overlay"><i class="bi bi-pencil-fill"></i></div>
+                </div>
+                <div>
+                    <h3 class="text-primary fw-bold mb-1" id="stuNameText">ชื่อนักเรียน</h3>
+                    <div class="d-flex align-items-center mb-2 mt-2 gap-2 flex-wrap">
+                        <div class="level-badge" id="stuLevelBadge" onclick="showLevelModal()">🐣 Lv.1 มือใหม่หัดเรียน</div>
+                        <span class="badge bg-secondary fs-6" id="stuIdText">เลขที่/รหัส: 000</span> 
+                        <span class="badge bg-info text-dark fs-6" id="stuRoomText">ระดับชั้น/ห้อง: 0</span>
+                        <span class="badge bg-primary fs-6 border border-white shadow-sm"><i class="bi bi-award-fill text-warning"></i> คะแนนเก็บสะสม: <span id="stuScoreText">0</span></span>
+                    </div>
+                    <div class="text-muted small fw-bold">
+                        EXP สะสม: <span id="expText" class="text-success fs-6">0</span> / <span id="nextExpText">100</span>
+                        <div class="progress mt-1 shadow-sm" style="height: 8px; width: 200px; border-radius: 10px;">
+                            <div class="progress-bar bg-warning progress-fill" id="expProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex flex-column gap-2">
+                <button class="btn btn-outline-danger shadow-sm rounded-pill px-4 fw-bold" onclick="logoutStudent()"><i class="bi bi-box-arrow-right"></i> ออกจากระบบ</button>
+            </div>
+        </div>
+
+        <ul class="nav nav-pills justify-content-center mb-4" id="stuPills" role="tablist">
+          <li class="nav-item" role="presentation"><button class="nav-link active fw-bold" id="tab-overview-btn" data-bs-toggle="pill" data-bs-target="#tab-overview" type="button" role="tab"><i class="bi bi-grid-fill"></i> ภาพรวม</button></li>
+          <li class="nav-item" role="presentation"><button class="nav-link fw-bold" id="tab-profile-btn" data-bs-toggle="pill" data-bs-target="#tab-profile" type="button" role="tab" onclick="showProfileReadOnly()"><i class="bi bi-person-lines-fill"></i> ข้อมูลส่วนตัว</button></li>
+        </ul>
+
+        <div class="tab-content">
+          <div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
+            
+            <div class="ai-chat-card mb-4 shadow-sm border-0" style="border-radius: 15px; overflow: hidden; background: #fff;">
+                <div class="ai-chat-header d-flex justify-content-between align-items-center p-3" data-bs-toggle="collapse" data-bs-target="#aiChatCollapse" style="background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); cursor: pointer; color: white;" onclick="triggerAiChatOnce()">
+                    <div class="d-flex align-items-center gap-2 fw-bold">
+                        <i class="bi bi-robot fs-5"></i>
+                        <span>คุยกับจีมิน (เพื่อน AI) 💬</span>
+                    </div>
+                    <i class="bi bi-chevron-down" id="aiChatToggleIcon" style="transition: transform 0.3s;"></i>
+                </div>
+                <div id="aiChatCollapse" class="collapse">
+                    <div class="card-body p-0">
+                        <div id="aiChatHistory" class="p-3" style="height: 250px; overflow-y: auto; background: #f8f9fa;">
+                            <div class="text-center text-muted small mt-4" id="aiChatPlaceholder">
+                                <i class="bi bi-stars fs-3"></i><br>
+                                รอแป๊บนึงนะ กำลังปลุกจีมิน...
+                            </div>
+                        </div>
+                        <div class="p-2 border-top d-flex gap-2 align-items-center" style="background: #fff;">
+                            <input type="text" id="aiChatInput" class="form-control border-0 bg-light rounded-pill px-3 py-2" placeholder="พิมพ์คุยกับจีมินตรงนี้..." onkeypress="if(event.key === 'Enter') sendAiChatMessage()">
+                            <button class="btn btn-primary rounded-pill px-3 py-2 shadow-sm fw-bold" onclick="sendAiChatMessage()" id="btnSendAiChat">
+                                <i class="bi bi-send-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="countdownWidget" class="deadline-widget hidden">
+                <h5 class="fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill text-warning"></i> ภารกิจด่วนที่สุด (ใกล้หมดเวลา!)</h5>
+                <h4 id="cdTaskName" class="text-white mt-2 mb-0">--- ชื่องาน ---</h4>
+                <div id="cdTime" class="timer-display">กำลังโหลด...</div>
+                <p class="small mb-0 opacity-75">อย่าลืมรีบเคลียร์ให้เสร็จก่อนหมดเวลานะครับ!</p>
+            </div>
+            <div id="bossAlertWidget" class="hidden mb-4 text-center">
+    <button class="btn btn-danger btn-lg rounded-pill fw-bold shadow-lg w-100" style="animation: pulseWarning 1.5s infinite; border: 3px solid #fff;" onclick="startBossBattle()">
+        <i class="bi bi-fire"></i> ⚠️ บอสปรากฏตัว! คลิกเพื่อเข้าสู่ฉากต่อสู้ ⚠️ <i class="bi bi-fire"></i>
+    </button>
+</div>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6"><div class="glass-card"><div class="d-flex justify-content-between mb-1"><span class="fw-bold text-dark"><i class="bi bi-calendar-check text-success"></i> การเข้าเรียน</span><span class="text-success fw-bold fs-5" id="attPctText">0%</span></div><div class="progress-bar-custom"><div id="attProgressBar" class="progress-fill bg-success" style="width: 0%;"></div></div><div class="d-flex justify-content-between mt-2 text-muted" style="font-size: 0.85rem;"><span>มา: <b id="stuPresent" class="text-success">0</b></span><span>ลา: <b id="stuLeave" class="text-warning text-dark">0</b></span><span>ขาด: <b id="stuAbsent" class="text-danger">0</b></span></div></div></div>
+                <div class="col-md-6"><div class="glass-card"><div class="d-flex justify-content-between mb-1"><span class="fw-bold text-dark"><i class="bi bi-journal-check text-primary"></i> การส่งงาน</span><span class="text-primary fw-bold fs-5" id="workPctText">0%</span></div><div class="progress-bar-custom"><div id="workProgressBar" class="progress-fill bg-primary" style="width: 0%;"></div></div><div class="d-flex justify-content-between mt-2 text-muted" style="font-size: 0.85rem;"><span>ส่งแล้ว: <b id="stuWorkDone" class="text-primary">0</b></span><span>ทั้งหมด: <b id="stuWorkTotal" class="text-dark">0</b></span></div></div></div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-end mb-3">
+                <h5 class="fw-bold text-dark mb-0"><i class="bi bi-list-task text-primary"></i> ภารกิจ (รายการงานทั้งหมด)</h5>
+            </div>
+            <div class="list-group mb-4" id="studentTasksList"></div>
+            
+            <div class="glass-card mb-4" style="padding: 0; overflow: hidden; border: 1px solid #198754;">
+                <div class="bg-success text-white p-2 fw-bold text-center"><i class="bi bi-award"></i> ผลคะแนน 3 งานที่ดีที่สุด</div>
+                <ul class="list-group list-group-flush" id="latestGradesList"></ul>
+            </div>
+            
+            <div class="d-flex flex-wrap gap-2 justify-content-center border-top pt-4">
+              <button class="btn btn-dark fw-bold text-white flex-grow-1 py-2 shadow-sm rounded-pill" onclick="openBoard('student')"><i class="bi bi-easel-fill"></i> กระดานโพสอิท</button>
+              <button class="btn btn-warning fw-bold text-dark flex-grow-1 py-2 shadow-sm rounded-pill" onclick="openStudentLeave()"><i class="bi bi-envelope-paper"></i> แจ้งลาหยุด</button>
+              <button class="btn btn-info fw-bold text-dark flex-grow-1 py-2 shadow-sm rounded-pill" onclick="downloadMyReport()"><i class="bi bi-printer"></i> เซฟสมุดพก</button>
+              <button class="btn btn-outline-secondary fw-bold rounded-pill" onclick="changeStudentPinFlow(false)"><i class="bi bi-key"></i> เปลี่ยน PIN</button>
+            </div>
+            <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
+              <button class="btn btn-outline-primary fw-bold flex-grow-1 py-2 shadow-sm rounded-pill" id="btnTogglePet" onclick="togglePetVisibility()"><i class="bi bi-eye"></i> ซ่อนสัตว์เลี้ยง</button>
+              <button class="btn btn-danger fw-bold text-white flex-grow-1 py-2 shadow-sm rounded-pill" onclick="window.open('https://line.me/ti/p/Q2DujICCiY', '_blank')"><i class="bi bi-life-preserver"></i> SOS ขอความช่วยเหลือจากครู</button>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="tab-profile" role="tabpanel">
+            <div id="profile-view-section">
+                <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-person-vcard"></i> ข้อมูลส่วนตัวของคุณ</h5>
+                <div class="row g-3 mb-4 px-2" id="profileDisplayData"></div>
+                <button class="btn btn-outline-primary w-100 fw-bold shadow-sm rounded-pill py-2" onclick="showEditProfile()"><i class="bi bi-pencil-square"></i> แก้ไขข้อมูลส่วนตัว</button>
+            </div>
+
+            <div id="profile-edit-section" class="hidden">
+                <h5 class="fw-bold mb-3 text-primary"><i class="bi bi-pencil-square"></i> แก้ไขข้อมูลส่วนตัว</h5>
+                <div class="row g-3 mb-4">
+                  <div class="col-md-6"><label class="form-label small fw-bold">ชื่อเล่น</label><input type="text" id="profNickname" class="form-control"></div>
+                  <div class="col-md-6"><label class="form-label small fw-bold">เพศ</label><select id="profGender" class="form-select"><option value="">-- เลือกเพศ --</option><option value="ชาย">ชาย</option><option value="หญิง">หญิง</option><option value="อื่นๆ">อื่นๆ</option></select></div>
+                  <div class="col-md-6"><label class="form-label small fw-bold">โรคประจำตัว</label><input type="text" id="profDisease" class="form-control" placeholder="ไม่มี หรือ ระบุ..."></div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-bold">วันเกิด</label>
+                    <div class="d-flex gap-2">
+                        <select id="profDobDay" class="form-select"></select>
+                        <select id="profDobMonth" class="form-select"></select>
+                        <select id="profDobYear" class="form-select"></select>
+                    </div>
+                  </div>
+                  <div class="col-md-12"><label class="form-label small fw-bold">กีฬาที่ชอบ</label><select id="profSport" class="form-select"><option value="">-- เลือกกีฬา --</option></select></div>
+                  
+                  <div class="col-md-12 mt-3">
+                      <label class="form-label small fw-bold mb-0">ความสามารถพิเศษ <small class="text-danger">(เลือกได้สูงสุด 5 อย่าง)</small></label>
+                      <div id="talentsContainer"></div>
+                  </div>
+                  
+                  <div class="col-md-12 mt-3">
+                      <label class="form-label small fw-bold mb-0">งานอดิเรก <small class="text-danger">(เลือกได้สูงสุด 5 อย่าง)</small></label>
+                      <div id="hobbiesContainer"></div>
+                  </div>
+                  
+                  <div class="col-12 mt-3 mb-1"><hr><h6 class="fw-bold text-secondary">ข้อมูลติดต่อและครอบครัว</h6></div>
+                  <div class="col-md-4"><label class="form-label small fw-bold">เบอร์โทรส่วนตัว</label><input type="text" id="profPhone" class="form-control"></div>
+                  <div class="col-md-4"><label class="form-label small fw-bold">ชื่อบิดา</label><input type="text" id="profFather" class="form-control"></div>
+                  <div class="col-md-4"><label class="form-label small fw-bold">ชื่อมารดา</label><input type="text" id="profMother" class="form-control"></div>
+                  <div class="col-md-3"><label class="form-label small fw-bold">บ้านเลขที่</label><input type="text" id="profHouseNo" class="form-control"></div>
+                  <div class="col-md-3"><label class="form-label small fw-bold">หมู่</label><input type="text" id="profMoo" class="form-control"></div>
+                  <div class="col-md-6"><label class="form-label small fw-bold">ตำบล</label><input type="text" id="profSubDistrict" class="form-control"></div>
+                  <div class="col-md-4"><label class="form-label small fw-bold">อำเภอ</label><input type="text" id="profDistrict" class="form-control"></div>
+                  <div class="col-md-4"><label class="form-label small fw-bold">จังหวัด</label><input type="text" id="profProvince" class="form-control"></div>
+                  <div class="col-md-4"><label class="form-label small fw-bold">รหัสไปรษณีย์</label><input type="text" id="profZipcode" class="form-control"></div>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <button class="btn btn-secondary w-50 fw-bold shadow-sm rounded-pill" onclick="showProfileReadOnly()"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                    <button class="btn btn-primary w-50 fw-bold shadow-sm rounded-pill" id="btnSaveProfile" onclick="saveStudentProfile()"><i class="bi bi-save"></i> บันทึกข้อมูล</button>
+                </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="teacher-view" class="hidden">
+      <div id="view-rooms" class="container pb-5"><div class="d-flex justify-content-between align-items-center mb-4"><h4 class="mb-0"><i class="bi bi-door-open-fill text-primary"></i> เลือกระดับชั้น/ห้อง</h4><button class="btn btn-primary" onclick="openRoomModal()"><i class="bi bi-plus-lg"></i> เพิ่มระดับชั้น/ห้อง</button></div><div class="row g-4" id="roomListContainer"></div></div>
+      
+      <div id="view-dashboard" class="container pb-5 hidden">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 bg-white p-3 rounded-3 shadow-sm">
+          <div class="d-flex align-items-center gap-2">
+             <h4 class="mb-0 text-primary fw-bold" id="dashboardTitle"><i class="bi bi-houses-fill"></i> ระดับชั้น/ห้อง: </h4>
+             <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="openConfigModal()" title="ตั้งค่า Group ID"><i class="bi bi-gear-fill"></i> Config</button>
+          </div>
+          <div class="mt-2 mt-md-0">
+            <button class="btn btn-primary fw-bold me-2" onclick="openBulkExpModal()"><i class="bi bi-stars"></i> มอบแต้มพิเศษ</button>
+            <button class="btn btn-dark fw-bold me-2" onclick="openBoard('teacher')"><i class="bi bi-easel-fill"></i> กระดานโพสอิท</button>
+            <button class="btn btn-warning fw-bold me-2" onclick="openAnnouncementModal()"><i class="bi bi-megaphone-fill"></i> ประกาศ</button>
+            <button class="btn btn-success me-2" onclick="openExportModal()"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+            <button class="btn btn-outline-secondary" onclick="exitRoom()"><i class="bi bi-arrow-left"></i> กลับ</button>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4"><div class="col-md-3"><div class="stat-card bg-primary text-center"><h6 class="opacity-75 mb-1">นักเรียนทั้งหมด</h6><h2 class="fw-bold mb-0" id="statTotal">0</h2></div></div><div class="col-md-3"><div class="stat-card bg-success text-center"><h6 class="opacity-75 mb-1">มาเรียนวันนี้</h6><h2 class="fw-bold mb-0" id="statPresent">0</h2></div></div><div class="col-md-3"><div class="stat-card bg-danger text-center"><h6 class="opacity-75 mb-1">ขาด/ลา วันนี้</h6><h2 class="fw-bold mb-0" id="statAbsent">0</h2></div></div><div class="col-md-3"><div class="stat-card bg-info text-center" style="color: #000;"><h6 class="opacity-75 mb-1" id="statTaskName">ภาพรวมส่งงาน</h6><h2 class="fw-bold mb-0" id="statTaskPct">0%</h2></div></div></div>
+        
+        <ul class="nav nav-pills justify-content-center mb-4" id="pills-tab" role="tablist">
+          <li class="nav-item" role="presentation"><button class="nav-link active" id="pills-students-tab" data-bs-toggle="pill" data-bs-target="#tab-students" type="button" role="tab">รายชื่อนักเรียน</button></li>
+          <li class="nav-item" role="presentation"><button class="nav-link" id="pills-attendance-tab" data-bs-toggle="pill" data-bs-target="#tab-attendance" type="button" role="tab">เช็คชื่อเข้าเรียน</button></li>
+          <li class="nav-item" role="presentation"><button class="nav-link" id="pills-assignments-tab" data-bs-toggle="pill" data-bs-target="#tab-assignments" type="button" role="tab">สั่งงาน / ตรวจงาน</button></li>
+        </ul>
+        
+        <div class="tab-content">
+          <div class="tab-pane fade show active" id="tab-students" role="tabpanel"><div class="card p-4"><div class="d-flex justify-content-between align-items-center mb-4"><h5 class="mb-0"><i class="bi bi-person-lines-fill text-primary"></i> นักเรียนในห้องนี้</h5><div><input type="file" id="fileImport" accept=".csv, .xlsx, .xls" style="display:none" onchange="handleFileImport(this)"><button class="btn btn-outline-success" type="button" onclick="document.getElementById('fileImport').click()"><i class="bi bi-file-earmark-spreadsheet-fill"></i> อัปโหลดไฟล์</button> <button class="btn btn-outline-info shadow-sm fw-bold ms-2" onclick="openAiScannerModal()"><i class="bi bi-robot"></i> สแกนเรดาร์ด้วย AI</button> <button class="btn btn-primary" type="button" onclick="openStudentModal()"><i class="bi bi-person-plus-fill"></i> เพิ่มนักเรียน</button></div></div><div class="mb-3"><input type="text" id="searchStudentAdmin" class="form-control search-input" placeholder="🔍 ค้นหา..." onkeyup="filterTable('studentTableBody', this.value)"></div><div class="table-responsive"><table class="table table-hover align-middle"><thead class="table-light"><tr><th>เลขที่/รหัส</th><th>ชื่อ-นามสกุล</th><th class="text-center">คะแนนสะสม</th><th class="text-center">จัดการ</th></tr></thead><tbody id="studentTableBody"></tbody></table></div></div></div>
+          
+          <div class="tab-pane fade" id="tab-attendance" role="tabpanel"><div class="card p-4"><div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2"><h5 class="mb-0"><i class="bi bi-clipboard-check-fill text-success"></i> เช็คชื่อประจำวัน</h5><div class="d-flex gap-2"><button class="btn btn-warning text-dark position-relative" type="button" onclick="openTeacherLeaveModal()"><i class="bi bi-envelope-paper"></i> คำร้องขอลา <span id="leaveBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="display: none;">0</span></button><input type="date" id="attDate" class="form-control" style="max-width: 150px;" onchange="loadAttendanceForDate()"></div></div><div class="mb-3"><input type="text" id="searchAtt" class="form-control search-input" placeholder="🔍 ค้นหา..." onkeyup="filterTable('attTableBody', this.value)"></div><div class="table-responsive mb-3"><table class="table table-hover align-middle"><thead class="table-light"><tr><th>เลขที่/รหัส</th><th>ชื่อ-นามสกุล</th><th class="text-center">บันทึกสถานะ</th><th class="text-center">สถานะ</th></tr></thead><tbody id="attTableBody"></tbody></table></div></div></div>
+          
+          <div class="tab-pane fade" id="tab-assignments" role="tabpanel">
+          
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <div class="card p-3 h-100 border-0 shadow-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="text-white">
+                                <h6 class="mb-1 fw-bold"><i class="bi bi-controller"></i> RPG Boss Fight</h6>
+                                <small class="opacity-75" style="font-size: 0.75rem;">เกมตีบอส (ตอบคำถามอิสระ)</small>
+                            </div>
+                            <div class="text-nowrap">
+                                <button class="btn btn-sm btn-light text-dark fw-bold shadow-sm px-4" onclick="openSummonBossModal()"><i class="bi bi-magic text-warning"></i> เสกบอส</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card p-3 h-100 border-0 shadow-sm" style="background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="text-white">
+                                <h6 class="mb-1 fw-bold"><i class="bi bi-lightning-charge-fill"></i> Live Quiz Battle</h6>
+                                <small class="opacity-75" style="font-size: 0.75rem;">แข่งตอบคำถามพร้อมกันทั้งห้อง</small>
+                            </div>
+                            <div class="text-nowrap">
+                                <button class="btn btn-sm btn-light text-danger fw-bold shadow-sm" onclick="openSetupLiveQuizModal()"><i class="bi bi-play-circle-fill"></i> เริ่มเกมใหม่</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <ul class="nav nav-tabs mb-3" id="taskTypeTabs" role="tablist">
+              <li class="nav-item" role="presentation"><button class="nav-link active fw-bold text-primary" data-bs-toggle="tab" data-bs-target="#subtab-individual" type="button" role="tab"><i class="bi bi-person-fill"></i> สั่งงาน/ตรวจงาน(เดี่ยว)</button></li>
+              <li class="nav-item" role="presentation"><button class="nav-link fw-bold text-success" data-bs-toggle="tab" data-bs-target="#subtab-group" type="button" role="tab"><i class="bi bi-people-fill"></i> สั่งงาน/ตรวจงาน(กลุ่ม)</button></li>
+            </ul>
+
+            <div class="tab-content">
+              <div class="tab-pane fade show active" id="subtab-individual" role="tabpanel">
+                <div class="card p-4 mb-4 border-primary" style="border-width: 2px;">
+                  <h5 class="mb-3"><i class="bi bi-plus-square-fill text-primary"></i> สร้างงานเดี่ยวใหม่</h5>
+                  <div class="row g-2">
+                    <div class="col-md-3"><input type="text" id="taskTitle" class="form-control" placeholder="ชื่องาน"></div>
+                    <div class="col-md-3"><input type="text" id="taskDesc" class="form-control" placeholder="รายละเอียด"></div>
+                    <div class="col-md-2"><input type="number" id="taskMaxScore" class="form-control" placeholder="คะแนนเต็ม"></div>
+                    <div class="col-md-2"><input type="date" id="taskDue" class="form-control" placeholder="เลือกกำหนดส่ง"></div>
+                    <div class="col-md-2"><button class="btn btn-primary w-100" type="button" onclick="addAssignment()"><i class="bi bi-send-fill"></i> สั่งงาน</button></div>
+                  </div>
+                </div>
+                <div class="card p-4">
+                  <h5 class="mb-3"><i class="bi bi-list-check text-secondary"></i> งานเดี่ยวที่สั่งไปแล้ว</h5>
+                  <div class="list-group" id="assignmentList"></div>
+                </div>
+              </div>
+              
+              <div class="tab-pane fade" id="subtab-group" role="tabpanel">
+                <div class="card p-4 mb-4 border-success" style="border-width: 2px;">
+                  <h5 class="mb-3"><i class="bi bi-plus-square-fill text-success"></i> สร้างงานกลุ่มใหม่</h5>
+                  <div class="row g-2">
+                    <div class="col-md-3"><input type="text" id="groupTaskTitle" class="form-control" placeholder="ชื่องานกลุ่ม"></div>
+                    <div class="col-md-2"><input type="number" id="groupTaskMembers" class="form-control" placeholder="จำนวนสมาชิก/กลุ่ม" min="2"></div>
+                    <div class="col-md-2"><input type="number" id="groupTaskMaxScore" class="form-control" placeholder="คะแนนเต็ม"></div>
+                    <div class="col-md-3"><input type="date" id="groupTaskDue" class="form-control" placeholder="เลือกกำหนดส่ง"></div>
+                    <div class="col-md-2"><button class="btn btn-success w-100" type="button" onclick="addGroupAssignment()"><i class="bi bi-send-fill"></i> สั่งงานกลุ่ม</button></div>
+                  </div>
+                </div>
+                <div class="card p-4">
+                  <h5 class="mb-3"><i class="bi bi-people text-secondary"></i> งานกลุ่มที่สั่งไปแล้ว</h5>
+                  <div class="list-group" id="groupAssignmentList"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          </div> </div>
+      </div>
+    </div>
+  </div> 
+
+  <div class="modal fade" id="teacherConfigModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content" style="border-radius: 15px;">
+        <div class="modal-header bg-dark text-white border-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-gear-fill"></i> ตั้งค่าระบบครูผู้สอน (Teacher Config)</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4 bg-light" style="max-height: 75vh; overflow-y: auto;">
+          
+          <div class="alert alert-primary mb-4 shadow-sm border-0 border-start border-5 border-primary">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+                <div>
+                    <h6 class="fw-bold mb-1"><i class="bi bi-database-add"></i> สำหรับผู้ที่เพิ่งเริ่มใช้งาน (Setup Database)</h6>
+                    <small class="mb-0">หากคุณเพิ่งสร้างโปรเจกต์ใน Supabase ใหม่ๆ กรุณานำโค้ด SQL ไปรันเพื่อสร้างตารางทั้งหมดก่อนเริ่มใช้งาน</small>
+                </div>
+                <button class="btn btn-primary btn-sm fw-bold shadow-sm rounded-pill px-3 text-nowrap" onclick="showAppModal('sqlCodeModal')"><i class="bi bi-code-slash"></i> ดูโค้ด SQL และวิธีทำ</button>
+            </div>
+          </div>
+
+          <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-primary mb-0"><i class="bi bi-database-fill"></i> SUPABASE_URL</label>
+                  <button class="btn btn-sm btn-outline-primary fw-bold px-3" id="btnEdit_SUPABASE_URL" onclick="toggleConfigEdit('SUPABASE_URL')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="form-text text-muted small mb-2">
+                  <b>วิธีหา:</b> ล็อกอิน Supabase > เข้าโปรเจกต์ > เมนู Settings (ฟันเฟืองมุมซ้ายล่าง) > เลือก API > คัดลอกลิงก์ตรงหัวข้อ <b>Project URL</b><br>
+                  <b>ความสำคัญ:</b> เป็นที่อยู่ (Endpoint) หลักสำหรับให้แอปนี้เชื่อมต่อเข้าไปยังฐานข้อมูล Supabase แทน Google Sheets 
+              </div>
+              <div id="view_SUPABASE_URL" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
+              <div id="edit_SUPABASE_URL" class="hidden mt-3 p-3 border border-primary rounded bg-light">
+                  <label class="small fw-bold mb-1">ระบุข้อมูลใหม่:</label>
+                  <input type="text" id="input_SUPABASE_URL" class="form-control mb-2" placeholder="เช่น https://xxxxxx.supabase.co">
+                  <label class="small fw-bold text-danger mb-1">ใส่ PIN ของครูเพื่อยืนยันการบันทึก:</label>
+                  <input type="password" id="pin_SUPABASE_URL" class="form-control mb-3" placeholder="รหัส PIN ปัจจุบัน">
+                  <div class="d-flex gap-2">
+                      <button class="btn btn-primary btn-sm w-50 fw-bold" onclick="saveSingleConfig('SUPABASE_URL')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
+                      <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('SUPABASE_URL')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+
+          <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold mb-0" style="color: #fd7e14;"><i class="bi bi-key-fill"></i> SUPABASE_KEY (anon public)</label>
+                  <button class="btn btn-sm btn-outline-warning text-dark fw-bold px-3" id="btnEdit_SUPABASE_KEY" onclick="toggleConfigEdit('SUPABASE_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="form-text text-muted small mb-2">
+                  <b>วิธีหา:</b> ในหน้าเมนู API เดียวกันกับ URL ด้านบน ให้คัดลอกข้อความยาวๆ ตรงหัวข้อ Project API keys (บรรทัดที่มีคำว่า <b>anon</b> และ <b>public</b>)<br>
+                  <b>ความสำคัญ:</b> เป็นกุญแจดิจิทัลที่อนุญาตให้แอปของเราสามารถดึงและบันทึกข้อมูลนักเรียนลงฐานข้อมูลได้อย่างปลอดภัย
+              </div>
+              <div id="view_SUPABASE_KEY" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
+              <div id="edit_SUPABASE_KEY" class="hidden mt-3 p-3 border border-warning rounded bg-light">
+                  <label class="small fw-bold mb-1">ระบุข้อมูลใหม่:</label>
+                  <input type="text" id="input_SUPABASE_KEY" class="form-control mb-2" placeholder="เช่น eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+                  <label class="small fw-bold text-danger mb-1">ใส่ PIN ของครูเพื่อยืนยันการบันทึก:</label>
+                  <input type="password" id="pin_SUPABASE_KEY" class="form-control mb-3" placeholder="รหัส PIN ปัจจุบัน">
+                  <div class="d-flex gap-2">
+                      <button class="btn btn-warning text-dark btn-sm w-50 fw-bold" onclick="saveSingleConfig('SUPABASE_KEY')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
+                      <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('SUPABASE_KEY')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+
+          <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-success mb-0"><i class="bi bi-line"></i> LINE_ACCESS_TOKEN</label>
+                  <button class="btn btn-sm btn-outline-success fw-bold px-3" id="btnEdit_LINE_ACCESS_TOKEN" onclick="toggleConfigEdit('LINE_ACCESS_TOKEN')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="form-text text-muted small mb-2">
+                  <b>วิธีหา:</b> เข้าเว็บ LINE Developers > เลือก Provider และ Channel (Messaging API) > แท็บ Messaging API > ตรง Channel access token กด Issue แล้วก็อปปี้มา<br>
+                  <b>ความสำคัญ:</b> สำคัญมาก! ใช้สำหรับให้บอทส่งข้อความแจ้งเตือนเข้ากลุ่ม LINE ของนักเรียน รวมถึงส่งรหัส OTP ให้ครู
+              </div>
+              <div id="view_LINE_ACCESS_TOKEN" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
+              <div id="edit_LINE_ACCESS_TOKEN" class="hidden mt-3 p-3 border border-success rounded bg-light">
+                  <label class="small fw-bold mb-1">ระบุข้อมูลใหม่:</label>
+                  <input type="text" id="input_LINE_ACCESS_TOKEN" class="form-control mb-2">
+                  <label class="small fw-bold text-danger mb-1">ใส่ PIN ของครูเพื่อยืนยันการบันทึก:</label>
+                  <input type="password" id="pin_LINE_ACCESS_TOKEN" class="form-control mb-3" placeholder="รหัส PIN ปัจจุบัน">
+                  <div class="d-flex gap-2">
+                      <button class="btn btn-success btn-sm w-50 fw-bold" onclick="saveSingleConfig('LINE_ACCESS_TOKEN')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
+                      <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('LINE_ACCESS_TOKEN')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+
+          <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-info mb-0" style="color: #667eea !important;"><i class="bi bi-robot"></i> GEMINI_API_KEY (AI วิเคราะห์)</label>
+                  <button class="btn btn-sm btn-outline-info fw-bold px-3" style="color: #667eea; border-color: #667eea;" id="btnEdit_GEMINI_API_KEY" onclick="toggleConfigEdit('GEMINI_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="form-text text-muted small mb-2">
+                  <b>วิธีหา:</b> ไปที่เว็บ <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a> ล็อกอินด้วยบัญชี Google > กดปุ่ม <b>Create API key</b> > คัดลอกรหัสยาวๆ ที่ได้มาใส่<br>
+                  <b>ความสำคัญ:</b> ระบบจะใช้คีย์นี้เชื่อมต่อกับ AI (Gemini) เพื่อทำหน้าที่เป็นผู้ช่วยแนะแนวส่วนตัวให้นักเรียน โดยจะอ่านสถิติ (การมาเรียน, การส่งงาน, EXP) แล้วเขียนคำแนะนำและให้กำลังใจแบบอัตโนมัติในหน้าแดชบอร์ดนักเรียน
+              </div>
+              <div id="view_GEMINI_API_KEY" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
+              <div id="edit_GEMINI_API_KEY" class="hidden mt-3 p-3 border rounded bg-light" style="border-color: #667eea !important;">
+                  <label class="small fw-bold mb-1">ระบุข้อมูลใหม่:</label>
+                  <input type="text" id="input_GEMINI_API_KEY" class="form-control mb-2" placeholder="เช่น AIzaSyA...">
+                  <label class="small fw-bold text-danger mb-1">ใส่ PIN ของครูเพื่อยืนยันการบันทึก:</label>
+                  <input type="password" id="pin_GEMINI_API_KEY" class="form-control mb-3" placeholder="รหัส PIN ปัจจุบัน">
+                  <div class="d-flex gap-2">
+                      <button class="btn text-white btn-sm w-50 fw-bold" style="background-color: #667eea;" onclick="saveSingleConfig('GEMINI_API_KEY')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
+                      <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('GEMINI_API_KEY')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+          <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-info mb-0"><i class="bi bi-image"></i> IMGBB_API_KEY</label>
+                  <button class="btn btn-sm btn-outline-info fw-bold px-3" id="btnEdit_IMGBB_API_KEY" onclick="toggleConfigEdit('IMGBB_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="form-text text-muted small mb-2">
+                  <b>วิธีหา:</b> สมัครสมาชิกเว็บ api.imgbb.com > สร้าง API Key ฟรี<br>
+                  <b>ความสำคัญ:</b> ใช้แปลงรูปภาพเวลาครูประกาศให้เป็นลิงก์ออนไลน์อัตโนมัติ เพื่อให้ระบบสามารถส่งรูปเข้า LINE ได้
+              </div>
+              <div id="view_IMGBB_API_KEY" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
+              <div id="edit_IMGBB_API_KEY" class="hidden mt-3 p-3 border border-info rounded bg-light">
+                  <label class="small fw-bold mb-1">ระบุข้อมูลใหม่:</label>
+                  <input type="text" id="input_IMGBB_API_KEY" class="form-control mb-2">
+                  <label class="small fw-bold text-danger mb-1">ใส่ PIN ของครูเพื่อยืนยันการบันทึก:</label>
+                  <input type="password" id="pin_IMGBB_API_KEY" class="form-control mb-3" placeholder="รหัส PIN ปัจจุบัน">
+                  <div class="d-flex gap-2">
+                      <button class="btn btn-info text-white btn-sm w-50 fw-bold" onclick="saveSingleConfig('IMGBB_API_KEY')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
+                      <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('IMGBB_API_KEY')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+
+          <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-danger mb-0"><i class="bi bi-person-badge"></i> TEACHER_LINE_UID</label>
+                  <button class="btn btn-sm btn-outline-danger fw-bold px-3" id="btnEdit_TEACHER_LINE_UID" onclick="toggleConfigEdit('TEACHER_LINE_UID')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="form-text text-muted small mb-2">
+                  <b>วิธีหา:</b> แอดบอทที่คุณสร้างไว้เป็นเพื่อน > พิมพ์คำว่า <b>!id</b> ในแชทส่วนตัวกับบอท > บอทจะตอบ User ID ของคุณมาให้ (เป็นรหัสยาวๆ ขึ้นต้นด้วย U)<br>
+                  <b>ความสำคัญ:</b> ถ้าระบุช่องนี้ ระบบจะอัปเกรดความปลอดภัย โดยส่งรหัส OTP 6 หลักเข้า LINE ของครูทุกครั้งที่ล็อกอิน <i>(หากปล่อยว่างไว้ จะล็อกอินด้วย PIN เพียงอย่างเดียว)</i>
+              </div>
+              <div id="view_TEACHER_LINE_UID" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
+              <div id="edit_TEACHER_LINE_UID" class="hidden mt-3 p-3 border border-danger rounded bg-light">
+                  <label class="small fw-bold mb-1">ระบุข้อมูลใหม่ (ปล่อยว่างได้ หากไม่ต้องการใช้ระบบ OTP):</label>
+                  <input type="text" id="input_TEACHER_LINE_UID" class="form-control mb-2" placeholder="เช่น U1234567890abcdef...">
+                  <label class="small fw-bold text-danger mb-1">ใส่ PIN ของครูเพื่อยืนยันการบันทึก:</label>
+                  <input type="password" id="pin_TEACHER_LINE_UID" class="form-control mb-3" placeholder="รหัส PIN ปัจจุบัน">
+                  <div class="d-flex gap-2">
+                      <button class="btn btn-danger btn-sm w-50 fw-bold" onclick="saveSingleConfig('TEACHER_LINE_UID')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
+                      <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('TEACHER_LINE_UID')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+
+          <div class="mb-2 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-shield-lock-fill text-dark"></i> TEACHER_PIN</label>
+                  <button class="btn btn-sm btn-outline-dark fw-bold px-3" id="btnEdit_TEACHER_PIN" onclick="toggleConfigEdit('TEACHER_PIN')"><i class="bi bi-pencil-square"></i> เปลี่ยนรหัส</button>
+              </div>
+              <div class="form-text text-muted small mb-2">
+                  <b>ความสำคัญ:</b> เป็นรหัสผ่านหลักในการเข้าสู่ระบบครู และเป็นรหัสผ่านสำหรับยืนยันการแก้ข้อมูลการตั้งค่าในหน้านี้ทั้งหมด ห้ามลืมเด็ดขาด!
+              </div>
+              <div id="view_TEACHER_PIN" class="p-2 bg-light border rounded" style="font-family: monospace; font-size: 0.9em; color: #555;">********</div>
+              <div id="edit_TEACHER_PIN" class="hidden mt-3 p-3 border border-dark rounded bg-light">
+                  <label class="small fw-bold mb-1">ตั้งรหัส PIN ใหม่:</label>
+                  <input type="password" id="input_TEACHER_PIN" class="form-control mb-2" placeholder="ใส่รหัสใหม่ที่ต้องการ">
+                  <label class="small fw-bold text-danger mb-1">ใส่ PIN เดิมเพื่อยืนยันการบันทึก:</label>
+                  <input type="password" id="pin_TEACHER_PIN" class="form-control mb-3" placeholder="รหัส PIN เดิม">
+                  <div class="d-flex gap-2">
+                      <button class="btn btn-dark btn-sm w-50 fw-bold" onclick="saveSingleConfig('TEACHER_PIN')"><i class="bi bi-save"></i> อัปเดตรหัสผ่าน</button>
+                      <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('TEACHER_PIN')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="sqlCodeModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content" style="border-radius: 15px;">
+        <div class="modal-header bg-dark text-white border-0">
+          <h5 class="modal-title fw-bold"><i class="bi bi-database-gear"></i> โค้ดสร้างตารางฐานข้อมูล Supabase (SQL)</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4 bg-light">
+          <div class="alert alert-warning fw-bold mb-3 border-0 border-start border-4 border-warning shadow-sm">
+            <i class="bi bi-info-circle-fill"></i> วิธีใช้งาน (อ่านก่อนรัน):
+            <ol class="mb-0 mt-2 px-3 text-dark">
+              <li>เข้าสู่ระบบ <a href="https://supabase.com" target="_blank" class="text-primary text-decoration-none">Supabase</a> แล้วเข้าโปรเจกต์ของคุณ</li>
+              <li>ไปที่เมนู <b>SQL Editor</b> (ไอคอนรูป 📝 &lt; &gt; แถบซ้ายมือ) > กดปุ่ม <b>New query</b></li>
+              <li>กดปุ่ม <span class="badge bg-success">คัดลอกโค้ด</span> ด้านล่าง แล้วนำไปวางในช่องว่างของ SQL Editor</li>
+              <li>กดปุ่ม <b>Run</b> (ปุ่มสีเขียวมุมขวาล่าง) รอจนขึ้นคำว่า <span class="text-success">Success</span></li>
+              <li class="text-danger mt-1"><b>สำคัญมาก!</b> หลังจากรันเสร็จ ให้ไปที่เมนู <b>Authentication > Policies</b> แล้วไล่กด <b>Disable RLS</b> ให้ครบทั้ง 10 ตาราง</li>
+            </ol>
+          </div>
+          <div class="position-relative">
+            <button class="btn btn-sm btn-success position-absolute top-0 end-0 m-2 fw-bold shadow" onclick="copySqlCode()" id="btnCopySql" style="z-index: 10;"><i class="bi bi-clipboard"></i> คัดลอกโค้ด</button>
+            <textarea id="sqlCodeArea" class="form-control text-light bg-dark p-3 rounded-3 shadow-sm border-0" style="font-family: monospace; font-size: 0.85rem; height: 400px; resize: none;" readonly>-- ========================================================
+-- ========================================================
+-- ส่วนที่ 0: ล้างกระดาน (ลบตารางเก่าทิ้งเพื่อป้องกัน Error ทับซ้อน)
+-- ========================================================
+DROP TABLE IF EXISTS live_quiz_responses CASCADE;
+DROP TABLE IF EXISTS live_quiz_sessions CASCADE;
+DROP TABLE IF EXISTS boss_logs CASCADE;
+DROP TABLE IF EXISTS boss_quizzes CASCADE;
+DROP TABLE IF EXISTS group_submissions CASCADE;
+DROP TABLE IF EXISTS groups CASCADE;
+DROP TABLE IF EXISTS group_tasks CASCADE;
+DROP TABLE IF EXISTS submissions CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS attendance CASCADE;
+DROP TABLE IF EXISTS leaves CASCADE;
+DROP TABLE IF EXISTS announcements CASCADE;
+DROP TABLE IF EXISTS students CASCADE;
+DROP TABLE IF EXISTS rooms CASCADE;
+
+-- ========================================================
+-- ส่วนที่ 1: สร้างตารางทั้งหมดใหม่ให้สมบูรณ์
+-- ========================================================
+
+-- 1. ตารางห้องเรียน
+CREATE TABLE rooms (
+    room_name TEXT PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 2. ตารางนักเรียน
+CREATE TABLE students (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    nickname TEXT DEFAULT '',
+    gender TEXT DEFAULT '',
+    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    accumulated_score NUMERIC DEFAULT 0,
+    pin TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
+    disease TEXT DEFAULT '',
+    dob TEXT DEFAULT '',
+    sport TEXT DEFAULT '',
+    talent TEXT DEFAULT '',
+    hobby TEXT DEFAULT '',
+    father TEXT DEFAULT '',
+    mother TEXT DEFAULT '',
+    house_no TEXT DEFAULT '',
+    moo TEXT DEFAULT '',
+    sub_district TEXT DEFAULT '',
+    district TEXT DEFAULT '',
+    province TEXT DEFAULT '',
+    zipcode TEXT DEFAULT '',
+    avatar TEXT DEFAULT '1',
+    exp NUMERIC DEFAULT 0,
+    last_check_in TEXT DEFAULT '',
+    dm JSONB DEFAULT '[]'::jsonb,
+    inventory JSONB DEFAULT '[]'::jsonb,
+    equipped_bg TEXT DEFAULT 'bg0',
+    last_passive_update BIGINT DEFAULT (extract(epoch from now()) * 1000),
+    buff_multiplier NUMERIC DEFAULT 1.0,
+    buff_end_at BIGINT DEFAULT 0
+);
+
+-- 3. ตารางเช็คชื่อ
+CREATE TABLE attendance (
+    id SERIAL PRIMARY KEY,
+    check_date TEXT NOT NULL,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    student_name TEXT,
+    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    status TEXT,
+    timestamp TEXT,
+    UNIQUE(check_date, student_id)
+);
+
+-- 4. ตารางสั่งงาน (เดี่ยว)
+CREATE TABLE tasks (
+    task_id TEXT PRIMARY KEY,
+    title TEXT,
+    description TEXT,
+    due_date TEXT,
+    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    max_score NUMERIC
+);
+
+-- 5. ตารางส่งงาน (เดี่ยว)
+CREATE TABLE submissions (
+    id SERIAL PRIMARY KEY,
+    task_id TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
+    task_title TEXT,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    student_name TEXT,
+    status TEXT,
+    score NUMERIC,
+    url TEXT,
+    screenshot_url TEXT,
+    timestamp TEXT,
+    UNIQUE(task_id, student_id)
+);
+
+-- 6. ตารางประกาศ
+CREATE TABLE announcements (
+    id SERIAL PRIMARY KEY,
+    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    message TEXT,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 7. คำร้องขอลา
+CREATE TABLE leaves (
+    id SERIAL PRIMARY KEY,
+    date_req TEXT,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    student_name TEXT,
+    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    leave_date TEXT,
+    reason TEXT,
+    status TEXT DEFAULT 'รออนุมัติ'
+);
+
+-- 8. ตารางสั่งงานกลุ่ม
+CREATE TABLE group_tasks (
+    task_id TEXT PRIMARY KEY,
+    title TEXT,
+    max_members INT,
+    due_date TEXT,
+    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    max_score NUMERIC
+);
+
+-- 9. ตารางข้อมูลกลุ่ม
+CREATE TABLE groups (
+    group_id TEXT PRIMARY KEY,
+    task_id TEXT REFERENCES group_tasks(task_id) ON DELETE CASCADE,
+    group_name TEXT,
+    members JSONB DEFAULT '[]'::jsonb,
+    status TEXT DEFAULT 'รออนุมัติ'
+);
+
+-- 10. ตารางส่งงานกลุ่ม
+CREATE TABLE group_submissions (
+    id SERIAL PRIMARY KEY,
+    task_id TEXT REFERENCES group_tasks(task_id) ON DELETE CASCADE,
+    group_id TEXT REFERENCES groups(group_id) ON DELETE CASCADE,
+    status TEXT,
+    score NUMERIC,
+    url TEXT,
+    screenshot_url TEXT,
+    timestamp TEXT,
+    UNIQUE(task_id, group_id)
+);
+
+-- 11. ตารางเก็บข้อมูลบอสและคำถาม
+CREATE TABLE boss_quizzes (
+    id SERIAL PRIMARY KEY,
+    room_name TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    topic TEXT,
+    boss_name TEXT,
+    boss_hp INT,
+    boss_max_hp INT,
+    questions_json JSONB,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 12. ตารางเก็บประวัติการตีบอส
+CREATE TABLE boss_logs (
+    id SERIAL PRIMARY KEY,
+    boss_id INT REFERENCES boss_quizzes(id) ON DELETE CASCADE,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    damage_dealt INT,
+    exp_earned INT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 13. ตารางเก็บเซสชันของ Live Quiz
+CREATE TABLE live_quiz_sessions (
+    id TEXT PRIMARY KEY,
+    room_name TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    status TEXT DEFAULT 'setup',
+    questions_json JSONB,
+    current_q_index INT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 14. ตารางเก็บคำตอบของนักเรียนแบบเรียลไทม์
+CREATE TABLE live_quiz_responses (
+    id SERIAL PRIMARY KEY,
+    session_id TEXT REFERENCES live_quiz_sessions(id) ON DELETE CASCADE,
+    q_index INT,
+    student_id TEXT,
+    answer TEXT,
+    response_time INT,
+    is_correct BOOLEAN,
+    UNIQUE(session_id, q_index, student_id)
+);
+
+-- [ส่วนที่แก้ไขและเพิ่มใหม่: สร้าง INDEX เพื่อเพิ่มความเร็วในการค้นหาและแก้หน่วง]
+CREATE INDEX idx_students_room ON students(room);
+CREATE INDEX idx_attendance_student ON attendance(student_id);
+CREATE INDEX idx_submissions_student ON submissions(student_id);
+CREATE INDEX idx_groups_members ON groups USING gin (members);
+CREATE INDEX idx_live_quiz_responses_session_q ON live_quiz_responses(session_id, q_index); -- เพิ่มมาเพื่อความไวของควิซ
+CREATE INDEX idx_boss_logs_boss_id ON boss_logs(boss_id); -- เพิ่มมาเพื่อความไวของเกมบอส
+ALTER TABLE live_quiz_responses SET (parallel_workers = 4); -- ช่วยให้ประมวลผลคำตอบพร้อมกันได้ไวขึ้น
+
+-- ========================================================
+-- ส่วนที่ 2: ระบบตารางทิพย์ (VIEWS) สำหรับแยกรายชื่อนักเรียนตามห้อง
+-- ========================================================
+
+CREATE OR REPLACE FUNCTION manage_room_student_views()
+RETURNS TRIGGER AS $$
+DECLARE
+    safe_view_name TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        safe_view_name := 'room_students_' || NEW.room_name;
+        EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT * FROM students WHERE room = %L', safe_view_name, NEW.room_name);
+        RETURN NEW;
+    ELSIF TG_OP = 'DELETE' THEN
+        safe_view_name := 'room_students_' || OLD.room_name;
+        EXECUTE format('DROP VIEW IF EXISTS %I', safe_view_name);
+        RETURN OLD;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trigger_room_views ON rooms;
+CREATE TRIGGER trigger_room_views
+AFTER INSERT OR DELETE ON rooms
+FOR EACH ROW
+EXECUTE FUNCTION manage_room_student_views();
+
+-- ========================================================
+-- ส่วนที่ 3: เปิดใช้งานระบบ Real-time และการส่งข้อมูลแบบ Full
+-- ========================================================
+
+-- [ส่วนที่เพิ่มใหม่: ตั้งค่าให้ส่งข้อมูลครบถ้วนสำหรับตารางที่มีการอัปเดตบ่อย]
+ALTER TABLE students REPLICA IDENTITY FULL;
+ALTER TABLE live_quiz_responses REPLICA IDENTITY FULL;
+ALTER TABLE boss_quizzes REPLICA IDENTITY FULL;
+
+-- เปิดใช้งาน Publication
+DROP PUBLICATION IF EXISTS supabase_realtime;
+CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
+</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="inventoryModal" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-centered"><div class="modal-content" style="border-radius: 20px;"><div class="modal-header border-0 bg-success text-white"><h5 class="modal-title fw-bold"><i class="bi bi-backpack-fill"></i> กระเป๋ามิติ</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4 bg-light">
+      <ul class="nav nav-pills justify-content-center mb-4" id="invTabs" role="tablist">
+        <li class="nav-item" role="presentation"><button class="nav-link active fw-bold" data-bs-toggle="pill" data-bs-target="#inv-clothes-m" type="button" role="tab" id="tabInvClothesM">👕 ชุดชาย</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#inv-clothes-f" type="button" role="tab" id="tabInvClothesF">👗 ชุดหญิง</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#inv-items" type="button" role="tab">👑 ของตกแต่ง</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#inv-bgs" type="button" role="tab">🖼️ ฉากหลัง</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#inv-foods" type="button" role="tab">🍗 อาหาร</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#inv-powerups" type="button" role="tab">⚡ ตัวช่วย</button></li>
+      </ul>
+      <div class="tab-content" style="max-height: 55vh; overflow-y: auto; overflow-x: hidden; padding: 10px;">
+        <div class="tab-pane fade show active" id="inv-clothes-m" role="tabpanel"><div class="row g-3" id="invClothesMList"></div></div>
+        <div class="tab-pane fade" id="inv-clothes-f" role="tabpanel"><div class="row g-3" id="invClothesFList"></div></div>
+        <div class="tab-pane fade" id="inv-items" role="tabpanel"><div class="row g-3" id="invItemList"></div></div>
+        <div class="tab-pane fade" id="inv-bgs" role="tabpanel"><div class="row g-3" id="invBgList"></div></div>
+        <div class="tab-pane fade" id="inv-foods" role="tabpanel"><div class="row g-3" id="invFoodList"></div></div>
+        <div class="tab-pane fade" id="inv-powerups" role="tabpanel"><div class="row g-3" id="invPowerupList"></div></div>
+      </div>
+  </div></div></div></div>
+
+  <div class="modal fade" id="shopModal" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-centered"><div class="modal-content" style="border-radius: 20px;"><div class="modal-header border-0 bg-warning text-dark"><h5 class="modal-title fw-bold"><i class="bi bi-shop"></i> ร้านค้า (แต้มของคุณ: <span id="shopUserExp" class="text-danger fw-bold"></span> EXP)</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-4 bg-light">
+      <ul class="nav nav-pills justify-content-center mb-4" id="shopTabs" role="tablist">
+        <li class="nav-item" role="presentation"><button class="nav-link active fw-bold" data-bs-toggle="pill" data-bs-target="#shop-clothes-m" type="button" role="tab" id="tabShopClothesM">👕 ชุดผู้ชาย</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#shop-clothes-f" type="button" role="tab" id="tabShopClothesF">👗 ชุดผู้หญิง</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#shop-items" type="button" role="tab">👑 ของตกแต่ง</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#shop-bgs" type="button" role="tab">🖼️ ฉากเวทมนตร์</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#shop-foods" type="button" role="tab">🍗 อาหาร</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link fw-bold" data-bs-toggle="pill" data-bs-target="#shop-powerups" type="button" role="tab">⚡ ตัวช่วย</button></li>
+      </ul>
+      <div class="tab-content" style="max-height: 55vh; overflow-y: auto; overflow-x: hidden; padding: 10px;">
+        <div class="tab-pane fade show active" id="shop-clothes-m" role="tabpanel"><div class="row g-3" id="shopClothesMList"></div></div>
+        <div class="tab-pane fade" id="shop-clothes-f" role="tabpanel"><div class="row g-3" id="shopClothesFList"></div></div>
+        <div class="tab-pane fade" id="shop-items" role="tabpanel"><div class="row g-3" id="shopItemList"></div></div>
+        <div class="tab-pane fade" id="shop-bgs" role="tabpanel"><div class="row g-3" id="shopBgList"></div></div>
+        <div class="tab-pane fade" id="shop-foods" role="tabpanel"><div class="row g-3" id="shopFoodList"></div></div>
+        <div class="tab-pane fade" id="shop-powerups" role="tabpanel"><div class="row g-3" id="shopPowerupList"></div></div>
+      </div>
+  </div></div></div></div>
+
+  <div class="modal fade" id="bulkExpModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header bg-primary text-white"><h5 class="modal-title"><i class="bi bi-stars"></i> แจกแต้มพิเศษแบบกลุ่ม</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body">
+    <div class="row g-3 mb-3">
+        <div class="col-md-6"><label class="form-label fw-bold">ระบุจำนวน EXP (แต้ม)</label><input type="number" id="bulkExpAmount" class="form-control" placeholder="เช่น 500 หรือ -100"></div>
+        <div class="col-md-6"><label class="form-label fw-bold">เหตุผลที่มอบแต้ม</label><input type="text" id="bulkExpReason" class="form-control" placeholder="เช่น ชนะเกมตอบคำถาม, ช่วยครูถือของ"></div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mb-2"><label class="form-label fw-bold mb-0">เลือกนักเรียนที่จะได้รับแต้ม</label><div class="form-check"><input class="form-check-input" type="checkbox" id="selectAllExp" onchange="toggleSelectAllExp(this)"><label class="form-check-label text-primary fw-bold" for="selectAllExp">เลือกทั้งหมด</label></div></div>
+    <div id="bulkExpStudentList" style="max-height: 40vh; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; background: #f8f9fa;"></div>
+  </div><div class="modal-footer"><button class="btn btn-primary w-100 fw-bold" onclick="submitBulkExp()">มอบแต้มและส่งแจ้งเตือน</button></div></div></div></div>
+
+  <div class="modal fade" id="sendDmModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-danger text-white"><h5 class="modal-title"><i class="bi bi-envelope-heart-fill"></i> ส่งข้อความถึง <span id="dmTargetName"></span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="dmTargetId"><label class="form-label small fw-bold text-muted mb-1">เทมเพลตข้อความด่วน:</label><div class="mb-3 d-flex gap-1 flex-wrap"><button class="btn btn-sm btn-outline-danger rounded-pill fw-bold" onclick="document.getElementById('dmTextInput').value='ตั้งใจเรียนนะ สู้ๆ ✌️'">สู้ๆ ✌️</button><button class="btn btn-sm btn-outline-warning text-dark rounded-pill fw-bold" onclick="document.getElementById('dmTextInput').value='อย่าลืมตามงานที่ค้างให้ครบนะครับ ⚠️'">ตามงานค้าง ⚠️</button><button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="document.getElementById('dmTextInput').value='พรุ่งนี้มีสอบ อย่าลืมอ่านหนังสือน้า 📚'">เตือนสอบ 📚</button><button class="btn btn-sm btn-outline-dark rounded-pill fw-bold" onclick="documentgetElementById('dmTextInput').value='ติดต่อครูด่วนเลยนะครับ มีเรื่องต้องคุย 📞'">ติดต่อด่วน 📞</button></div><textarea id="dmTextInput" class="form-control" rows="4" placeholder="หรือพิมพ์ข้อความส่วนตัวเพื่อให้กำลังใจเตือนเรื่องงานที่นี่..."></textarea></div><div class="modal-footer"><button class="btn btn-danger w-100 fw-bold" onclick="processSendDM()">ส่งข้อความ</button></div></div></div></div>
+
+  <div class="modal fade" id="levelModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius: 20px;"><div class="modal-header border-0 bg-primary text-white"><h5 class="modal-title fw-bold"><i class="bi bi-bar-chart-fill"></i> ระบบระดับและของรางวัล</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><div id="levelListContainer" style="max-height:60vh; overflow-y:auto;"></div></div></div></div></div>
+  <div class="modal fade" id="avatarModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content" style="border-radius: 20px;"><div class="modal-header border-0 bg-primary text-white"><h5 class="modal-title fw-bold"><i class="bi bi-emoji-sunglasses"></i> เลือกอวตารตัวโปรดของคุณ</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><div class="alert alert-info py-2 small fw-bold"><i class="bi bi-info-circle-fill"></i> เลื่อนระดับเพื่อปลดล็อคอวตารใหม่ๆ มากขึ้น!</div><div class="d-flex flex-wrap gap-3 justify-content-center" id="avatarSelectionList" style="max-height: 50vh; overflow-y: auto; padding-right: 10px;"></div></div><div class="modal-footer border-0 justify-content-center"><button class="btn btn-primary px-5 rounded-pill fw-bold" onclick="confirmAvatarChange()"><i class="bi bi-check-circle"></i> ยืนยันการเปลี่ยน</button></div></div></div></div>
+  <div class="modal fade" id="boardModal" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog modal-fullscreen"><div class="modal-content" style="background-color: #34495e;"><div class="modal-header border-0 text-white" style="background: rgba(0,0,0,0.6);"><h5 class="modal-title fw-bold"><i class="bi bi-easel-fill text-warning"></i> กระดานโพสอิท (ห้อง: <span id="boardRoomName"></span>)</h5><div><button class="btn btn-danger btn-sm hidden me-3" id="btnTeacherClearBoard" onclick="confirmClearBoard()"><i class="bi bi-trash"></i> ล้างกระดานทั้งหมด</button><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div></div><div class="modal-body p-0"><div class="board-bg" id="boardContainer"></div></div><div class="modal-footer border-0 flex-column align-items-center" style="background: rgba(0,0,0,0.7); box-shadow: 0 -5px 10px rgba(0,0,0,0.3); padding-top: 15px;"><div class="w-100" style="max-width: 800px;"><div class="text-white small fw-bold mb-1"><i class="bi bi-palette-fill text-warning"></i> เลือกลายโพสอิท (ปลดล็อคตามเลเวล):</div><div class="style-picker-container" id="postItStylePicker"></div></div><div class="input-group w-100 shadow-sm mt-2" style="max-width: 800px;"><input type="text" id="piText" class="form-control border-0 fs-5" placeholder="พิมพ์ข้อความที่นี่ แล้วกดปุ่ม หรือ Enter..." onkeypress="if(event.key === 'Enter') submitPostIt()"><button class="btn btn-warning fw-bold fs-5 px-4" onclick="submitPostIt()"><i class="bi bi-send-fill"></i> แปะเลย!</button></div></div></div></div></div>
+  
+  <div class="modal fade" id="announcementModal" tabindex="-1" data-bs-backdrop="static">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content" style="border-radius: 15px;">
+              <div class="modal-header bg-warning border-0 text-dark"><h5 class="modal-title fw-bold"><i class="bi bi-megaphone-fill"></i> ระบบประกาศห้องเรียน</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+              <div class="modal-body p-0">
+                  <ul class="nav nav-tabs w-100" id="announceTabs" role="tablist">
+                      <li class="nav-item w-50 text-center" role="presentation"><button class="nav-link active w-100 fw-bold py-3 text-primary" id="tab-web-btn" data-bs-toggle="tab" data-bs-target="#tab-web" type="button" role="tab"><i class="bi bi-globe"></i> ประกาศขึ้นเว็บนักเรียน</button></li>
+                      <li class="nav-item w-50 text-center" role="presentation"><button class="nav-link w-100 fw-bold py-3 text-success" id="tab-line-btn" data-bs-toggle="tab" data-bs-target="#tab-line" type="button" role="tab"><i class="bi bi-line"></i> ประกาศเข้ากลุ่ม LINE</button></li>
+                  </ul>
+                  <div class="tab-content p-4 bg-light">
+                      <div class="tab-pane fade show active" id="tab-web" role="tabpanel">
+                          <label class="form-label fw-bold"><i class="bi bi-stars text-warning"></i> เทมเพลตครูยุคใหม่ (กดเพื่อเติมข้อความ)</label>
+                          <div class="d-flex flex-wrap gap-2 mb-3"><button class="btn btn-sm btn-outline-success rounded-pill fw-bold" onclick="applyWebAnnounceTemplate('buff')">🎁 แจกบัฟ/แต้มพิเศษ</button><button class="btn btn-sm btn-outline-danger rounded-pill fw-bold" onclick="applyWebAnnounceTemplate('cheer')">💖 ให้กำลังใจ</button><button class="btn btn-sm btn-outline-warning text-dark rounded-pill fw-bold" onclick="applyWebAnnounceTemplate('warning')">👀 เตือนคนดองงาน</button></div>
+                          <label class="form-label fw-bold">ข้อความที่ต้องการประกาศขึ้นแดชบอร์ดนักเรียนทั้งห้อง</label>
+                          <textarea id="announceWebMsgArea" class="form-control mb-3 shadow-sm" rows="5" placeholder="พิมพ์ข้อความที่นี่... (นักเรียนจะต้องกดปุ่มรับทราบข้อความจึงจะหายไปทีละอัน)"></textarea>
+                          <button class="btn btn-primary w-100 fw-bold py-2 shadow" id="btnConfirmAnnounceWeb" onclick="processWebAnnounce()"><i class="bi bi-send-fill"></i> ส่งประกาศขึ้นเว็บเลย</button>
+                      </div>
+                      <div class="tab-pane fade" id="tab-line" role="tabpanel">
+                          <label class="form-label fw-bold">1. ตัวช่วยสร้างข้อความด่วน (คลิกเพื่อเลือกฟอร์ม)</label>
+                          <div class="d-flex flex-wrap gap-2 mb-3"><button class="btn btn-sm btn-outline-danger rounded-pill fw-bold" onclick="showTemplateForm('exam')">📝 นัดสอบเก็บคะแนน / กลางภาค</button><button class="btn btn-sm btn-outline-warning text-dark rounded-pill fw-bold" onclick="showTemplateForm('homework')">⚠️ ตามงานค้าง</button><button class="btn btn-sm btn-outline-info rounded-pill fw-bold" onclick="showTemplateForm('cancel')">❌ เลื่อน/งดคลาส</button></div>
+                          <div id="templateFormArea" class="hidden mb-3" data-current-type="">
+                              <div id="form-exam" class="hidden template-subform shadow-sm"><h6 class="text-danger fw-bold"><i class="bi bi-card-checklist"></i> ข้อมูลการสอบ</h6><div class="row g-2 mt-2"><div class="col-md-4"><label class="small text-muted fw-bold">วันที่สอบ</label><input type="date" id="tmpExDate" class="form-control form-control-sm"></div><div class="col-md-4"><label class="small text-muted fw-bold">เวลาเริ่ม</label><input type="time" id="tmpExTimeStart" class="form-control form-control-sm"></div><div class="col-md-4"><label class="small text-muted fw-bold">เวลาจบ</label><input type="time" id="tmpExTimeEnd" class="form-control form-control-sm"></div><div class="col-md-6"><label class="small text-muted fw-bold">สถานที่ / ห้องสอบ</label><input type="text" id="tmpExLoc" class="form-control form-control-sm" placeholder="เช่น ห้อง 301 หรือ ออนไลน์"></div><div class="col-md-6"><label class="small text-muted fw-bold">เนื้อหาที่ออกสอบ</label><input type="text" id="tmpExTopic" class="form-control form-control-sm" placeholder="เช่น บทที่ 1-2"></div></div></div>
+                              <div id="form-homework" class="hidden template-subform shadow-sm"><h6 class="text-warning fw-bold"><i class="bi bi-exclamation-triangle"></i> ข้อมูลตามงานค้าง</h6><div class="row g-2 mt-2"><div class="col-md-12"><label class="small text-muted fw-bold">ชื่องานที่ค้าง</label><input type="text" id="tmpHwName" class="form-control form-control-sm" placeholder="เช่น รายงานประจำหน่วย"></div><div class="col-md-12"><label class="small text-muted fw-bold">ขีดเส้นตาย (เดดไลน์)</label><input type="datetime-local" id="tmpHwDeadline" class="form-control form-control-sm"></div></div></div>
+                              <div id="form-cancel" class="hidden template-subform shadow-sm"><h6 class="text-info fw-bold"><i class="bi bi-x-circle"></i> ข้อมูลการงดคลาส</h6><div class="row g-2 mt-2"><div class="col-md-4"><label class="small text-muted fw-bold">วันที่งด</label><input type="date" id="tmpCancelDate" class="form-control form-control-sm"></div><div class="col-md-8"><label class="small text-muted fw-bold">เหตุผล</label><input type="text" id="tmpCancelReason" class="form-control form-control-sm" placeholder="เช่น ครูติดประชุมด่วน"></div></div></div>
+                              <button class="btn btn-dark btn-sm w-100 mt-3 fw-bold shadow-sm" onclick="generateTemplateText()">นำข้อมูลไปวางในกล่องข้อความ 👇</button>
+                          </div>
+                          <label class="form-label fw-bold">2. 💬 ข้อความที่จะประกาศ (แก้ไขได้อิสระ)</label><textarea id="announceMsgArea" class="form-control mb-3 shadow-sm" rows="6" placeholder="พิมพ์ข้อความที่ต้องการแจ้งเตือนที่นี่..."></textarea>
+                          <label class="form-label fw-bold">3. 🔗 แนบลิงก์เพิ่มเติม (ถ้ามี)</label><input type="url" id="announceLink" class="form-control mb-3 shadow-sm" placeholder="เช่น ลิงก์โฟลเดอร์ หรือเว็บไซต์">
+                          <label class="form-label fw-bold">4. 🖼️ แนบรูปภาพจากเครื่อง</label><input type="file" id="announceImgFile" class="form-control mb-2 shadow-sm" accept="image/*" onchange="previewAndCompressImg(this)"><div class="text-center"><span id="compressStatus" class="text-primary small fw-bold" style="display:none;"><i class="bi bi-hourglass-split"></i> กำลังย่อขนาดรูปภาพ...</span><img id="announceImgPreview" src="" style="max-height: 150px; display: none; border-radius: 10px; margin-top: 10px; border: 2px solid #dee2e6;" class="shadow-sm"></div>
+                          <button class="btn btn-success w-100 fw-bold py-2 mt-3 shadow" id="btnConfirmAnnounce" onclick="processBroadcastAnnounce()"><i class="bi bi-send-fill"></i> ส่งประกาศด่วนเข้า LINE กลุ่ม</button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+  </div>
+
+  <div class="modal fade" id="submitWorkModal" tabindex="-1" data-bs-backdrop="static">
+      <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content" style="border-radius: 15px;">
+              <div class="modal-header bg-primary text-white border-0">
+                  <h5 class="modal-title fw-bold"><i class="bi bi-cloud-arrow-up-fill"></i> ส่งผลงาน</h5>
+                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body p-4">
+                  <input type="hidden" id="submitTaskId" value="">
+                  <input type="hidden" id="submitIsGroup" value="false">
+                  <input type="hidden" id="submitGroupId" value="">
+                  <h6 id="submitTaskTitle" class="text-primary fw-bold mb-3">ชื่องาน: </h6>
+                  
+                  <div id="submitLinkDiv" class="mb-3">
+                      <label class="form-label fw-bold"><i class="bi bi-link-45deg"></i> วางลิงก์ผลงาน (เช่น Canva, Drive)</label>
+                      <input type="url" id="submitLink" class="form-control" placeholder="วางลิงก์ที่นี่...">
+                      <small class="text-danger mt-1 d-block"><b>* ข้อควรระวัง:</b> อย่าลืมตั้งค่าแชร์ลิงก์เป็นสาธารณะนะครับ</small>
+                  </div>
+                  
+                  <div class="p-3 bg-light border rounded-3">
+                      <label class="form-label fw-bold text-success mb-1"><i class="bi bi-image"></i> แนบรูปภาพผลงาน (ให้ AI ตรวจ)</label>
+                      <p class="small text-muted mb-2">แคปหน้าจอผลงาน หรือเซฟเป็นรูปภาพมา 1 แผ่นเพื่อให้ระบบ AI ช่วยประเมินคะแนนครับ</p>
+                      <input type="file" id="submitImgFile" class="form-control form-control-sm mb-2" accept="image/*" onchange="previewSubmitImg(this)">
+                      <div class="text-center">
+                          <span id="submitCompressStatus" class="text-primary small fw-bold" style="display:none;"><i class="bi bi-hourglass-split"></i> กำลังเตรียมรูปภาพ...</span>
+                          <img id="submitImgPreview" src="" style="max-width: 100%; max-height: 200px; display: none; border-radius: 8px; border: 2px solid #ccc; margin-top: 5px;">
+                      </div>
+                  </div>
+                  
+              </div>
+              <div class="modal-footer border-0">
+                  <button class="btn btn-primary w-100 fw-bold py-2 shadow-sm" id="btnConfirmSubmit" onclick="processSubmitWork()">ยืนยันการส่งงาน</button>
+              </div>
+          </div>
+      </div>
+  </div>
+
+  <div class="modal fade" id="studentLeaveModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius: 15px;"><div class="modal-header bg-warning border-0 pb-3"><h5 class="modal-title fw-bold text-dark"><i class="bi bi-envelope-paper"></i> แบบฟอร์มขอลาหยุด</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><div class="row"><div class="col-6"><label class="form-label fw-bold small">วันที่เริ่มลา</label><input type="date" id="studentLeaveDate" class="form-control mb-3" placeholder="เลือกวันที่"></div><div class="col-6"><label class="form-label fw-bold small">ถึงวันที่</label><input type="date" id="studentLeaveEndDate" class="form-control mb-3" placeholder="เลือกวันที่"></div></div><label class="form-label fw-bold small mb-2">เลือกสาเหตุ (กดเพื่อเติมข้อความอัตโนมัติ)</label><div class="d-flex flex-wrap gap-2 mb-3"><button class="btn btn-sm btn-outline-danger rounded-pill fw-bold" onclick="applyLeaveTemplate('ป่วย มีไข้ ไม่สบาย ขออนุญาตพักผ่อนครับ/ค่ะ')">🤒 ลาป่วย</button><button class="btn btn-sm btn-outline-warning text-dark rounded-pill fw-bold" onclick="applyLeaveTemplate('มีธุระส่วนตัว/ครอบครัวที่ต้องจัดการครับ/ค่ะ')">🏠 ลากิจ</button><button class="btn btn-sm btn-outline-info rounded-pill fw-bold" onclick="applyLeaveTemplate('มีนัดพบแพทย์/ตรวจสุขภาพ/ทำฟันครับ/ค่ะ')">🩺 ลาแพทย์</button><button class="btn btn-sm btn-outline-dark rounded-pill fw-bold" onclick="applyLeaveTemplate('เกิดเหตุสุดวิสัย/อุบัติเหตุครับ/ค่ะ')">🚨 เหตุฉุกเฉิน</button></div><label class="form-label fw-bold small">เหตุผลการลา</label><textarea id="studentLeaveReason" class="form-control mb-3" rows="3" placeholder="หรือพิมพ์เหตุผลที่นี่..."></textarea></div><div class="modal-footer border-0 pt-0 pb-4 px-4"><button class="btn btn-warning w-100 py-2 fw-bold text-dark shadow-sm" onclick="submitLeave()"><i class="bi bi-send"></i> ยืนยันการส่งคำร้อง</button></div></div></div></div>
+  <div class="modal fade" id="teacherLeaveModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content" style="border-radius: 15px;"><div class="modal-header bg-warning border-0"><h5 class="modal-title fw-bold text-dark"><i class="bi bi-envelope-paper"></i> คำร้องขอลาที่รออนุมัติ</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>วันที่ขอลา</th><th>ชื่อนักเรียน</th><th>เหตุผล</th><th class="text-center">จัดการ</th></tr></thead><tbody id="teacherLeaveTableBody"></tbody></table></div></div></div></div></div>
+  <div class="modal fade" id="exportModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius: 15px;"><div class="modal-header bg-success text-white border-0"><h5 class="modal-title fw-bold">รายงาน Excel</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><div class="form-check mb-3"><input class="form-check-input" type="radio" name="exportType" id="exportAtt" value="attendance" checked><label class="form-check-label fw-bold" for="exportAtt">1. ข้อมูลการมาเรียน</label></div><div class="form-check mb-3"><input class="form-check-input" type="radio" name="exportType" id="exportWork" value="work"><label class="form-check-label fw-bold" for="exportWork">2. ข้อมูลส่งงาน/คะแนน</label></div><div class="form-check mb-2"><input class="form-check-input" type="radio" name="exportType" id="exportAll" value="all"><label class="form-check-label fw-bold" for="exportAll">3. ทั้งหมด</label></div></div><div class="modal-footer border-0"><button class="btn btn-success w-100 fw-bold" onclick="processExcelExport()" id="btnExport">ดาวน์โหลด</button></div></div></div></div>
+  <div class="modal fade" id="roomModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">เพิ่มระดับชั้น/ห้อง</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="text" id="newRoomName" class="form-control" placeholder="ระดับชั้น/ห้อง"></div><div class="modal-footer"><button class="btn btn-success w-100" onclick="saveRoom()">สร้างห้องเรียน</button></div></div></div></div>
+  <div class="modal fade" id="studentModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">ข้อมูลนักเรียน</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="editIndex" value="-1"><input type="text" id="stuId" class="form-control mb-3" placeholder="เลขที่/รหัส"><input type="text" id="stuName" class="form-control mb-3" placeholder="ชื่อ-นามสกุล"></div><div class="modal-footer"><button class="btn btn-success w-100" onclick="saveStudent()">บันทึก</button></div></div></div></div>
+  <div class="modal fade" id="editTaskModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">แก้ไขงาน</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="editTaskId" value=""><input type="text" id="editTaskTitle" class="form-control mb-3" placeholder="ชื่องาน"><input type="text" id="editTaskDesc" class="form-control mb-3" placeholder="รายละเอียด"><input type="number" id="editTaskMaxScore" class="form-control mb-3" placeholder="คะแนนเต็ม"><input type="date" id="editTaskDue" class="form-control mb-3" placeholder="เลือกกำหนดส่ง"></div><div class="modal-footer"><button class="btn btn-warning w-100" onclick="saveEditAssignment()">อัปเดต</button></div></div></div></div>
+  
+  <div class="modal fade" id="taskModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-light pb-3"><div><h5 class="modal-title fw-bold" id="taskModalTitle">ตรวจงาน</h5><small class="text-muted" id="taskModalRoom"></small></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="table-responsive" style="max-height: 60vh; overflow-y: auto;"><table class="table table-hover mb-0"><thead style="position: sticky; top: 0; background: white; z-index: 1;"><tr><th>เลขที่/รหัส</th><th>ชื่อ-นามสกุล</th><th class="text-center">ดูผลงาน</th><th class="text-center" style="width:120px;">คะแนน</th><th class="text-center">เช็คสถานะ</th><th class="text-center">สถานะ</th></tr></thead><tbody id="taskTableBody"></tbody></table></div></div></div></div></div>
+
+  <div class="modal fade" id="groupTaskModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content"><div class="modal-header bg-success text-white pb-3"><div><h5 class="modal-title fw-bold" id="groupTaskModalTitle">ตรวจงานกลุ่ม</h5><small class="text-light" id="groupTaskModalRoom"></small></div><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="table-responsive" style="max-height: 60vh; overflow-y: auto;"><table class="table table-hover mb-0"><thead style="position: sticky; top: 0; background: white; z-index: 1;"><tr><th>ชื่อกลุ่ม</th><th>สมาชิก</th><th class="text-center">ดูผลงาน</th><th class="text-center" style="width:120px;">คะแนน</th><th class="text-center">เช็คสถานะ</th><th class="text-center">สถานะ</th></tr></thead><tbody id="groupTaskTableBody"></tbody></table></div></div></div></div></div>
+
+  <div class="modal fade" id="configModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 15px;">
+        <div class="modal-header bg-dark text-white border-0"><h5 class="modal-title fw-bold"><i class="bi bi-gear-fill"></i> ตั้งค่าห้องเรียน (Config)</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+          <div class="alert alert-info small fw-bold"><i class="bi bi-info-circle-fill"></i> วิธีหากรุ๊ปไอดี (Group ID):<br>1. เชิญบอทเข้ากลุ่ม LINE ของห้องเรียนนี้<br>2. พิมพ์คำว่า <b>!id</b> ลงในกลุ่ม<br>3. บอทจะตอบรหัสมาให้ ให้นำรหัสนั้นมาใส่ในช่องด้านล่างนี้เลยครับ</div>
+          <label class="form-label fw-bold">LINE Group ID ประจำห้องนี้</label>
+          <input type="text" id="configGroupId" class="form-control" placeholder="เช่น C1234567890abcdef...">
+        </div>
+        <div class="modal-footer border-0"><button class="btn btn-primary w-100 fw-bold" id="btnSaveConfig" onclick="saveConfigGroupId()"><i class="bi bi-save"></i> อัปเดตข้อมูล</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="studentFormGroupModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 15px;">
+        <div class="modal-header bg-success text-white border-0"><h5 class="modal-title fw-bold"><i class="bi bi-people-fill"></i> จัดกลุ่มทำภารกิจ</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+          <input type="hidden" id="formGroupTaskId">
+          <input type="hidden" id="formGroupMaxMembers">
+          <h6 id="formGroupTaskTitle" class="text-success fw-bold mb-3">ชื่องาน: </h6>
+          <label class="form-label fw-bold">ตั้งชื่อกลุ่มของคุณ</label>
+          <input type="text" id="formGroupName" class="form-control mb-3" placeholder="ระบุชื่อกลุ่ม">
+          <label class="form-label fw-bold">เลือกเพื่อนเข้ากลุ่ม <small class="text-danger">(เลือกได้อีก <span id="formGroupMaxText">0</span> คน)</small></label>
+          <div id="formGroupAvailableStudents" style="max-height: 250px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; background: #f8f9fa;"></div>
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-success w-100 fw-bold" id="btnConfirmFormGroup" onclick="processFormGroup()">ส่งขออนุมัติจัดกลุ่ม</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="teacherManageGroupModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content" style="border-radius: 15px;">
+        <div class="modal-header bg-warning text-dark border-0"><h5 class="modal-title fw-bold"><i class="bi bi-person-check-fill"></i> อนุมัติกลุ่มนักเรียน</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+          <h6 class="fw-bold text-success mb-3">กลุ่มที่จัดตั้งแล้ว</h6>
+          <div class="table-responsive mb-4" style="max-height: 300px; overflow-y: auto;">
+              <table class="table table-bordered table-hover">
+                  <thead class="table-light"><tr><th>ชื่อกลุ่ม</th><th>รายชื่อสมาชิก</th><th>สถานะ</th><th class="text-center">อนุมัติ</th></tr></thead>
+                  <tbody id="tmGroupListBody"></tbody>
+              </table>
+          </div>
+          <h6 class="fw-bold text-danger mb-3">นักเรียนที่ยังไม่มีกลุ่ม (จับเศษ)</h6>
+          <div id="tmNoGroupList" style="max-height: 150px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; background: #f8f9fa; display: flex; flex-wrap: wrap; gap: 5px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="aiScannerModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+          <div class="modal-content border-0 shadow-lg rounded-4">
+              <div class="modal-header border-0 pb-0" style="background: linear-gradient(135deg, #f8fafc, #e2e8f0);">
+                  <h5 class="modal-title fw-bold text-primary">
+                      <i class="bi bi-radar" style="font-size: 1.5rem; vertical-align: middle;"></i> เรดาร์ AI สแกนพฤติกรรม
+                  </h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body p-4" id="aiScannerBody" style="background: #f8fafc;">
+                  <div class="text-center text-muted py-5">
+                      <div class="spinner-border text-primary" role="status"></div>
+                      <div class="mt-3">กำลังรอข้อมูลจาก AI...</div>
+                  </div>
+              </div>
+              <div class="modal-footer border-0 pt-0" style="background: #f8fafc;">
+                  <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
+              </div>
+          </div>
+      </div>
+  </div>
+
+  <div class="modal fade" id="aiGraderModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+              <div class="modal-header border-0 bg-dark text-white">
+                  <h5 class="modal-title fw-bold"><i class="bi bi-magic text-warning"></i> AI วิเคราะห์ผลงาน</h5>
+                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body p-4 bg-light">
+                  <div id="aiGraderLoading" class="text-center py-4">
+                      <div class="spinner-border text-warning mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                      <h6 class="fw-bold text-muted">กำลังใช้ดวงตา AI เพ่งดูผลงาน...</h6>
+                      <small class="text-secondary">อาจใช้เวลา 5-10 วินาที</small>
+                  </div>
+                  
+                  <div id="aiGraderResult" class="hidden">
+                      <input type="hidden" id="aiGraderTargetId">
+                      <input type="hidden" id="aiGraderTargetName">
+                      <input type="hidden" id="aiGraderIsGroup">
+                      
+                      <div class="text-center mb-3">
+                          <img id="aiGraderPreviewImg" src="" style="max-height: 200px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                      </div>
+                      
+                      <div class="card border-0 shadow-sm mb-3">
+                          <div class="card-body">
+                              <h6 class="fw-bold text-primary mb-1"><i class="bi bi-eye"></i> สิ่งที่ AI มองเห็น:</h6>
+                              <p id="aiGraderSummary" class="small mb-3 text-dark"></p>
+                              
+                              <h6 class="fw-bold text-success mb-1"><i class="bi bi-chat-quote"></i> ข้อเสนอแนะ:</h6>
+                              <p id="aiGraderFeedback" class="small mb-0 text-muted"></p>
+                          </div>
+                      </div>
+                      
+                      <div class="alert alert-warning text-center border-0 shadow-sm mb-0">
+                          <span class="d-block small fw-bold text-dark mb-1">คะแนนที่ AI แนะนำ</span>
+                          <h2 class="fw-bold mb-0 text-danger"><span id="aiGraderScoreText">0</span> <small class="text-dark fs-6">/ <span id="aiGraderMaxScoreText">10</span></small></h2>
+                      </div>
+                  </div>
+              </div>
+              <div class="modal-footer border-0 bg-light justify-content-center" id="aiGraderFooter" style="display: none;">
+                  <button type="button" class="btn btn-secondary px-4 fw-bold rounded-pill" data-bs-dismiss="modal">ยกเลิก</button>
+                  <button type="button" class="btn btn-warning px-4 fw-bold rounded-pill text-dark shadow-sm" onclick="applyAiScore()">นำคะแนนนี้ไปใช้ <i class="bi bi-check-circle"></i></button>
+              </div>
+          </div>
+      </div>
+  </div>
+
+<div class="modal fade" id="summonBossModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 20px; border: 4px solid #764ba2;">
+            <div class="modal-header text-white border-0" style="background: #764ba2;">
+                <h5 class="modal-title fw-bold"><i class="bi bi-magic"></i> อัญเชิญมอนสเตอร์บอส</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 text-center bg-light">
+                <img src="https://api.dicebear.com/9.x/bottts/svg?seed=Dragon" width="100" class="mb-3" alt="boss-preview">
+                
+                <h6 class="fw-bold mb-2 text-dark text-start">1. พิมพ์หัวข้อบทเรียน</h6>
+                <input type="text" id="bossTopicInput" class="form-control form-control-lg mb-3 shadow-sm" placeholder="เช่น ระบบสุริยะ">
+                
+                <h6 class="fw-bold mb-2 text-dark text-start">2. กำหนดค่าบอส</h6>
+                <div class="row g-2 mb-4">
+                    <div class="col-6">
+                        <label class="small fw-bold text-muted">จำนวนคำถาม (ข้อ)</label>
+                        <input type="number" id="bossQCountInput" class="form-control text-center" value="5" min="1" max="20">
+                    </div>
+                    <div class="col-6">
+                        <label class="small fw-bold text-muted">เลือดบอส (HP)</label>
+                        <input type="number" id="bossHpInput" class="form-control text-center" value="500" min="10">
+                        <div id="bossHpSuggest" class="text-primary fw-bold mt-1" style="font-size: 0.65rem; line-height: 1.2;"></div>
+                    </div>
+                </div>
+
+                <button class="btn w-100 fw-bold text-white py-2 shadow" style="background: #764ba2; border-radius: 30px;" onclick="processSummonBoss()" id="btnSummonBoss">
+                    <i class="bi bi-lightning-charge-fill"></i> อัญเชิญบอสเลย!
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="bossBattleModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="background-color: #2c3e50; border-radius: 15px; border: 4px solid #34495e; box-shadow: 0 0 30px rgba(0,0,0,0.8);">
+            <div class="modal-body p-4 text-center position-relative">
+                
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" onclick="resetBossBattle()" title="หนีการต่อสู้"></button>
+                
+                <div class="mb-4 mt-2">
+                    <h3 id="bbBossName" class="text-warning fw-bold mb-1" style="text-shadow: 2px 2px 4px #000;">--- ชื่อบอส ---</h3>
+                    <p id="bbBossTopic" class="text-info small fw-bold mb-3">หัวข้อ: ---</p>
+                    
+                    <div class="position-relative d-inline-block" id="bbBossAvatarContainer">
+                        <div id="bbBossIcon" class="boss-emoji-icon">👾</div>
+                        <div id="bbDamageText" class="position-absolute top-50 start-50 translate-middle fw-bold text-danger hidden" style="font-size: 3.5rem; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff; z-index: 10;">-10</div>
+                    </div>
+                    
+                    <div class="mt-3 mx-auto" style="max-width: 400px;">
+                        <div class="d-flex justify-content-between text-white small fw-bold mb-1">
+                            <span>HP บอส</span>
+                            <span id="bbHpText">500 / 500</span>
+                        </div>
+                        <div class="progress" style="height: 20px; background-color: #495057; border: 2px solid #212529; border-radius: 10px;">
+                            <div id="bbHpBar" class="progress-bar bg-danger progress-bar-striped progress-bar-animated" style="width: 100%; transition: width 0.5s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bg-light border-0 shadow" style="border-radius: 15px;">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="badge bg-primary fs-6" id="bbQuestionCounter">ข้อที่ 1/5</span>
+                            <span class="badge bg-success fs-6"><i class="bi bi-star-fill text-warning"></i> ตอบถูก +100 EXP</span>
+                        </div>
+                        <h5 id="bbQuestionText" class="fw-bold text-dark mb-4" style="line-height: 1.5;">--- กำลังโหลดคำถาม ---</h5>
+                        
+                        <div class="row g-2" id="bbOptionsContainer">
+                            </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="setupLiveQuizModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 15px; border: 4px solid #ff416c;">
+            <div class="modal-header text-white border-0" style="background: #ff416c;">
+                <h5 class="modal-title fw-bold"><i class="bi bi-lightning-charge-fill"></i> สร้าง Live Quiz ด้วย AI</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <div class="alert alert-warning small fw-bold">
+                    <i class="bi bi-info-circle"></i> AI จะอ่านไฟล์เอกสาร และ/หรือ คำสั่งที่คุณครูพิมพ์ แล้วสร้างเป็นคำถามอัตโนมัติ
+                </div>
+                
+                <label class="fw-bold mb-1">1. พิมพ์คำสั่งให้ AI (เช่น "ขอคำถามจากบทที่ 2"):</label>
+                <textarea id="liveQuizContent" class="form-control mb-3" rows="3" placeholder="พิมพ์คำสั่งชี้เป้าหมาย หรือวางเนื้อหาข้อมูลยาวๆ ลงที่นี่..."></textarea>
+                
+                <label class="fw-bold mb-1 text-primary"><i class="bi bi-file-earmark-word-fill"></i> 2. แนบไฟล์เอกสาร (PDF, TXT, DOCX):</label>
+                <input type="file" id="liveQuizFile" class="form-control mb-1 shadow-sm" accept=".pdf, .txt, .docx" onchange="previewLiveQuizFile(this)">
+                <div id="liveQuizFileStatus" class="small text-success fw-bold mb-3 hidden"><i class="bi bi-check-circle-fill"></i> ระบบอ่านไฟล์พร้อมแล้ว!</div>
+                
+                <label class="fw-bold mb-1">3. จำนวนคำถามที่ต้องการ:</label>
+                <input type="number" id="liveQuizCount" class="form-control mb-4" value="5" min="1" max="20">
+                
+                <button class="btn w-100 fw-bold text-white py-2 shadow" style="background: #ff416c; border-radius: 30px;" id="btnGenerateLiveQuiz" onclick="generateLiveQuiz()">
+                    <i class="bi bi-magic"></i> ให้ AI สร้างคำถามและเปิดห้องรอเลย!
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="teacherQuizControlModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 15px; overflow: hidden;">
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-broadcast text-danger"></i> ห้องควบคุม Live Quiz</h5>
+                <button type="button" class="btn-close btn-close-white" onclick="confirmEndLiveQuiz()"></button>
+            </div>
+            <div class="modal-body p-4 text-center bg-light">
+                <h4 id="tqStatusText" class="text-danger fw-bold mb-3">รอนักเรียนเตรียมตัว...</h4>
+                
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                        <span class="badge bg-primary fs-6 mb-2" id="tqQuestionNumber">ข้อที่ 1 / X</span>
+                        <h4 id="tqQuestionText" class="fw-bold text-dark mb-4">--- โหลดคำถาม ---</h4>
+                        
+                        <div class="row g-2 text-start" id="tqOptionsContainer">
+                            </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center bg-white p-3 rounded shadow-sm border">
+                    <div>
+                        <span class="fw-bold text-muted">ตอบแล้ว:</span>
+                        <span class="fs-4 fw-bold text-success mx-2" id="tqAnswerCount">0</span>
+                        <span class="fw-bold text-muted">คน</span>
+                    </div>
+                    <div id="tqControlButtons">
+                        <button class="btn btn-warning fw-bold text-dark px-4" id="btnReleaseQ" onclick="releaseLiveQuestion()">ปล่อยคำถามนี้ให้นักเรียน <i class="bi bi-send-fill"></i></button>
+                        <button class="btn btn-success fw-bold text-white px-4 hidden" id="btnReleaseOpt" onclick="releaseLiveOptions()">ปล่อยตัวเลือกให้นักเรียน <i class="bi bi-list-check"></i></button>
+                        <button class="btn btn-info fw-bold text-dark px-4 hidden" id="btnShowAns" onclick="showLiveAnswer()">เฉลย / ปิดรับคำตอบ <i class="bi bi-check-all"></i></button>
+                        <button class="btn btn-primary fw-bold px-4 hidden" id="btnNextQ" onclick="nextLiveQuestion()">ไปข้อถัดไป <i class="bi bi-arrow-right"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="studentLiveQuizModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content kahoot-modal-content">
+            <div class="modal-body d-flex flex-column p-4 text-center justify-content-center position-relative">
+                
+                <div id="sqWaitScreen">
+                    <div id="sqWaitContent" class="text-center w-100" style="max-width: 500px; margin: 0 auto; padding: 20px;">
+                        <div class="spinner-grow text-light mb-4" style="width: 4rem; height: 4rem;" role="status"></div>
+                        <h2 class="text-white fw-bold" id="sqWaitText">สมรภูมิพร้อมแล้ว!</h2>
+                        
+                        <div id="partyActionArea" class="mt-4"></div> 
+                    </div>
+                </div>
+
+                <div id="sqPlayScreen" class="hidden w-100" style="max-width: 800px; margin: 0 auto;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="badge bg-dark fs-5 shadow" id="sqQuestionNumber">ข้อที่ ?</span>
+                        <span class="badge bg-danger fs-5 shadow"><i class="bi bi-clock-history"></i> <span id="sqTimer">0.0</span>s</span>
+                    </div>
+                    
+                    <div class="card border-0 shadow-lg mb-4" style="border-radius: 20px;">
+                        <div class="card-body p-4 p-md-5">
+                            <h2 id="sqQuestionText" class="fw-bold text-dark mb-0" style="line-height: 1.4;">---</h2>
+                        </div>
+                    </div>
+
+                    <div class="row g-3" id="sqOptionsContainer">
+                        </div>
+                    
+                    <div id="sqPowerupsContainer" class="d-flex justify-content-center flex-wrap gap-2 mt-4"></div>
+                    
+                </div>
+                
+                <div id="sqResultScreen" class="hidden w-100" style="max-width: 600px; margin: 0 auto;">
+                    <h1 id="sqResultIcon" style="font-size: 6rem; text-shadow: 0 5px 15px rgba(0,0,0,0.3);">✅</h1>
+                    <h2 id="sqResultText" class="text-white fw-bold mt-3 mb-2">ตอบถูก!</h2>
+                    <h5 id="sqResultSubText" class="text-white opacity-75 mb-4">ได้โบนัสความเร็ว...</h5>
+                    <button class="btn btn-light btn-lg rounded-pill fw-bold px-5" onclick="backToWaitScreen()">รอลุยข้อต่อไป <i class="bi bi-arrow-clockwise"></i></button>
+                </div>
+                
+                <div id="sqLeaderboardScreen" class="hidden w-100 h-100" style="max-width: 800px; margin: 0 auto; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 20px;">
+                    <h2 class="text-white fw-bold mb-4" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.5); z-index: 10;">🏆 สรุปอันดับคะแนนสูงสุด 🏆</h2>
+                    
+                    <div id="podiumContainer" class="d-flex align-items-end justify-content-center mb-4" style="height: 250px; gap: 8px; width: 100%; z-index: 10;">
+                        </div>
+                    
+                    <div id="runnerUpContainer" class="w-100" style="max-width: 500px; z-index: 10;">
+                        </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+    <script src="global.js"></script>
+    <script src="student.js"></script>
+    <script src="teacher.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            flatpickr('input[type="date"]', {
+                locale: 'th',
+                dateFormat: 'Y-m-d',
+                disableMobile: 'true'
+            });
+            flatpickr('input[type="datetime-local"]', {
+                locale: 'th',
+                enableTime: true,
+                time_24hr: true,
+                dateFormat: 'Y-m-d\\TH:i',
+                disableMobile: 'true'
+            });
+        }, 500);
+    });
+  </script>
+
+<div class="modal fade" id="giftModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content" style="border-radius: 20px; border: 3px solid #ff4757;">
+      <div class="modal-header bg-white border-0">
+        <h5 class="modal-title fw-bold text-danger"><i class="bi bi-gift-fill"></i> ส่งของขวัญมิติให้เพื่อน</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4 bg-light">
+        <div class="mb-4">
+          <label class="form-label fw-bold"><i class="bi bi-person-heart"></i> 1. เลือกเพื่อนผู้รับขวัญ</label>
+          <select id="giftReceiverId" class="form-select form-select-lg shadow-sm rounded-pill"></select>
+        </div>
+        
+        <label class="form-label fw-bold"><i class="bi bi-box-seam"></i> 2. เลือกสิ่งที่ต้องการส่ง</label>
+        <ul class="nav nav-pills mb-3 justify-content-center" id="giftTabs" role="tablist">
+          <li class="nav-item"><button class="nav-link active fw-bold px-4" data-bs-toggle="pill" data-bs-target="#tab-gift-item" onclick="renderGiftInventory()"><i class="bi bi-backpack-fill"></i> ส่งไอเทม</button></li>
+          <li class="nav-item"><button class="nav-link fw-bold px-4" data-bs-toggle="pill" data-bs-target="#tab-gift-exp"><i class="bi bi-stars"></i> แบ่งปัน EXP</button></li>
+        </ul>
+
+        <div class="tab-content" id="giftTabsContent">
+          <div class="tab-pane fade show active" id="tab-gift-item">
+            <div id="giftItemList" class="row g-2" style="max-height: 300px; overflow-y: auto; padding: 10px;"></div>
+          </div>
+          <div class="tab-pane fade" id="tab-gift-exp">
+            <div class="card p-4 border-0 shadow-sm text-center" style="border-radius: 15px;">
+              <h6 class="fw-bold mb-3">ระบุจำนวนแต้มที่ต้องการส่งให้เพื่อน</h6>
+              <div class="input-group mb-2" style="max-width: 250px; margin: 0 auto;">
+                <input type="number" id="giftExpAmount" class="form-control text-center fs-4 fw-bold" placeholder="0">
+                <span class="input-group-text bg-warning fw-bold">EXP</span>
+              </div>
+              <small class="text-muted">แต้มของคุณที่มี: <b id="giftMyCurrentExp" class="text-primary">0</b> EXP</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button class="btn btn-danger btn-lg w-100 fw-bold rounded-pill shadow" id="btnConfirmGift" onclick="processFinalGift()">
+          <i class="bi bi-send-check-fill"></i> ยืนยันการส่งของขวัญ
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
