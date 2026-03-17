@@ -488,8 +488,14 @@ window.google = { script: { run: createGASProxy(null, null) } };
         }
     });
 
-    // ฟังก์ชันสำหรับสั่งให้ OneSignal ยิงแจ้งเตือนหาทุกคนที่กด Allow ไว้
 window.sendPushNotification = function(title, message) {
-    // สั่งให้ Google Apps Script (ที่ปลอดภัยกว่า) เป็นคนยิงแจ้งเตือนแทน
-    google.script.run.sendOneSignalNotification(title, message);
+    // ต้องมีตัวแปร GAS_WEB_APP_URL ที่เป็นลิงก์ /exec ของฟลุ๊คอยู่แล้วในไฟล์นี้นะครับ
+    fetch(GAS_WEB_APP_URL, {
+        method: "POST",
+        mode: "no-cors", // สำคัญมากเพื่อให้ส่งข้ามเว็บได้
+        body: JSON.stringify({
+            action: "sendOneSignalNotification",
+            params: [title, message]
+        })
+    });
 };
