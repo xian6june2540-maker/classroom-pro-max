@@ -3,6 +3,15 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d6efd">
 <link rel="apple-touch-icon" href="icon.png">
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "5ec4809e-0c65-4ad7-b78d-89a32e51e7a8",
+    });
+  });
+</script>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
