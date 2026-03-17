@@ -1,0 +1,15 @@
+{
+  "name": "ระบบจัดการชั้นเรียน Pro Max",
+  "short_name": "Classroom",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f4f7f6",
+  "theme_color": "#0d6efd",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
