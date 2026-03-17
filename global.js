@@ -10,16 +10,16 @@ const createGASProxy = (successHandler, failureHandler) => {
             if (prop === 'withFailureHandler') return (cb) => createGASProxy(successHandler, cb);
             
             return function(...args) {
-                // 🛠️ เช็คว่าเป็นคำสั่งแจ้งเตือนหรือไม่
+                // 🛠️ ดักจับ: ถ้าเป็นการยิงแจ้งเตือน ให้ข้ามกำแพง CORS (no-cors)
                 const isNotify = (prop === 'sendOneSignalNotification');
 
                 fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    mode: isNotify ? 'no-cors' : 'cors', // ถ้าแจ้งเตือน ให้ใช้ no-cors เพื่อไม่ให้บราวเซอร์บล็อก
+                    mode: isNotify ? 'no-cors' : 'cors', 
                     body: JSON.stringify({ action: prop, params: args })
                 })
                 .then(r => {
-                    if (isNotify) return { success: true }; // ถ้า no-cors ไม่ต้องรออ่าน json เพราะบราวเซอร์ห้ามอ่าน
+                    if (isNotify) return { success: true }; // no-cors อ่าน json ไม่ได้อยู่แล้ว ให้ข้ามไปเลย
                     return r.json();
                 })
                 .then(res => {
@@ -27,6 +27,7 @@ const createGASProxy = (successHandler, failureHandler) => {
                         if (successHandler) successHandler(res.data);
                     } else if (res && !isNotify) {
                         if (failureHandler) failureHandler(new Error(res.message));
+                        else console.error("API Error:", res.message);
                     }
                 })
                 .catch(err => {
@@ -494,6 +495,6 @@ window.google = { script: { run: createGASProxy(null, null) } };
     });
 
 window.sendPushNotification = function(title, message) {
-    // สั่งรันผ่านสะพานเชื่อม (Proxy) ที่เราแก้เรื่อง no-cors ไว้ให้แล้วข้างบน
+    // ใช้ Proxy ตัวเดิมที่มึงทำไว้ แต่แก้เรื่อง CORS ให้แล้ว
     google.script.run.sendOneSignalNotification(title, message);
 };
