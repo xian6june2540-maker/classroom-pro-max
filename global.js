@@ -491,7 +491,7 @@ window.google = { script: { run: createGASProxy(null, null) } };
     // ฟังก์ชันสำหรับสั่งให้ OneSignal ยิงแจ้งเตือนหาทุกคนที่กด Allow ไว้
 window.sendPushNotification = function(title, message) {
     const ONESIGNAL_APP_ID = "5ec4809e-0c65-4ad7-b78d-89a32e51e7a8";
-    const ONESIGNAL_REST_API_KEY = "mgxmjsfquef2nrrqy3fhoy2de";
+    const ONESIGNAL_REST_API_KEY = "os_v2_app_l3cibhqmmvfnpn4nrgrs4uphvamgxmjsfquef2nrrqy3fhoy2deiqqdz56pv4hn42sl67m3fsvz3uxrezkna5gm2jtdmg2aepbi3tkq";
 
     fetch("https://onesignal.com/api/v1/notifications", {
         method: "POST",
