@@ -1,0 +1,23 @@
+name: 24/7 Wake Up Vercel
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # ยิงปลุก Vercel ทุกๆ 5 นาที
+  workflow_dispatch:
+
+jobs:
+  ping-and-keep-alive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: ดึงโค้ดลงมาเช็ค
+        uses: actions/checkout@v4
+
+      - name: สาดกระสุนสะกิด Vercel
+        run: curl -s https://classroom-pro-max.vercel.app/api/cron
+
+      - name: หุ่นยนต์ปลุก GitHub (ไฮเปอร์โหมด)
+        uses: gautamkrishnar/keepalive-workflow@v2
+        with:
+          time_elapsed: 7 # 👈 บังคับหุ่นยนต์ทำงานทุก 7 วัน (ไม่ต้องรอ 50 วันแล้ว!)
