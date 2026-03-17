@@ -766,6 +766,7 @@
             document.getElementById('taskDesc').value = '';
             document.getElementById('taskDue').value = '';
             document.getElementById('taskMaxScore').value = '';
+            window.sendPushNotification("📝 ภารกิจใหม่มาแล้ว!", "งาน: " + t + " (ส่งภายใน " + du + ")");
             Toast.fire({ icon: 'success', title: 'สั่งงานแล้ว' });
             loadAllData();
         }).saveAssignment(id, t, d, du, currentRoom, m);
@@ -982,6 +983,7 @@
             document.getElementById('groupTaskMembers').value = '';
             document.getElementById('groupTaskMaxScore').value = '';
             document.getElementById('groupTaskDue').value = '';
+            window.sendPushNotification("👥 รวมพลังด่วน!", "ภารกิจกลุ่มใหม่: " + t + " (รีบจัดกลุ่มกันนะ!)");
             Toast.fire({ icon: 'success', title: 'สั่งงานกลุ่มแล้ว' });
             loadAllData();
         }).saveGroupAssignment(id, t, m, du, currentRoom, max);
@@ -2063,6 +2065,7 @@
             Swal.close();
 
             if (res.success) {
+                window.sendPushNotification("🐉 บอสปรากฏตัว!", "หัวข้อ: " + topic + " รวมพลังไปสู้บอสกันเร็ว!");
                 Swal.fire('สำเร็จ!', res.message, 'success');
                 hideAppModal('summonBossModal');
             } else {

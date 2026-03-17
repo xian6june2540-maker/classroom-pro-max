@@ -487,3 +487,24 @@ window.google = { script: { run: createGASProxy(null, null) } };
             loadFullDashboard(savedStudentId, true);
         }
     });
+
+    // ฟังก์ชันสำหรับสั่งให้ OneSignal ยิงแจ้งเตือนหาทุกคนที่กด Allow ไว้
+window.sendPushNotification = function(title, message) {
+    const ONESIGNAL_APP_ID = "5ec4809e-0c65-4ad7-b78d-89a32e51e7a8";
+    const ONESIGNAL_REST_API_KEY = "mgxmjsfquef2nrrqy3fhoy2de";
+
+    fetch("https://onesignal.com/api/v1/notifications", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": "Basic " + ONESIGNAL_REST_API_KEY
+        },
+        body: JSON.stringify({
+            app_id: ONESIGNAL_APP_ID,
+            included_segments: ["Total Subscriptions"], // ส่งหาทุกคน
+            headings: { "en": title },
+            contents: { "en": message },
+            isAnyWebp: true // รองรับรูปภาพถ้ามี
+        })
+    });
+};
