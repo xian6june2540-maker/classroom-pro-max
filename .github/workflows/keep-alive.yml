@@ -2,22 +2,27 @@ name: 24/7 Wake Up Vercel
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # ยิงปลุก Vercel ทุกๆ 5 นาที
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  ping-and-keep-alive:
+  ping:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: ดึงโค้ดลงมาเช็ค
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: สาดกระสุนสะกิด Vercel
+      - name: Ping Vercel
         run: curl -s https://classroom-pro-max.vercel.app/api/cron
 
-      - name: หุ่นยนต์ปลุก GitHub (ไฮเปอร์โหมด)
-        uses: gautamkrishnar/keepalive-workflow@v2
-        with:
-          time_elapsed: 7 # 👈 บังคับหุ่นยนต์ทำงานทุก 7 วัน (ไม่ต้องรอ 50 วันแล้ว!)
+      - name: Auto-commit to keep repo active
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          date +%F > keepalive-vercel.txt
+          git add keepalive-vercel.txt
+          git commit -m "Auto update to prevent GitHub Actions from pausing" || exit 0
+          git push --force
