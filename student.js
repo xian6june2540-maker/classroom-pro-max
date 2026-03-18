@@ -1922,20 +1922,25 @@
         if (!currentBossData) return;
         if (supabaseClient) {
             if (window.bossRealtimeChannel) supabaseClient.removeChannel(window.bossRealtimeChannel);
-            window.bossRealtimeChannel = supabaseClient.channel('boss-' + currentBossData.bossId)
-                .on('postgres_changes', { event: 'PATCH', schema: 'public', table: 'boss_quizzes', filter: `id=eq.${currentBossData.bossId}` }, payload => {
+            window.bossRealtimeChannel = supabaseClient.channel('boss-sync-' + currentBossData.bossId)
+                .on('postgres_changes', { 
+                    event: 'PATCH', 
+                    schema: 'public', 
+                    table: 'boss_quizzes', 
+                    filter: `id=eq.${currentBossData.bossId}` 
+                }, payload => {
                     const newHp = payload.new.boss_hp;
-                    // 🌟 จุดสำคัญ: ต้องแก้ตัวแปรในเครื่องด้วย เลือดอีกจอถึงจะลดตามจริง
+                    // 🌟 จุดสำคัญ: อัปเดตเลือดในตัวแปรเครื่องเราด้วย (เพื่อใช้คำนวณข้อถัดไป)
                     currentBossData.hp = newHp; 
                     updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
+                    
                     if (newHp <= 0) {
-                        clearTimeout(window.bossNextQTimer); // 🛑 หยุดการโหลดข้อต่อไปทันที
+                        clearTimeout(window.bossNextQTimer); // หยุดการโหลดข้อต่อไปทันที
                         finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
                     }
                 }).subscribe();
         }
-        currentQuestionIndex = 0; 
-        currentCorrectCount = 0;
+        currentQuestionIndex = 0; currentCorrectCount = 0;
         let bossParts = currentBossData.bossName.split('|');
         let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
         let bName = bossParts.length > 1 ? bossParts[1] : currentBossData.bossName;
@@ -1946,6 +1951,7 @@
         loadBossQuestion();
         showAppModal('bossBattleModal');
     }
+
     // 1. โหลดคำถามขึ้นหน้าจอ (เปลี่ยนจากเลข 5 เป็น นับจำนวนข้อจริง)
     function loadBossQuestion() {
         const qData = currentBossData.questions[currentQuestionIndex];
@@ -1975,8 +1981,12 @@
     }
 
     function selectBossAnswer(btnElement, selected, correct) {
+        // 🌟 กันค้าง: ถ้าบอสตายแล้ว ไม่ต้องทำงานต่อ
+        if (!currentBossData || currentBossData.hp <= 0) return; 
+
         const allBtns = document.querySelectorAll('.boss-opt-btn');
         allBtns.forEach(b => b.disabled = true);
+        
         if (selected === correct) {
             btnElement.classList.replace('btn-outline-light', 'btn-success');
             btnElement.style.color = "#fff";
@@ -1995,12 +2005,15 @@
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        // 🌟 เก็บค่า Timer ไว้ใน window.bossNextQTimer
+        // 🌟 เก็บค่า Timer ไว้ในตัวแปร เพื่อให้สั่งหยุดได้ถ้าเกมจบก่อนกำหนด
         window.bossNextQTimer = setTimeout(() => {
-            if (!currentBossData || currentBossData.hp <= 0) return;
+            if (!currentBossData || currentBossData.hp <= 0) return; 
             currentQuestionIndex++;
-            if (currentQuestionIndex < currentBossData.questions.length) loadBossQuestion();
-            else finishBossBattle();
+            if (currentQuestionIndex < currentBossData.questions.length) {
+                loadBossQuestion();
+            } else {
+                finishBossBattle(); 
+            }
         }, 1500);
     }
 
@@ -2034,9 +2047,8 @@
         checkActiveBoss(); // โหลดใหม่เผื่อปุ่มต้องซ่อน
     }
 
-    // 3. สรุปผลหลังตอบครบทุกข้อ (กรณีบอสยังไม่ตาย)
     function finishBossBattle() {
-        clearTimeout(window.bossNextQTimer);
+        clearTimeout(window.bossNextQTimer); // ล้าง Timer ทิ้ง
         if (window.bossRealtimeChannel) {
             supabaseClient.removeChannel(window.bossRealtimeChannel);
             window.bossRealtimeChannel = null;
@@ -2051,6 +2063,17 @@
             hideAppModal('bossBattleModal');
             loadFullDashboard(globalPortalStudent.id, true);
         });
+    }
+
+    function finishBossBattleEarly(message) {
+        clearTimeout(window.bossNextQTimer); // ล้าง Timer ทิ้ง
+        if (window.bossRealtimeChannel) {
+            supabaseClient.removeChannel(window.bossRealtimeChannel);
+            window.bossRealtimeChannel = null;
+        }
+        Swal.fire({ title: message, timer: 2500, showConfirmButton: false, icon: 'success' });
+        hideAppModal('bossBattleModal'); 
+        loadFullDashboard(globalPortalStudent.id, true); 
     }
 
     // =========================================================
@@ -3010,17 +3033,6 @@ async function renderPartySelection() {
         `;
     }
 }
-
-    function finishBossBattleEarly(message) {
-        clearTimeout(window.bossNextQTimer);
-        if (window.bossRealtimeChannel) {
-            supabaseClient.removeChannel(window.bossRealtimeChannel);
-            window.bossRealtimeChannel = null;
-        }
-        Swal.fire({ title: message, timer: 2500, showConfirmButton: false, icon: 'success' });
-        hideAppModal('bossBattleModal'); 
-        loadFullDashboard(globalPortalStudent.id, true); 
-    }
 
     // ฟังก์ชันอัปเดตหลอดเลือดบอสแบบ Real-time บนหน้าจอ
     function updateBossHpUI_Realtime(hp, maxHp) {
