@@ -1797,18 +1797,19 @@
         }, 2000); // ดีเลย์นิดนึงรอให้ระบบหลักโหลดเสร็จก่อน
     });
 
+// ฟังก์ชันเช็คว่ามีบอสเกิดใหม่ไหม
     function checkActiveBoss() {
         if (!globalPortalStudent) return;
         google.script.run.withSuccessHandler(function(res) {
             const alertWidget = document.getElementById('bossAlertWidget');
-            // 🌟 เช็คว่านักเรียนกำลังสู้บอสอยู่หรือไม่
             const bossModal = document.getElementById('bossBattleModal');
             const isBattling = bossModal && bossModal.classList.contains('show');
 
             if (res.hasBoss && !res.alreadyFought && res.hp > 0) {
-                // 🌟 ถ้าไม่ได้เปิดหน้าจอสู้อยู่ ให้อัปเดตข้อมูลบอสใหม่ (ป้องกันเลือดเด้งกลับตอนกำลังตี)
+                // 🌟 ป้องกันเลือดเด้งเพี้ยน: เก็บเลือดตั้งต้นจากฐานข้อมูลไว้ โดยไม่ให้ทับตอนเด็กกำลังตี
                 if (!isBattling) {
                     currentBossData = res;
+                    currentBossData.originalDbHp = res.hp; // เซฟเลือดดั้งเดิมไว้
                 }
                 if (alertWidget.classList.contains('hidden')) {
                     Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: '⚠️ บอสปรากฏตัวแล้ว! รีบไปตีเร็วเข้า!', showConfirmButton: false, timer: 4000 });
@@ -1822,15 +1823,54 @@
         }).getActiveBoss(globalPortalStudent.room, globalPortalStudent.id);
     }
 
-    // 🟢 แอบแทรกการเช็คบอส เข้าไปในจังหวะที่โหลด Dashboard เสร็จ (โดยไม่กวนโค้ดเดิม)
+// =========================================================
+    // ⚡ ระบบเรดาร์ค้นหาบอสแบบเรียลไทม์ (ความเร็วแสง)
+    // =========================================================
+    window.bossSyncTimer = null;
+
+    function startBossSync() {
+        if (window.bossSyncTimer) clearInterval(window.bossSyncTimer);
+        
+        // ให้มันแอบสแกนบอสในหลังบ้านทุกๆ 2.5 วินาที
+        window.bossSyncTimer = setInterval(async () => {
+            if (!globalPortalStudent || !supabaseClient) return;
+            
+            // ถ้าเด็กกำลังตีบอสอยู่ ให้ข้ามไปก่อน ไม่ต้องกวนจอ
+            const bossModal = document.getElementById('bossBattleModal');
+            if (bossModal && bossModal.classList.contains('show')) return;
+
+            try {
+                let { data } = await supabaseClient.from('boss_quizzes')
+                    .select('id, status, boss_hp')
+                    .eq('room_name', globalPortalStudent.room)
+                    .eq('status', 'active')
+                    .order('id', { ascending: false })
+                    .limit(1);
+                
+                if (data && data.length > 0) {
+                    let boss = data[0];
+                    // ถ้าพบบอสตัวใหม่ หรือเลือดขยับ ให้ดึงข้อมูลมาโชว์ทันที
+                    if (!currentBossData || currentBossData.bossId !== boss.id || currentBossData.hp !== boss.boss_hp) {
+                        checkActiveBoss();
+                    }
+                } else if (currentBossData) {
+                    // ถ้าบอสโดนลบหรือตายไปแล้ว
+                    checkActiveBoss(); 
+                }
+            } catch(e) { console.error("Boss Sync Error:", e); }
+        }, 2500);
+    }
+
+    // 🟢 แอบแทรกการเปิดเรดาร์เข้าไปตอนที่โหลด Dashboard เสร็จ
     const originalLoadFullDashboard = window.loadFullDashboard;
     window.loadFullDashboard = async function(studentId, isSilent) {
         await originalLoadFullDashboard(studentId, isSilent);
-        checkActiveBoss(); // เช็คบอสทันทีหลังโหลดข้อมูลเสร็จ
-        checkCurrentLiveQuiz(); // 🌟 แทรกรอเช็ค Live Quiz ด้วย
+        checkActiveBoss(); 
+        checkCurrentLiveQuiz(); 
+        startBossSync(); // เปิดเรดาร์สแกนบอสทันที
     };
 
-    // ฟังก์ชันเริ่มสู้บอส
+// ฟังก์ชันเริ่มสู้บอส
     function startBossBattle() {
         if (!currentBossData) return;
         
@@ -1845,11 +1885,14 @@
             currentCorrectCount = 0;
         }
         
-        // 🌟 2. แก้ปัญหาเลือดบอสไม่ตรง!
-        // เอาเลือดล่าสุดจากหลังบ้าน มาหักออกด้วยดาเมจที่เราตีไปแล้ว (แต่ยังไม่ได้กดส่งตอนจบ)
-        let displayHp = currentBossData.hp - (currentCorrectCount * 10);
+        // 🌟 2. แก้ปัญหาเลือดบอสลดเบิ้ล!
+        // ใช้เลือดดั้งเดิมจากฐานข้อมูล มาหักลบกับดาเมจที่ตีไปแล้ว (ทำให้เปิด-ปิดกี่รอบเลือดก็เป๊ะ)
+        let baseHp = currentBossData.originalDbHp !== undefined ? currentBossData.originalDbHp : currentBossData.hp;
+        let displayHp = baseHp - (currentCorrectCount * 10);
         if (displayHp < 0) displayHp = 0;
-        currentBossData.hp = displayHp; // จำค่านี้ไว้ เพื่อให้ตีครั้งต่อไปเลือดลดลงอย่างต่อเนื่อง
+        
+        currentBossData.hp = displayHp; // อัปเดตเลือดบนจอ
+        currentBossData.originalDbHp = baseHp; // ล็อกเลือดดั้งเดิมไว้กันเหนียว
         
         let bossParts = currentBossData.bossName.split('|');
         let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
