@@ -1926,12 +1926,12 @@
                 .on('postgres_changes', { event: 'PATCH', schema: 'public', table: 'boss_quizzes', filter: `id=eq.${currentBossData.bossId}` }, payload => {
                     const newHp = payload.new.boss_hp;
                     
-                    // 🌟 จุดตาย: ต้องแก้ค่า HP ในเครื่องเด็กทุกคนให้ตรงกับ DB ทันที
-                    currentBossData.hp = newHp; 
+                    // 🌟 จุดสำคัญ: อัปเดตเลือดในตัวแปรเครื่องเด็กทุกคนให้ตรงกับ DB ทันที
+                    if(currentBossData) currentBossData.hp = newHp; 
                     updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
                     
                     if (newHp <= 0) {
-                        clearTimeout(window.bossNextQTimer); // 🛑 สั่งหยุดคิวโหลดข้อต่อไปทันที
+                        clearTimeout(window.bossNextQTimer); // 🛑 สั่งหยุดคิวโหลดข้อต่อไปทันที กันค้าง
                         finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
                     }
                 }).subscribe();
@@ -1977,7 +1977,9 @@
     }
 
     function selectBossAnswer(btnElement, selected, correct) {
-        if (!currentBossData || currentBossData.hp <= 0) return; // 🛡️ กันกดซ้ำตอนบอสตาย
+        // 🛡️ กันค้าง: ถ้าบอสตายไปแล้ว (เพื่อนฟันตาย) ไม่ต้องทำห่าอะไรต่อทั้งนั้น
+        if (!currentBossData || currentBossData.hp <= 0) return; 
+
         const allBtns = document.querySelectorAll('.boss-opt-btn');
         allBtns.forEach(b => b.disabled = true);
         
@@ -1999,7 +2001,7 @@
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        // 🌟 เก็บ Timer ไว้ในตัวแปรคุมกลาง เพื่อสั่งลบได้ทันทีถ้าเพื่อนตีบอสตายก่อน 1.5 วิจะครบ
+        // 🌟 เก็บ Timer ไว้ในตัวแปรคุมกลาง เพื่อสั่งลบได้ทันทีถ้าเพื่อนตีบอสตายก่อน
         window.bossNextQTimer = setTimeout(() => {
             if (!currentBossData || currentBossData.hp <= 0) return; 
             currentQuestionIndex++;
@@ -2057,8 +2059,7 @@
     }
 
     function finishBossBattleEarly(message) {
-        // ล้าง Timer และปิดท่อ Realtime ทันที
-        clearTimeout(window.bossNextQTimer);
+        clearTimeout(window.bossNextQTimer); // ล้างคิวข้อถัดไปทิ้งทันที
         if (window.bossRealtimeChannel) {
             supabaseClient.removeChannel(window.bossRealtimeChannel);
             window.bossRealtimeChannel = null;
@@ -2066,7 +2067,7 @@
         
         Swal.fire({ title: message, timer: 2500, showConfirmButton: false, icon: 'success' });
         
-        // 🌟 ปิด Modal แบบเด็ดขาด
+        // 🌟 สั่งปิด Modal แบบ Force
         hideAppModal('bossBattleModal'); 
         loadFullDashboard(globalPortalStudent.id, true); 
     }
