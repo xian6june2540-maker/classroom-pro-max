@@ -509,7 +509,16 @@
                 
                 if (gained > 0) {
                     exp += gained;
+                    // 🌟 แอบซิงค์ EXP ที่ผลิตได้ (Passive) ไปบันทึกลงหลังบ้านทันที!
+                    // เพื่อให้หน้าจอครูและหลังบ้านเห็นเลขตรงกับที่นักเรียนเห็น 100%
+                    supabaseClient.from('students').update({
+                        exp: exp,
+                        last_passive_update: now
+                    }).eq('id', studentId).catch(e => console.error("Sync EXP Error:", e));
                 }
+            } else if (lastPass !== now) {
+                // 🌟 ถึงไม่ได้ใส่ของเพิ่ม EXP ก็รีเซ็ตเวลาให้ตรงกันไว้ก่อน กันเหนียว
+                supabaseClient.from('students').update({ last_passive_update: now }).eq('id', studentId).catch(e => {});
             }
             // --- จบระบบคำนวณ ---
             
