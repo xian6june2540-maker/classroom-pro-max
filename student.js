@@ -1925,21 +1925,27 @@
     function startBossBattle() {
         if (!currentBossData) return;
         
-        // 🌟 รีเซ็ตสถานะการเล่นใหม่ทุกครั้ง
         currentQuestionIndex = 0; 
         currentCorrectCount = 0;
         
-        // 🌟 เปิดท่อ Realtime: ทำหน้าที่ "ขยับหลอดเลือด" อย่างเดียว ห้ามสั่งจบเกม
+        // 🌟 ตัวแปรเก็บเวลาอัปเดตล่าสุด กันอัปเดตรัวเกินไป (Throttling)
+        window.lastHpUpdateAt = 0;
+
         if (supabaseClient) {
             if (window.bossRealtimeChannel) supabaseClient.removeChannel(window.bossRealtimeChannel);
             window.bossRealtimeChannel = supabaseClient.channel('boss-sync-global')
                 .on('postgres_changes', { event: 'PATCH', schema: 'public', table: 'boss_quizzes' }, payload => {
                     if (!currentBossData || payload.new.id !== currentBossData.bossId) return;
                     
+                    const now = Date.now();
                     const newHp = payload.new.boss_hp;
-                    currentBossData.hp = newHp; // ซิงค์ค่า HP ล่าสุดไว้ในตัวแปรเครื่องเรา
+
+                    // 🛡️ กฎเหล็ก 1: ถ้าเพิ่งอัปเดตไปไม่ถึง 1.5 วินาที ไม่ต้องวาดจอใหม่ (กันค้าง)
+                    if (now - window.lastHpUpdateAt < 1500 && newHp > 0) return;
                     
-                    // ✅ อัปเดตแค่ภาพหลอดเลือดบนหน้าจอให้เด็กเห็นเพื่อนช่วยกันตี
+                    window.lastHpUpdateAt = now;
+                    
+                    // 🛡️ กฎเหล็ก 2: อัปเดตแค่ภาพหลอดเลือดบนหน้าจอเท่านั้น ห้ามสั่งปิดหรือเปลี่ยนข้อจากตรงนี้
                     updateBossHpUI_Realtime(newHp, currentBossData.maxHp);
                 }).subscribe();
         }
@@ -1986,38 +1992,38 @@
     }
 
     function selectBossAnswer(btnElement, selected, correct) {
-        // 1. ล็อกปุ่มทั้งหมดทันที กันเด็กกดย้ำจนค้าง (ล็อกถาวรในข้อนี้)
         const allBtns = document.querySelectorAll('.boss-opt-btn');
         allBtns.forEach(b => {
             b.disabled = true;
-            b.style.pointerEvents = 'none'; 
+            b.style.pointerEvents = 'none'; // ล็อกการสัมผัส 100%
+            b.style.opacity = '0.6';
         });
         
         if (selected === correct) {
-            // ✅ ตอบถูก: แสดงสีเขียว + ลดเลือดในจอตัวเองทันที (ไม่ต้องรอ Server)
             btnElement.classList.replace('btn-outline-light', 'btn-success');
             btnElement.style.color = "#fff";
+            btnElement.style.opacity = '1';
             currentCorrectCount++;
             
-            playAttackAnimation(10); // ฟันบอสโชว์ในเครื่องตัวเองทันที
+            playAttackAnimation(10); // ลดเลือดโชว์ในเครื่องตัวเองทันที (Visual)
 
-            // 🚀 ยิงดาเมจไปที่ Server แบบเบื้องหลัง (ไม่ใช้ SuccessHandler เพื่อความลื่นไหล)
+            // 🚀 ยิงดาเมจแบบยิงทิ้ง (Fire and Forget) ไม่ต้องรอ SuccessHandler ให้เน็ตหน่วง
             google.script.run.sendBossHit(currentBossData.bossId, globalPortalStudent.id);
-
         } else {
-            // ❌ ตอบผิด: แสดงสีแดง + เฉลยข้อถูก
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
+            btnElement.style.opacity = '1';
             allBtns.forEach(b => { 
                 if (b.innerText.includes(correct)) { 
                     b.classList.replace('btn-outline-light', 'btn-success'); 
                     b.style.color = "#fff"; 
+                    b.style.opacity = '1';
                 } 
             });
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        // ⏱️ รอ 1.5 วินาทีให้เด็กดูเฉลย แล้วไปข้อต่อไปทันที (เน็ตช้าก็ไม่ค้าง เพราะเราไม่รอ Server แล้ว)
+        // ⏱️ ไม่สนเน็ตช้าหรือเร็ว 1.5 วินาทีเปลี่ยนข้อทันที
         if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
         window.bossNextQTimer = setTimeout(() => {
             moveToNextBossQuestion();
@@ -3078,5 +3084,23 @@ async function renderPartySelection() {
             hpBar.style.width = pct + '%';
             // ถ้าเลือดเหลือน้อยกว่า 30% ให้หลอดเป็นสีแดงกระพริบ
             if (pct < 30) hpBar.classList.add('bg-danger');
+        }
+    }
+
+    function updateBossHpUI_Realtime(hp, maxHp) {
+        const hpVal = Math.max(0, parseInt(hp));
+        const pct = Math.round((hpVal / maxHp) * 100);
+        
+        const hpText = document.getElementById('bbHpText');
+        const hpBar = document.getElementById('bbHpBar');
+        
+        // 🛡️ เช็คก่อนว่าค่าเปลี่ยนจริงไหม ถ้าไม่เปลี่ยนไม่ต้องสั่ง Browser วาดใหม่ (ลดภาระ CPU)
+        if (hpText && hpText.innerText !== `${hpVal} / ${maxHp}`) {
+            hpText.innerText = `${hpVal} / ${maxHp}`;
+            if(hpBar) {
+                hpBar.style.width = pct + '%';
+                if (pct < 30) hpBar.classList.add('bg-danger');
+                else hpBar.classList.remove('bg-danger');
+            }
         }
     }
