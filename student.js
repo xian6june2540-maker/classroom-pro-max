@@ -1294,20 +1294,25 @@
             title: 'ออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#6c757d', confirmButtonText: '<i class="bi bi-box-arrow-right"></i> ออกจากระบบ', cancelButtonText: 'ยกเลิก'
         }).then(function(result) {
             if (result.isConfirmed) {
-                if (typeof autoRefreshInterval !== 'undefined' && autoRefreshInterval !== null) { clearTimeout(autoRefreshInterval); autoRefreshInterval = null; }
-                localStorage.removeItem('studentId');
-                if (typeof currentStudentId !== 'undefined') currentStudentId = null;
+                // 🌟 จุดที่ 5: สั่งหยุด "เรดาร์" และ "Auto-Save" ทันที เพื่อล้างหน่วยความจำ
+                if (window.dashboardRadarTimer) { 
+                    clearInterval(window.dashboardRadarTimer); 
+                    window.dashboardRadarTimer = null; 
+                }
+                if (window.autoSaveExpTimer) { 
+                    clearInterval(window.autoSaveExpTimer); 
+                    window.autoSaveExpTimer = null; 
+                }
 
-                document.getElementById('student-dashboard-view').classList.add('hidden');
-                let avatarEl = document.getElementById('draggable-avatar'); if (avatarEl) avatarEl.classList.add('hidden');
-
-                document.getElementById('student-search-view').classList.remove('hidden');
-                document.getElementById('portalStudentId').value = '';
+                if (typeof autoRefreshInterval !== 'undefined' && autoRefreshInterval !== null) { 
+                    clearTimeout(autoRefreshInterval); 
+                    autoRefreshInterval = null; 
+                }
                 
-                let resultBox = document.getElementById('selectResultBox'); if (resultBox) resultBox.classList.add('hidden');
-                let btnLock = document.getElementById('btnLock'); if (btnLock) btnLock.classList.remove('hidden');
-
-                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ออกจากระบบเรียบร้อย', showConfirmButton: false, timer: 1500 });
+                localStorage.removeItem('studentId');
+                
+                // บังคับรีโหลดหน้าเว็บเพื่อล้างตัวแปร global ทั้งหมดให้สะอาด 100%
+                location.reload(); 
             }
         });
     }
@@ -1785,41 +1790,129 @@
     let currentQuestionIndex = 0;
     let currentCorrectCount = 0;
 
-    // แอบดักฟังฐานข้อมูลบอสแบบ Realtime (ถ้ามีการสร้างบอสใหม่ ปุ่มแดงจะเด้งทันที)
-    document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(() => {
-            if(supabaseClient) {
-                supabaseClient.channel('boss-channel')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'boss_quizzes' }, payload => {
-                        if (globalPortalStudent && payload.new && payload.new.room_name === globalPortalStudent.room) {
-                            checkActiveBoss();
-                        }
-                    }).subscribe();
-            }
-        }, 2000); // ดีเลย์นิดนึงรอให้ระบบหลักโหลดเสร็จก่อน
-    });
+    // =========================================================
+    // 🛡️ SYSTEM CORE: RADAR & AUTO-SAVE (ระบบคุมเสถียรภาพ)
+    // =========================================================
+    window.dashboardRadarTimer = null;
+    window.autoSaveExpTimer = null;
 
-    // ฟังก์ชันเช็คว่ามีบอสเกิดใหม่ไหม (ถูกเรียกตอนโหลด Dashboard หรือตอน Realtime ทักมา)
-    function checkActiveBoss() {
-        if (!globalPortalStudent) return;
-        google.script.run.withSuccessHandler(function(res) {
-            const alertWidget = document.getElementById('bossAlertWidget');
-            if (res.hasBoss && !res.alreadyFought && res.hp > 0) {
-                currentBossData = res;
-                alertWidget.classList.remove('hidden'); // โชว์ปุ่มกระพริบ
-            } else {
-                alertWidget.classList.add('hidden'); // ซ่อนปุ่ม
-                currentBossData = null;
-            }
-        }).getActiveBoss(globalPortalStudent.room, globalPortalStudent.id);
+    // 1. ระบบเรดาร์ ตรวจจับบอสและควิซทุกๆ 5 วินาที (ไม่จองท่อ Realtime ค้าง)
+    function startDashboardRadar() {
+        if (!globalPortalStudent || !supabaseClient) return;
+        
+        checkCurrentLiveQuiz();
+        checkActiveBoss();
+        
+        if (!window.dashboardRadarTimer) {
+            window.dashboardRadarTimer = setInterval(() => {
+                if (!globalPortalStudent) {
+                    clearInterval(window.dashboardRadarTimer);
+                    window.dashboardRadarTimer = null;
+                    return;
+                }
+                checkCurrentLiveQuiz();
+                checkActiveBoss();
+            }, 5000);
+        }
     }
 
-    // 🟢 แอบแทรกการเช็คบอส เข้าไปในจังหวะที่โหลด Dashboard เสร็จ (โดยไม่กวนโค้ดเดิม)
+    // 2. ระบบ Auto-Save แอบเซฟ EXP ทุกๆ 2 นาที
+    function startAutoSaveExp() {
+        if (window.autoSaveExpTimer) clearInterval(window.autoSaveExpTimer);
+        window.autoSaveExpTimer = setInterval(async () => {
+            if (!globalPortalStudent || !supabaseClient) return;
+            try {
+                let now = Date.now();
+                let eqBg = globalPortalStudent.equippedBg || "bg0";
+                let inv = globalPortalStudent.inventory || [];
+                
+                let totalExpPerMs = 0; 
+                totalExpPerMs += getExpPerMs(eqBg);
+                let myItems = inv.filter(x => x.startsWith('i'));
+                if(myItems.length > 0) totalExpPerMs += getExpPerMs(myItems[myItems.length-1]);
+                let myClothes = inv.filter(x => x.startsWith('m') || x.startsWith('w')); 
+                if(myClothes.length > 0) totalExpPerMs += getExpPerMs(myClothes[myClothes.length-1]);
+
+                if (totalExpPerMs <= 0) return; // ไม่มีของเพิ่มแต้ม ไม่ต้องเซฟ
+
+                let { data: s } = await supabaseClient.from('students').select('exp, last_passive_update, buff_multiplier, buff_end_at').eq('id', globalPortalStudent.id).single();
+                if (s) {
+                    let dbExp = parseFloat(s.exp) || 0;
+                    let dbLastPass = parseInt(s.last_passive_update) || now;
+                    let dbBuffMult = parseFloat(s.buff_multiplier) || 1.0;
+                    let dbBuffEnd = parseInt(s.buff_end_at) || 0;
+                    
+                    let timePassed = now - dbLastPass;
+                    let currentMult = (now < dbBuffEnd) ? dbBuffMult : 1.0;
+                    let addedExp = Math.floor((timePassed * totalExpPerMs) * currentMult);
+                    
+                    if (addedExp > 0) {
+                        let newExp = dbExp + addedExp;
+                        await supabaseClient.from('students').update({
+                            exp: newExp,
+                            last_passive_update: now
+                        }).eq('id', globalPortalStudent.id);
+                        
+                        // อัปเดตหน้าจอเงียบๆ โดยไม่กวนเด็ก
+                        globalPortalStudent.exp = newExp;
+                        globalPortalStudent.last_passive_update = now;
+                        
+                        let expEl = document.getElementById('expText');
+                        if(expEl) expEl.innerText = newExp;
+                        let shopExpEl = document.getElementById('shopUserExp');
+                        if(shopExpEl) shopExpEl.innerText = newExp;
+                        
+                        let expPct = (globalPortalStudent.level.next === "Max") ? 100 : Math.min(100, Math.round((newExp / globalPortalStudent.level.next) * 100));
+                        let bar = document.getElementById('expProgressBar');
+                        if(bar) bar.style.width = expPct + '%';
+                    }
+                }
+            } catch(e) {}
+        }, 120000); // 120000 ms = 2 นาที
+    }
+
+    // 3. ฟังก์ชันสแกนหาบอส ดึงข้อมูลตรงจาก Supabase ไร้ดีเลย์
+    async function checkActiveBoss() {
+        if (!globalPortalStudent || !supabaseClient) return;
+        try {
+            let { data: bosses } = await supabaseClient.from('boss_quizzes')
+                .select('*')
+                .eq('room_name', globalPortalStudent.room)
+                .eq('status', 'active')
+                .order('id', { ascending: false })
+                .limit(1);
+
+            const alertWidget = document.getElementById('bossAlertWidget');
+            if (bosses && bosses.length > 0) {
+                let boss = bosses[0];
+                let { data: logs } = await supabaseClient.from('boss_logs')
+                    .select('id').eq('boss_id', boss.id).eq('student_id', globalPortalStudent.id).limit(1);
+                
+                let alreadyFought = (logs && logs.length > 0);
+                if (!alreadyFought && boss.boss_hp > 0) {
+                    currentBossData = {
+                        bossId: boss.id, bossName: boss.boss_name, topic: boss.topic,
+                        hp: boss.boss_hp, maxHp: boss.boss_max_hp,
+                        questions: typeof boss.questions_json === 'string' ? JSON.parse(boss.questions_json) : boss.questions_json
+                    };
+                    if(alertWidget) alertWidget.classList.remove('hidden');
+                } else {
+                    if(alertWidget) alertWidget.classList.add('hidden');
+                    currentBossData = null;
+                }
+            } else {
+                if(alertWidget) alertWidget.classList.add('hidden');
+                currentBossData = null;
+            }
+        } catch (e) {}
+    }
+
+    // 4. แก้ไข loadFullDashboard ให้สตาร์ทเครื่องยนต์ Radar และ Auto-Save
     const originalLoadFullDashboard = window.loadFullDashboard;
     window.loadFullDashboard = async function(studentId, isSilent) {
         await originalLoadFullDashboard(studentId, isSilent);
-        checkActiveBoss(); // เช็คบอสทันทีหลังโหลดข้อมูลเสร็จ
-        checkCurrentLiveQuiz(); // 🌟 แทรกรอเช็ค Live Quiz ด้วย
+        startDashboardRadar();
+        startAutoSaveExp();
     };
 
     // ฟังก์ชันเริ่มสู้บอส
@@ -1989,197 +2082,100 @@
     let activePowerUp = null; // ตัวแปรเก็บไอเทมที่กดใช้ในข้อนั้นๆ
     let sqHasChangedAnswer = false; // 🌟 เพิ่มตัวแปรเช็คว่าเคยใช้สิทธิ์เปลี่ยนคำตอบไปหรือยัง
 
-    // 1. ดักฟัง Realtime จากตาราง live_quiz_sessions (เพื่อเด้งหน้าจออัตโนมัติ)
-    document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(() => {
-            if(supabaseClient) {
-                supabaseClient.channel('student-live-quiz-channel')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_quiz_sessions' }, payload => {
-                        if (globalPortalStudent && payload.new && payload.new.room_name === globalPortalStudent.room) {
-                            handleLiveQuizChange(payload.new);
-                        } 
-                        else if (globalPortalStudent && payload.eventType === 'DELETE' && sqSessionData && payload.old.id === sqSessionData.id) {
-                            forceCloseLiveQuiz();
-                        }
-                    }) 
-                    // +++ เพิ่มใหม่: ดักฟังคนเข้าห้องเพื่ออัปเดตรายชื่อปาร์ตี้ทันที +++
-                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_quiz_responses' }, payload => {
-                        // ถ้ามีใครส่งข้อมูลเข้าห้อง (q_index -1)
-                        if (payload.new.q_index === -1) {
-                            const area = document.getElementById('partySelectionArea');
-                            // ถ้าเรากำลังเปิดหน้าเลือกปาร์ตี้อยู่ ให้โหลดชื่อใหม่ทันที (ชื่อเพื่อนคนนั้นจะหายไป)
-                            if (area && !sqHasJoined) {
-                                renderPartySelection(); 
-                            }
-                        }
-                    })
-                    // +++++++++++++++++++++++++++++++++++++++++++++++++++++
-                    .subscribe(); 
-            }
-        }, 2500);
-    });
-
     window.liveQuizSyncTimer = null; 
     window.liveQuizRealtimeChannel = null; // 🌟 เพิ่มตัวแปรเก็บสายตรง Realtime
 
+    // --- ส่วนนี้คือตัวแปรที่ต้องมีไว้ด้านบนสุดของโซน Live Quiz ---
+    window.liveQuizRealtimeChannel = null; 
+
+    // ฟังก์ชันที่ 1: "ยามเฝ้าประตู" (เช็คทุก 5 วินาทีว่ามีเกมไหม)
     async function checkCurrentLiveQuiz() {
         if (!globalPortalStudent || !supabaseClient) return;
-        
-        // 1. ดึงข้อมูลครั้งแรกตอนโหลดหน้า
-        let { data } = await supabaseClient.from('live_quiz_sessions')
-            .select('*')
-            .eq('room_name', globalPortalStudent.room)
-            .order('created_at', { ascending: false })
-            .limit(1);
-        
-        if (data && data.length > 0) {
-            handleLiveQuizChange(data[0]);
-        }
-        
-        // 🌟 2. เปิดใช้งานระบบ Realtime สายตรง! (เด้งปุ๊บมาปั๊บ ไม่มีดีเลย์)
-        if (!window.liveQuizRealtimeChannel) {
-            window.liveQuizRealtimeChannel = supabaseClient
-                .channel('realtime-quiz-student')
-                .on(
-                    'postgres_changes', 
-                    { 
-                        event: '*', // ดักฟังทุกการกระทำ (สร้าง, แก้ไข, ลบ)
-                        schema: 'public', 
-                        table: 'live_quiz_sessions',
-                        filter: `room_name=eq.${globalPortalStudent.room}` 
-                    }, 
-                    (payload) => {
-                        // ทันทีที่ครูกดปุ่ม ข้อมูลจะวิ่งเข้าบรรทัดนี้ทันที!
-                        if (payload.eventType === 'DELETE') {
-                            forceCloseLiveQuiz(); // ครูปิดเกม
-                        } else if (payload.new) {
-                            handleLiveQuizChange(payload.new); // ครูเปลี่ยนสถานะ/คำถาม
-                        }
-                    }
-                )
-                .subscribe();
-        }
-        
-        // 3. ปรับแผนสำรอง: ให้เรดาร์เช็คห่างขึ้นเป็น 5 วินาที เพื่อไม่ให้หน่วงเครื่อง
-        if (!window.liveQuizSyncTimer) {
-            window.liveQuizSyncTimer = setInterval(async () => {
-                if (!globalPortalStudent) return; 
-
-                try {
-                    let { data: syncData } = await supabaseClient.from('live_quiz_sessions')
-                        .select('*')
-                        .eq('room_name', globalPortalStudent.room)
-                        .order('created_at', { ascending: false })
-                        .limit(1);
-                    
-                    if (syncData && syncData.length > 0) {
-                        let isChanged = !sqSessionData || 
-                                        sqSessionData.status !== syncData[0].status || 
-                                        sqSessionData.current_q_index !== syncData[0].current_q_index;
-                        
-                        if (isChanged) handleLiveQuizChange(syncData[0]);
-                    } else if (sqSessionData) {
-                        forceCloseLiveQuiz();
-                    }
-                } catch (err) { }
-            }, 5000); 
-        }
+        try {
+            // ดึงข้อมูลล่าสุดจากตาราง live_quiz_sessions
+            let { data: syncData } = await supabaseClient.from('live_quiz_sessions')
+                .select('*')
+                .eq('room_name', globalPortalStudent.room)
+                .order('created_at', { ascending: false })
+                .limit(1);
+            
+            if (syncData && syncData.length > 0) {
+                // ถ้าข้อมูลเปลี่ยน (เช่น ครูเปลี่ยนข้อ หรือเปลี่ยนสถานะ) ให้ส่งไปจัดการต่อ
+                let isChanged = !sqSessionData || 
+                                sqSessionData.status !== syncData[0].status || 
+                                sqSessionData.current_q_index !== syncData[0].current_q_index;
+                
+                if (isChanged) handleLiveQuizChange(syncData[0]);
+            } else if (sqSessionData) {
+                // ถ้าเคยมีเกมแต่ตอนนี้หายไป (ครูลบห้อง) ให้สั่งปิดหน้าจอ
+                forceCloseLiveQuiz();
+            }
+        } catch(e) { console.error("Radar Sync Error:", e); }
     }
 
-// 3. จัดการสถานะหน้าจอตามคำสั่งครู (รวมระบบคัดกรองและแสดงโจทย์ก่อน)
+    // ฟังก์ชันที่ 2: "ตัวจัดการหน้าจอ" (เปิดท่อ Realtime และโชว์โจทย์)
     async function handleLiveQuizChange(sessionData) {
-        // ==========================================
-        // 🛠️ ส่วนที่แก้ไข: ป้องกัน Supabase ไม่ส่ง JSON คำถามมาด้วย
-        // ==========================================
+        // บันทึกข้อมูลเซสชันปัจจุบันไว้ในตัวแปรหลัก
         if (sqSessionData && sqSessionData.id === sessionData.id) {
-            if (!sessionData.questions_json) {
-                sessionData.questions_json = sqSessionData.questions_json;
-            }
+            if (!sessionData.questions_json) sessionData.questions_json = sqSessionData.questions_json;
         }
         if (typeof sessionData.questions_json === 'string') {
             try { sessionData.questions_json = JSON.parse(sessionData.questions_json); } catch(e) {}
         }
         sqSessionData = sessionData;
-        // ==========================================
 
+        // 🌟 ไฮไลท์: ถ้ายังไม่มีท่อ Realtime ให้เปิดเฉพาะตอนเริ่มเกมนี้เท่านั้น!
+        if (!window.liveQuizRealtimeChannel) {
+            window.liveQuizRealtimeChannel = supabaseClient.channel('live-quiz-' + sessionData.id)
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'live_quiz_sessions', 
+                    filter: 'id=eq.' + sessionData.id 
+                }, payload => {
+                    if (payload.eventType === 'DELETE') forceCloseLiveQuiz();
+                    else if (payload.new) handleLiveQuizChange(payload.new);
+                })
+                .on('postgres_changes', { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'live_quiz_responses', 
+                    filter: 'session_id=eq.' + sessionData.id 
+                }, payload => {
+                    // ดึงรายชื่อปาร์ตี้แบบ Realtime
+                    if (payload.new.q_index === -1) {
+                        const area = document.getElementById('partySelectionArea');
+                        if (area && !sqHasJoined) renderPartySelection(); 
+                    }
+                })
+                .subscribe();
+        }
+
+        // --- ส่วนการจัดการแสดงผล Modal (เหมือนเดิม) ---
         const modal = document.getElementById('studentLiveQuizModal');
         const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
 
-        // ==========================================
-        // 🛠️ ส่วนที่แก้ไข: แก้บั๊กไม่แจ้งเตือนนักเรียนที่เข้าไม่ทัน
-        // ==========================================
-        // 🛡️ ตรวจสอบสิทธิ์: ถ้าเกมเริ่มไปแล้ว (ไม่ใช่ setup) แต่เด็กยังไม่ได้กดเข้าร่วม
+        // เช็คว่าเด็กเข้าทันไหม
         if (sessionData.status !== 'setup' && !sqHasJoined) {
-            forceCloseLiveQuiz(); // บังคับปิดหน้าต่างเกม
-            
-            // แจ้งเตือนแค่ครั้งเดียว ไม่ให้เด้งรัวๆ
-            if (!window.hasAlertedMissedQuiz) {
-                window.hasAlertedMissedQuiz = true;
-                Swal.fire({
-                    icon: 'info',
-                    title: 'เข้าห้องไม่ทัน!',
-                    text: 'คุณครูได้เริ่มเกมไปแล้ว หรือคุณไม่ได้กดเข้าร่วมให้ทันเวลาครับ',
-                    confirmButtonText: 'รับทราบ',
-                    confirmButtonColor: '#0d6efd'
-                });
-            }
-            return; // หยุดการทำงาน
-        }
-        // ==========================================
-
-        // เปิดหน้าจอเกมอัตโนมัติ (สำหรับคนที่อยู่ในช่วง setup หรือคนที่เข้าร่วมแล้ว)
-        if (!modal.classList.contains('show')) {
-            bsModal.show();
+            forceCloseLiveQuiz(); 
+            return; 
         }
 
-        // รีเซ็ตสถานะการตอบเมื่อเปลี่ยนข้อใหม่
+        if (!modal.classList.contains('show')) bsModal.show();
+
+        // รีเซ็ตสถานะเมื่อเปลี่ยนข้อ
         if (sessionData.current_q_index !== sqLastSeenQIndex) {
             sqHasAnswered = false;
-            sqHasChangedAnswer = false; // 🌟 รีเซ็ตสิทธิ์การเปลี่ยนคำตอบในข้อใหม่
+            sqHasChangedAnswer = false;
             sqLastSeenQIndex = sessionData.current_q_index;
         }
 
-        // --- แก้ไขใน JS_Student.html (ส่วนสถานะ setup) ---
-       if (sessionData.status === 'setup') {
-            window.hasAlertedMissedQuiz = false;
-            showSqScreen('wait');
-            
-            if (!sqHasJoined) {
-                document.getElementById('sqWaitText').innerHTML = 'เลือกวิธีเข้าสู่สมรภูมิ';
-                document.getElementById('partyActionArea').innerHTML = `
-                    <div class="d-grid gap-3">
-                        <button class="btn btn-primary btn-lg rounded-pill fw-bold shadow-lg py-3" onclick="joinLiveQuiz()">
-                            <i class="bi bi-person-fill"></i> เข้าร่วมเกม (คนเดียว)
-                        </button>
-                        <button class="btn btn-warning btn-lg rounded-pill fw-bold shadow-lg py-3 text-dark" onclick="openPartySetup()">
-                            <i class="bi bi-people-fill"></i> ตั้งปาร์ตี้ (แชร์เครื่อง)
-                        </button>
-                    </div>
-                `;
-            } else {
-                document.getElementById('sqWaitText').innerHTML = 'เข้าห้องเรียบร้อย!<br>เตรียมตัวลุยได้เลย';
-                document.getElementById('partyActionArea').innerHTML = '';
-            }
-        }
-
-        else if (sessionData.status === 'show_question') {
-            // จังหวะที่ 1: แสดงเฉพาะโจทย์ให้นักเรียนอ่านก่อน (ยังไม่มีตัวเลือก)
-            renderSqQuestionOnly(sessionData);
-        }
-        else if (sessionData.status === 'active') {
-            // จังหวะที่ 2: แสดงโจทย์พร้อมตัวเลือก 4 สี และเริ่มจับเวลา
-            if (!sqHasAnswered) {
-                renderSqQuestion(sessionData);
-            }
-        }
-        else if (sessionData.status === 'show_answer') {
-            showSqScreen('result');
-            checkSqResult();
-        }
-        else if (sessionData.status === 'show_leaderboard') {
-            showSqScreen('leaderboard');
-            calculateAndShowLeaderboard();
-        }
+        // เช็คสถานะเกมแล้วเปลี่ยนหน้าจอ (Play, Result, Leaderboard)
+        if (sessionData.status === 'setup') showSqScreen('wait');
+        else if (sessionData.status === 'show_question') renderSqQuestionOnly(sessionData);
+        else if (sessionData.status === 'active') { if (!sqHasAnswered) renderSqQuestion(sessionData); }
+        else if (sessionData.status === 'show_answer') { showSqScreen('result'); checkSqResult(); }
+        else if (sessionData.status === 'show_leaderboard') { showSqScreen('leaderboard'); calculateAndShowLeaderboard(); }
     }
 
     // ฟังก์ชันสลับหน้าจอ (รอ -> เล่น -> เฉลย -> อันดับ)
@@ -2630,7 +2626,7 @@
         sqHasJoined = false; 
         if(sqTimerInterval) clearInterval(sqTimerInterval);
         
-        // 🌟 ตัดสายท่อ Realtime เมื่อเกมจบ
+        // 🌟 จุดที่ 4: สั่งทำลายท่อ Realtime ทันทีเมื่อจบเกม เพื่อคืนโควตาให้เพื่อนห้องอื่น
         if (window.liveQuizRealtimeChannel) {
             supabaseClient.removeChannel(window.liveQuizRealtimeChannel);
             window.liveQuizRealtimeChannel = null;
