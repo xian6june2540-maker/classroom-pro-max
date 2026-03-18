@@ -2399,7 +2399,7 @@
         }
     }
 
-    function submitSqAnswer(btnElement, selectedAnswer) {
+    async function submitSqAnswer(btnElement, selectedAnswer) {
         if (sqHasAnswered) return;
         sqHasAnswered = true;
         if(sqTimerInterval) clearInterval(sqTimerInterval);
@@ -2408,7 +2408,7 @@
         if (activePowerUp === 'p2') responseTime = 0; 
         const isCorrect = (selectedAnswer === sqCurrentCorrectAnswer);
 
-        // 1. ให้ปุ่มเด้งตอบสนองทันทีแบบไร้ดีเลย์
+        // เปลี่ยนหน้าจอทันทีก่อนส่งข้อมูล
         if (btnElement) {
             btnElement.style.border = "6px solid white";
             btnElement.style.transform = "scale(1.05)";
@@ -2416,27 +2416,24 @@
         const allBtns = document.querySelectorAll('.quiz-btn-gigantic');
         allBtns.forEach(b => b.disabled = true);
 
-        // 2. เปลี่ยนหน้าจอทันที (ลดดีเลย์เหลือ 150ms ให้ตาเห็นว่ากดปุ่มติดแล้วเปลี่ยนหน้าเลย)
-        setTimeout(() => {
-            showSqScreen('wait');
-            let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
-            
-            if (selectedAnswer === "TIMEOUT_NO_ANSWER") {
-                document.getElementById('sqWaitText').innerHTML = `
-                    <div class="mb-3 text-danger"><i class="bi bi-clock-history"></i> หมดเวลาส่งคำตอบ!</div>
-                    สมาชิกปาร์ตี้ ${partyCount} คนไม่ได้ส่งคำตอบในข้อนี้ครับ
-                `;
-            } else {
-                document.getElementById('sqWaitText').innerHTML = `
-                    <div class="mb-3 text-warning"><i class="bi bi-stars"></i> ส่งคำตอบเรียบร้อย!</div>
-                    สถานะ: <b>แฝงร่างส่งแทนสมาชิก ${partyCount} คน</b><br>
-                    รอดูผลลัพธ์พร้อมกันน้า...
-                `;
-            }
-        }, 150);
+        showSqScreen('wait');
+        let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
+        
+        if (selectedAnswer === "TIMEOUT_NO_ANSWER") {
+            document.getElementById('sqWaitText').innerHTML = `
+                <div class="mb-3 text-danger"><i class="bi bi-clock-history"></i> หมดเวลาส่งคำตอบ!</div>
+                สมาชิกปาร์ตี้ ${partyCount} คนไม่ได้ส่งคำตอบในข้อนี้ครับ
+            `;
+        } else {
+            document.getElementById('sqWaitText').innerHTML = `
+                <div class="mb-3 text-warning"><i class="bi bi-stars"></i> ส่งคำตอบเรียบร้อย!</div>
+                สถานะ: <b>แฝงร่างส่งแทนสมาชิก ${partyCount} คน</b><br>
+                รอดูผลลัพธ์พร้อมกันน้า...
+            `;
+        }
 
-        // 3. ส่งข้อมูลเข้า Database แบบเบื้องหลัง (ไม่ต้องใช้ await ไม่ต้องรอ)
-        if (supabaseClient && sqSessionData) {
+        // ปล่อยฐานข้อมูลทำงานเบื้องหลัง
+        try {
             if (!window.windowPartyMembers || window.windowPartyMembers.length === 0) {
                 window.windowPartyMembers = [globalPortalStudent.id];
             }
@@ -2456,10 +2453,11 @@
 
             if (!isCorrect && activePowerUp === 'p3') {
                 window.windowPartyMembers.forEach(sid => {
-                    // ปล่อยยิง Google Apps Script เบื้องหลัง
                     google.script.run.addManualEXP(sid, 75); 
                 });
             }
+        } catch(e) {
+            console.error("Party Submit Error:", e);
         }
     }
 

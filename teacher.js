@@ -1839,34 +1839,36 @@
         document.getElementById('tqOptionsContainer').innerHTML = html;
     }
 
-    function releaseLiveQuestion() {
+    // 3. [จังหวะที่ 1] ครูกด "ปล่อยคำถาม" -> ส่งแค่โจทย์ให้นักเรียนอ่านก่อน
+    async function releaseLiveQuestion() {
         if (!supabaseClient || !liveQuizSessionId) return;
-
-        // 1. เปลี่ยนหน้าจอครูทันทีแบบไร้ดีเลย์
+        
+        // เปลี่ยนหน้าจอทันทีก่อนส่งข้อมูล
         document.getElementById('btnReleaseQ').classList.add('hidden');
         document.getElementById('btnReleaseOpt').classList.remove('hidden'); 
         document.getElementById('tqStatusText').innerText = "นักเรียนกำลังอ่านคำถาม...";
         document.getElementById('tqStatusText').className = "text-info fw-bold mb-3";
 
-        // 2. ยิงข้อมูลไปฐานข้อมูลแบบเบื้องหลัง (เอา await ออกเพื่อไม่ให้บล็อกหน้าจอ)
+        // ลบ await ออก ยิงฐานข้อมูลไปเบื้องหลัง
         supabaseClient.from('live_quiz_sessions').update({ 
             status: 'show_question', 
             current_q_index: liveQuizCurrentIndex 
-        }).eq('id', liveQuizSessionId).catch(e => console.error(e));
+        }).eq('id', liveQuizSessionId);
     }
 
-    function releaseLiveOptions() {
+    // 4. [จังหวะที่ 2] ครูกด "ปล่อยตัวเลือก" -> ส่งช้อยส์ให้เด็กตอบ และเริ่มจับเวลาจริง
+    async function releaseLiveOptions() {
         if (!supabaseClient || !liveQuizSessionId) return;
 
-        // 1. เปลี่ยนหน้าจอครูและเริ่มนับเวลาทันที
-        document.getElementById('btnReleaseOpt').classList.add('hidden');
-        document.getElementById('btnShowAns').classList.remove('hidden');
-
+        // เปลี่ยนหน้าจอทันทีก่อนส่งข้อมูล
         let tqAnsCountEl = document.getElementById('tqAnswerCount');
         if (tqAnsCountEl && tqAnsCountEl.previousElementSibling) {
             tqAnsCountEl.previousElementSibling.innerText = "ตอบแล้ว:";
         }
         tqAnsCountEl.innerText = "0 / " + joinedPlayersCount + " คน";
+        
+        document.getElementById('btnReleaseOpt').classList.add('hidden');
+        document.getElementById('btnShowAns').classList.remove('hidden');
 
         teacherTimeLeft = 30;
         document.getElementById('tqStatusText').innerText = `กำลังรับคำตอบ... (เหลือ ${teacherTimeLeft} วิ)`;
@@ -1884,10 +1886,10 @@
             }
         }, 1000);
 
-        // 2. ยิงฐานข้อมูลแบบเบื้องหลัง (เอา await ออก)
+        // ลบ await ออก ยิงฐานข้อมูลไปเบื้องหลัง
         supabaseClient.from('live_quiz_sessions').update({ 
             status: 'active' 
-        }).eq('id', liveQuizSessionId).catch(e => console.error(e));
+        }).eq('id', liveQuizSessionId);
     }
 
     function showLiveAnswer() {
