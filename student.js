@@ -2016,6 +2016,8 @@
         }, 2500);
     });
 
+    window.liveQuizSyncTimer = null; // ตัวแปรสำหรับจับเวลาดึงข้อมูล
+
     async function checkCurrentLiveQuiz() {
         if (!globalPortalStudent || !supabaseClient) return;
         
@@ -2028,6 +2030,33 @@
         
         if (data && data.length > 0) {
             handleLiveQuizChange(data[0]);
+
+            // 🌟 ระบบดึงข้อมูลอัตโนมัติ (Polling Fallback) ดึงซ้ำทุก 1.5 วินาที
+            if (!window.liveQuizSyncTimer) {
+                window.liveQuizSyncTimer = setInterval(async () => {
+                    let { data: syncData } = await supabaseClient.from('live_quiz_sessions')
+                        .select('*')
+                        .eq('room_name', globalPortalStudent.room)
+                        .order('created_at', { ascending: false })
+                        .limit(1);
+                    
+                    if (syncData && syncData.length > 0) {
+                        // เช็คว่าครูเปลี่ยนสถานะหรือเปลี่ยนข้อไหม ถ้าเปลี่ยนค่อยอัปเดตจอ (กันจอกระพริบ)
+                        let isChanged = !sqSessionData || 
+                                        sqSessionData.status !== syncData[0].status || 
+                                        sqSessionData.current_q_index !== syncData[0].current_q_index;
+                        
+                        if (isChanged) {
+                            handleLiveQuizChange(syncData[0]);
+                        }
+                    } else {
+                        // ถ้าไม่เจอห้องแล้ว (ครูกดปิดเกม) ให้บังคับออก
+                        forceCloseLiveQuiz();
+                    }
+                }, 1500);
+            }
+        } else {
+            forceCloseLiveQuiz();
         }
     }
 
@@ -2530,6 +2559,12 @@
         sqLastSeenQIndex = -1;
         sqHasJoined = false; // รีเซ็ตให้พร้อมสำหรับเกมรอบหน้า
         if(sqTimerInterval) clearInterval(sqTimerInterval);
+        
+        // 🌟 หยุดการดึงข้อมูลอัตโนมัติเมื่อเกมจบ ป้องกันการกินเน็ตฟรี
+        if(window.liveQuizSyncTimer) {
+            clearInterval(window.liveQuizSyncTimer);
+            window.liveQuizSyncTimer = null;
+        }
         
         hideAppModal('studentLiveQuizModal');
         // 🌟 FIX 1: ลบคำสั่งโหลด Dashboard ตรงนี้ออก เพื่อกันลูปนรกเด้งเข้าออก
