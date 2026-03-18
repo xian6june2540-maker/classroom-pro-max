@@ -1987,6 +1987,7 @@
     let sqLastSeenQIndex = -1; 
     let sqHasJoined = false; // ตัวแปรจำว่ากดเข้าร่วมหรือยัง
     let activePowerUp = null; // ตัวแปรเก็บไอเทมที่กดใช้ในข้อนั้นๆ
+    let sqHasChangedAnswer = false; // 🌟 เพิ่มตัวแปรเช็คว่าเคยใช้สิทธิ์เปลี่ยนคำตอบไปหรือยัง
 
     // 1. ดักฟัง Realtime จากตาราง live_quiz_sessions (เพื่อเด้งหน้าจออัตโนมัติ)
     document.addEventListener('DOMContentLoaded', () => {
@@ -2115,6 +2116,7 @@
         // รีเซ็ตสถานะการตอบเมื่อเปลี่ยนข้อใหม่
         if (sessionData.current_q_index !== sqLastSeenQIndex) {
             sqHasAnswered = false;
+            sqHasChangedAnswer = false; // 🌟 รีเซ็ตสิทธิ์การเปลี่ยนคำตอบในข้อใหม่
             sqLastSeenQIndex = sessionData.current_q_index;
         }
 
@@ -2402,17 +2404,18 @@
         }
     }
 
-    // 5. เมื่อนักเรียนกดเลือกคำตอบ (เวอร์ชั่นรองรับระบบปาร์ตี้แชร์เครื่อง)
+    // 5. เมื่อนักเรียนกดเลือกคำตอบ
     async function submitSqAnswer(btnElement, selectedAnswer) {
         if (sqHasAnswered) return;
         sqHasAnswered = true;
-        if(sqTimerInterval) clearInterval(sqTimerInterval);
+        
+        // 🌟 ปิด clearInterval ไว้เพื่อให้เวลานับถอยหลังต่อ เผื่อเด็กจะกลับมาเปลี่ยนใจ (แต่เวลาที่ส่งจะบันทึกเป๊ะๆ ตามจังหวะที่กด)
+        // if(sqTimerInterval) clearInterval(sqTimerInterval);
 
         let responseTime = Date.now() - sqQuestionStartMs;
-        if (activePowerUp === 'p2') responseTime = 0; // ถ้านาฬิกาหยุดเวลา ให้เวลาเป็น 0 เพื่อโบนัสเต็ม
+        if (activePowerUp === 'p2') responseTime = 0; 
         const isCorrect = (selectedAnswer === sqCurrentCorrectAnswer);
 
-        // จัดการ UI ปุ่มที่กดและปิดการทำงานปุ่มอื่นทั้งหมด
         if (btnElement) {
             btnElement.style.border = "6px solid white";
             btnElement.style.transform = "scale(1.05)";
@@ -2420,42 +2423,48 @@
         const allBtns = document.querySelectorAll('.quiz-btn-gigantic');
         allBtns.forEach(b => b.disabled = true);
 
-        // --- ส่วนส่งคำตอบแทนทุกคนในปาร์ตี้ลง Database ---
         try {
-            // ป้องกันกรณีตัวแปรรายชื่อปาร์ตี้ว่าง ให้ถือว่ามีแค่ตัวเอง (Fallback)
             if (!window.windowPartyMembers || window.windowPartyMembers.length === 0) {
                 window.windowPartyMembers = [globalPortalStudent.id];
             }
 
-            // เตรียมรายการส่งข้อมูลทุกคนในปาร์ตี้พร้อมกัน (Parallel)
-            const partyTasks = window.windowPartyMembers.map(sid => {
+            const partyTasks = window.windowPartyMembers.map(async sid => {
+                // 🌟 ถ้าใช้สิทธิ์เปลี่ยนคำตอบ ให้ลบคำตอบเก่าของข้อนี้ในฐานข้อมูลทิ้งก่อน
+                if (sqHasChangedAnswer) {
+                    await supabaseClient.from('live_quiz_responses')
+                        .delete()
+                        .eq('session_id', sqSessionData.id)
+                        .eq('q_index', sqSessionData.current_q_index)
+                        .eq('student_id', sid);
+                }
+
+                let finalAnswer = selectedAnswer;
+                // 🌟 แนบสถานะเพื่อไปหัก EXP 50% ที่ฝั่งครู
+                if (sqHasChangedAnswer && finalAnswer !== "TIMEOUT_NO_ANSWER") {
+                    finalAnswer += "|CHANGED";
+                }
+
                 return supabaseClient.from('live_quiz_responses').insert({
                     session_id: sqSessionData.id,
                     q_index: sqSessionData.current_q_index,
-                    student_id: sid,           // ใช้ ID ของเพื่อนแต่ละคน
-                    answer: selectedAnswer,
+                    student_id: sid,
+                    answer: finalAnswer,
                     response_time: responseTime,
                     is_correct: isCorrect
                 });
             });
 
-            // สั่งยิงข้อมูลทุกคนลง Supabase และรอจนกว่าจะเสร็จทั้งหมด
             await Promise.all(partyTasks);
 
-            // ระบบปลอบใจ: ถ้ามีไอเทมโล่ (p3) และตอบผิด ให้แต้มทุกคนในปาร์ตี้
             if (!isCorrect && activePowerUp === 'p3') {
                 window.windowPartyMembers.forEach(sid => {
                     google.script.run.addManualEXP(sid, 75); 
                 });
             }
-            
-            // กรณีใช้ Pass Key (p6) จะมีตรรกะฝั่ง Server จัดการแจกแต้มตอนจบเกมให้เองตามปกติ
         } catch(e) {
             console.error("Party Submit Error:", e);
         }
-        // ----------------------------------------------
 
-        // ดีเลย์นิดนึงให้ดูรู้ว่ากดติด แล้วเปลี่ยนไปหน้า "รอ"
         setTimeout(() => {
             showSqScreen('wait');
             let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
@@ -2466,14 +2475,48 @@
                     สมาชิกปาร์ตี้ ${partyCount} คนไม่ได้ส่งคำตอบในข้อนี้ครับ
                 `;
             } else {
+                // 🌟 สร้างปุ่มเปลี่ยนคำตอบ โดยเช็คว่าเวลายังไม่หมดและยังไม่เคยใช้สิทธิ์
+                let currentTimerText = document.getElementById('sqTimer').innerText;
+                let changeBtnHtml = '';
+                
+                if (!sqHasChangedAnswer && currentTimerText !== "0.0") {
+                    changeBtnHtml = `
+                        <div class="mt-4">
+                            <button class="btn btn-outline-light rounded-pill px-4 py-2 fw-bold" onclick="allowChangeSqAnswer()">
+                                <i class="bi bi-arrow-repeat"></i> เปลี่ยนคำตอบ
+                            </button>
+                            <div class="small mt-2 text-white-50" style="line-height: 1.4;">
+                                กดได้แค่ 1 ครั้ง/ข้อเพื่อเปลี่ยนคำตอบ ข้อนั้นๆ<br>แต่ EXP จะได้แค่ 50% จากที่ตั้งไว้
+                            </div>
+                        </div>
+                    `;
+                }
+
                 document.getElementById('sqWaitText').innerHTML = `
                     <div class="mb-3 text-warning"><i class="bi bi-stars"></i> ส่งคำตอบเรียบร้อย!</div>
                     สถานะ: <b>แฝงร่างส่งแทนสมาชิก ${partyCount} คน</b><br>
                     รอดูผลลัพธ์พร้อมกันน้า...
+                    ${changeBtnHtml}
                 `;
             }
         }, 1000);
     }
+
+    // 🌟 เพิ่มฟังก์ชันใหม่ต่อท้าย submitSqAnswer ทันที เพื่อให้เด็กกดสลับจอกลับไปตอบใหม่ได้
+    window.allowChangeSqAnswer = function() {
+        sqHasAnswered = false; // ปลดล็อกให้ส่งใหม่ได้
+        sqHasChangedAnswer = true; // ล็อกสิทธิ์ไม่ให้กดเปลี่ยนซ้ำได้อีก
+        
+        showSqScreen('play'); // สลับจอไปที่คำถาม
+        
+        // ปลดล็อกปุ่มช้อยส์ทั้งหมดให้กลับมากดได้
+        const allBtns = document.querySelectorAll('.quiz-btn-gigantic');
+        allBtns.forEach(b => {
+            b.disabled = false;
+            b.style.border = "none";
+            b.style.transform = "scale(1)";
+        });
+    };
 
 // 6. เมื่อครูกดโชว์เฉลย ให้เช็คผลลัพธ์ของตัวเอง
     async function checkSqResult() {
