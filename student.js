@@ -1831,17 +1831,12 @@
     function startBossSync() {
         if (window.bossSyncTimer) clearInterval(window.bossSyncTimer);
         
-        // ให้มันแอบสแกนบอสในหลังบ้านทุกๆ 2.5 วินาที
         window.bossSyncTimer = setInterval(async () => {
             if (!globalPortalStudent || !supabaseClient) return;
             
-            // ถ้าเด็กกำลังตีบอสอยู่ ให้ข้ามไปก่อน ไม่ต้องกวนจอ
-            const bossModal = document.getElementById('bossBattleModal');
-            if (bossModal && bossModal.classList.contains('show')) return;
-
             try {
                 let { data } = await supabaseClient.from('boss_quizzes')
-                    .select('id, status, boss_hp')
+                    .select('id, status, boss_hp, boss_max_hp')
                     .eq('room_name', globalPortalStudent.room)
                     .eq('status', 'active')
                     .order('id', { ascending: false })
@@ -1849,13 +1844,28 @@
                 
                 if (data && data.length > 0) {
                     let boss = data[0];
-                    // ถ้าพบบอสตัวใหม่ หรือเลือดขยับ ให้ดึงข้อมูลมาโชว์ทันที
+                    const bossModal = document.getElementById('bossBattleModal');
+                    if (bossModal && bossModal.classList.contains('show')) {
+                        // 🌟 ถ้านักเรียนกำลังตีบอสอยู่ ให้อัปเดตเลือดให้ตรงกับหลังบ้านแบบ Real-time!
+                        if (currentBossData && currentBossData.bossId === boss.id) {
+                            currentBossData.hp = boss.boss_hp;
+                            updateBossHpUI(boss.boss_hp, currentBossData.maxHp);
+                        }
+                        return; 
+                    }
+
                     if (!currentBossData || currentBossData.bossId !== boss.id || currentBossData.hp !== boss.boss_hp) {
                         checkActiveBoss();
                     }
                 } else if (currentBossData) {
-                    // ถ้าบอสโดนลบหรือตายไปแล้ว
-                    checkActiveBoss(); 
+                    const bossModal = document.getElementById('bossBattleModal');
+                    if (bossModal && bossModal.classList.contains('show')) {
+                        // บอสตายแล้วตอนกำลังตี
+                        currentBossData.hp = 0;
+                        updateBossHpUI(0, currentBossData.maxHp);
+                    } else {
+                        checkActiveBoss(); 
+                    }
                 }
             } catch(e) { console.error("Boss Sync Error:", e); }
         }, 2500);
@@ -1874,7 +1884,6 @@
     function startBossBattle() {
         if (!currentBossData) return;
         
-        // 1. ดึงสถานะที่ค้างไว้จากเครื่องเด็ก (เผื่อปัดจอทิ้ง)
         const savedStateStr = localStorage.getItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`);
         if (savedStateStr) {
             const savedState = JSON.parse(savedStateStr);
@@ -1885,15 +1894,7 @@
             currentCorrectCount = 0;
         }
         
-        // 🌟 2. แก้ปัญหาเลือดบอสลดเบิ้ล!
-        // ใช้เลือดดั้งเดิมจากฐานข้อมูล มาหักลบกับดาเมจที่ตีไปแล้ว (ทำให้เปิด-ปิดกี่รอบเลือดก็เป๊ะ)
-        let baseHp = currentBossData.originalDbHp !== undefined ? currentBossData.originalDbHp : currentBossData.hp;
-        let displayHp = baseHp - (currentCorrectCount * 10);
-        if (displayHp < 0) displayHp = 0;
-        
-        currentBossData.hp = displayHp; // อัปเดตเลือดบนจอ
-        currentBossData.originalDbHp = baseHp; // ล็อกเลือดดั้งเดิมไว้กันเหนียว
-        
+        // 🌟 ดึงเลือดบอสจากหลังบ้านตรงๆ มาแสดงเลย ไม่มีบวก/ลบทิพย์อีกแล้ว!
         let bossParts = currentBossData.bossName.split('|');
         let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
         let bName = bossParts.length > 1 ? bossParts[1] : currentBossData.bossName;
@@ -1950,6 +1951,11 @@
             btnElement.classList.replace('btn-outline-light', 'btn-success');
             btnElement.style.color = "#fff";
             currentCorrectCount++;
+            
+            // 🌟 เคล็ดลับ Last Hit: ยิงดาเมจ 10 หน่วยไปหักเลือดบอสที่หลังบ้าน "ทันที" (ข้อละ 1 ฮิต)
+            // พอเลือดหลังบ้านลดปุ๊บ เรดาร์ Real-time จะดึงเลือดใหม่มากระจายให้หน้าจอทุกคนเห็นทันที!
+            google.script.run.attackBoss(currentBossData.bossId, globalPortalStudent.id, 1);
+            
             playAttackAnimation(10); 
             Toast.fire({ icon: 'success', title: 'โจมตีโดนบอสเต็มๆ! ⚔️' });
         } else {
@@ -1970,7 +1976,6 @@
         
         const totalQ = currentBossData.questions.length; 
         
-        // 🌟 เซฟสถานะข้อล่าสุดลงเครื่องนักเรียน
         localStorage.setItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`, JSON.stringify({
             qIndex: currentQuestionIndex + 1,
             correctCount: currentCorrectCount
@@ -2019,10 +2024,11 @@
     // 3. สรุปผลหลังตอบครบทุกข้อ
     function finishBossBattle() {
         const totalQ = currentBossData.questions.length;
-        let expGain = currentCorrectCount * 100; // ข้อละ 100 EXP
+        let expGain = currentCorrectCount * 100; // คิดคำนวณไว้โชว์สรุปบนจอเฉยๆ (ของจริงทยอยส่งเข้า DB ไปแล้วตอนกดตอบ)
         let extraMsg = "";
         
-        if (currentCorrectCount === totalQ && totalQ > 0) {
+        let isPerfect = (currentCorrectCount === totalQ && totalQ > 0);
+        if (isPerfect) {
             expGain += 300; 
             extraMsg = "<br><span class='text-success fw-bold'>โบนัสเพอร์เฟกต์ +300 EXP! 🎉</span>";
         }
@@ -2035,21 +2041,24 @@
             confirmButtonText: 'รับรางวัล',
         }).then((res) => {
             if (res.isConfirmed) {
-                Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading() });
+                Swal.fire({ title: 'กำลังสรุปผล...', didOpen: () => Swal.showLoading() });
                 
-                google.script.run.withSuccessHandler(function(resDB) {
+                const finalizeBossExit = function() {
                     hideAppModal('bossBattleModal');
                     Swal.close();
-                    if (resDB.success) {
-                        Toast.fire({ icon: 'success', title: `บันทึกแต้ม +${resDB.exp} EXP เรียบร้อย` });
-                        document.getElementById('bossAlertWidget').classList.add('hidden'); 
-                        
-                        // 🌟 ล้างข้อมูลที่เซฟค้างไว้ออกไป เพราะส่งสำเร็จแล้ว
-                        localStorage.removeItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`);
-                        
-                        loadFullDashboard(globalPortalStudent.id, true);
-                    }
-                }).attackBoss(currentBossData.bossId, globalPortalStudent.id, currentCorrectCount);
+                    Toast.fire({ icon: 'success', title: `ยอดเยี่ยมมาก!` });
+                    document.getElementById('bossAlertWidget').classList.add('hidden'); 
+                    localStorage.removeItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`);
+                    loadFullDashboard(globalPortalStudent.id, true);
+                };
+
+                // ถ้าตอบถูกหมด (Perfect) ให้เรียกหลังบ้านเพื่อแจกโบนัส 300 EXP เพิ่มต่างหาก
+                if (isPerfect) {
+                    google.script.run.withSuccessHandler(finalizeBossExit).addManualEXP(globalPortalStudent.id, 300);
+                } else {
+                    // ถ้าไม่ Perfect ก็จบได้เลย เพราะแต้มย่อยส่งเข้าหลังบ้านไปหมดแล้ว
+                    finalizeBossExit();
+                }
             }
         });
     }
