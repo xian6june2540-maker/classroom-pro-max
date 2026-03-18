@@ -2179,6 +2179,7 @@
     }
 
     function renderSqQuestionOnly(sessionData) {
+        if(sqTimerInterval) clearInterval(sqTimerInterval); // 🌟 แก้บั๊กตัวเลขนับถอยหลังผีหลอก
         showSqScreen('play');
         const qIndex = sessionData.current_q_index;
         
@@ -2238,6 +2239,9 @@
     function renderSqQuestion(sessionData) {
         showSqScreen('play');
         const qIndex = sessionData.current_q_index;
+
+        let oldAction = document.getElementById('sqAnswerActionArea'); 
+        if(oldAction) oldAction.remove();
         
         let questions = [];
         if (sessionData && sessionData.questions_json) {
@@ -2409,13 +2413,11 @@
         if (sqHasAnswered) return;
         sqHasAnswered = true;
 
-        // ดึงสถานะเวลาปัจจุบันมาเช็ค
-        let currentTimerText = document.getElementById('sqTimer').innerText;
-
         let responseTime = Date.now() - sqQuestionStartMs;
         if (activePowerUp === 'p2') responseTime = 0; 
         const isCorrect = (selectedAnswer === sqCurrentCorrectAnswer);
 
+        // จัดการ UI: ไฮไลท์ข้อที่กด และล็อกปุ่มทั้งหมด
         if (btnElement) {
             btnElement.style.border = "6px solid white";
             btnElement.style.transform = "scale(1.05)";
@@ -2434,17 +2436,15 @@
                     finalAnswer += "|CHANGED";
                 }
 
-                // 🌟 แก้ไข: ใช้ UPDATE แทน DELETE + INSERT เพื่อแก้บั๊กข้อมูลเบิ้ลและลดความหน่วง
                 if (sqHasChangedAnswer) {
-                    return supabaseClient.from('live_quiz_responses')
-                        .update({
-                            answer: finalAnswer,
-                            response_time: responseTime,
-                            is_correct: isCorrect
-                        })
-                        .eq('session_id', sqSessionData.id)
-                        .eq('q_index', sqSessionData.current_q_index)
-                        .eq('student_id', sid);
+                    return supabaseClient.from('live_quiz_responses').update({
+                        answer: finalAnswer,
+                        response_time: responseTime,
+                        is_correct: isCorrect
+                    })
+                    .eq('session_id', sqSessionData.id)
+                    .eq('q_index', sqSessionData.current_q_index)
+                    .eq('student_id', sid);
                 } else {
                     return supabaseClient.from('live_quiz_responses').insert({
                         session_id: sqSessionData.id,
@@ -2459,60 +2459,59 @@
 
             await Promise.all(partyTasks);
 
-            // 🌟 กันฟาร์ม EXP: ให้แต้มปลอบใจเฉพาะการตอบรอบแรกเท่านั้น
             if (!isCorrect && activePowerUp === 'p3' && !sqHasChangedAnswer) {
-                window.windowPartyMembers.forEach(sid => {
-                    google.script.run.addManualEXP(sid, 75); 
-                });
+                window.windowPartyMembers.forEach(sid => google.script.run.addManualEXP(sid, 75));
             }
-        } catch(e) {
-            console.error("Party Submit Error:", e);
+        } catch(e) { console.error("Party Submit Error:", e); }
+
+        // 🌟 สร้างพื้นที่แจ้งสถานะและปุ่ม "เปลี่ยนคำตอบ" ต่อท้ายกล่องช้อยส์
+        let actionArea = document.getElementById('sqAnswerActionArea');
+        if (!actionArea) {
+            actionArea = document.createElement('div');
+            actionArea.id = 'sqAnswerActionArea';
+            actionArea.className = 'col-12 text-center mt-3';
+            document.getElementById('sqOptionsContainer').appendChild(actionArea);
         }
 
-        // 🌟 แก้ไข: ลดดีเลย์ UI ตอนสลับหน้าจอจาก 1000ms เหลือ 300ms ให้ระบบตอบสนองทันใจขึ้น
-        setTimeout(() => {
-            showSqScreen('wait');
-            let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
-            
-            if (selectedAnswer === "TIMEOUT_NO_ANSWER") {
-                document.getElementById('sqWaitText').innerHTML = `
-                    <div class="mb-3 text-danger"><i class="bi bi-clock-history"></i> หมดเวลาส่งคำตอบ!</div>
-                    สมาชิกปาร์ตี้ ${partyCount} คนไม่ได้ส่งคำตอบในข้อนี้ครับ
-                `;
-            } else {
-                let changeBtnHtml = '';
-                
-                if (!sqHasChangedAnswer && currentTimerText !== "0.0") {
-                    changeBtnHtml = `
-                        <div class="mt-4">
-                            <button class="btn btn-outline-light rounded-pill px-4 py-2 fw-bold" onclick="allowChangeSqAnswer()">
-                                <i class="bi bi-arrow-repeat"></i> เปลี่ยนคำตอบ
-                            </button>
-                            <div class="small mt-2 text-white-50" style="line-height: 1.4;">
-                                กดได้แค่ 1 ครั้ง/ข้อเพื่อเปลี่ยนคำตอบ ข้อนั้นๆ<br>แต่ EXP จะได้แค่ 50% จากที่ตั้งไว้
-                            </div>
-                        </div>
-                    `;
-                }
+        let currentTimerText = document.getElementById('sqTimer').innerText;
 
-                document.getElementById('sqWaitText').innerHTML = `
-                    <div class="mb-3 text-warning"><i class="bi bi-stars"></i> ส่งคำตอบเรียบร้อย!</div>
-                    สถานะ: <b>แฝงร่างส่งแทนสมาชิก ${partyCount} คน</b><br>
-                    รอดูผลลัพธ์พร้อมกันน้า...
-                    ${changeBtnHtml}
+        if (selectedAnswer === "TIMEOUT_NO_ANSWER") {
+            actionArea.innerHTML = `<h5 class="text-danger fw-bold bg-white p-2 rounded shadow"><i class="bi bi-clock-history"></i> หมดเวลาส่งคำตอบ!</h5>`;
+        } else {
+            let changeBtnHtml = '';
+            
+            // เช็คว่ายังไม่หมดเวลา และยังไม่เคยเปลี่ยนคำตอบ
+            if (!sqHasChangedAnswer && currentTimerText !== "0.0" && currentTimerText !== "TIMEOUT") {
+                changeBtnHtml = `
+                    <div class="mt-2">
+                        <button class="btn btn-warning btn-lg rounded-pill fw-bold px-4 shadow-sm" onclick="allowChangeSqAnswer()">
+                            <i class="bi bi-arrow-repeat"></i> เปลี่ยนใจตอบข้ออื่น
+                        </button>
+                        <div class="small text-white mt-2" style="text-shadow: 1px 1px 2px #000;">
+                            (กดได้แค่ 1 ครั้ง/ข้อ | EXP จะถูกหัก 50%)
+                        </div>
+                    </div>
                 `;
             }
-        }, 300); 
+
+            actionArea.innerHTML = `
+                <div class="p-3 bg-dark bg-opacity-50 rounded-4 shadow-sm border border-white">
+                    <h5 class="text-success fw-bold text-white mb-0"><i class="bi bi-check-circle-fill"></i> ส่งคำตอบแล้ว! รอดูเฉลย</h5>
+                    ${changeBtnHtml}
+                </div>
+            `;
+        }
     }
 
-    // 🌟 เพิ่มฟังก์ชันใหม่ต่อท้าย submitSqAnswer ทันที เพื่อให้เด็กกดสลับจอกลับไปตอบใหม่ได้
     window.allowChangeSqAnswer = function() {
-        sqHasAnswered = false; // ปลดล็อกให้ส่งใหม่ได้
-        sqHasChangedAnswer = true; // ล็อกสิทธิ์ไม่ให้กดเปลี่ยนซ้ำได้อีก
+        sqHasAnswered = false; 
+        sqHasChangedAnswer = true; 
         
-        showSqScreen('play'); // สลับจอไปที่คำถาม
-        
-        // ปลดล็อกปุ่มช้อยส์ทั้งหมดให้กลับมากดได้
+        // ลบกล่องปุ่มเปลี่ยนคำตอบทิ้งไปเลย (ใช้ได้แค่ครั้งเดียว)
+        let actionArea = document.getElementById('sqAnswerActionArea');
+        if(actionArea) actionArea.remove();
+
+        // ปลดล็อกปุ่มช้อยส์ให้กลับมากดใหม่ได้
         const allBtns = document.querySelectorAll('.quiz-btn-gigantic');
         allBtns.forEach(b => {
             b.disabled = false;
