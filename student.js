@@ -1797,16 +1797,20 @@
         }, 2000); // ดีเลย์นิดนึงรอให้ระบบหลักโหลดเสร็จก่อน
     });
 
-    // ฟังก์ชันเช็คว่ามีบอสเกิดใหม่ไหม (ถูกเรียกตอนโหลด Dashboard หรือตอน Realtime ทักมา)
     function checkActiveBoss() {
         if (!globalPortalStudent) return;
         google.script.run.withSuccessHandler(function(res) {
             const alertWidget = document.getElementById('bossAlertWidget');
             if (res.hasBoss && !res.alreadyFought && res.hp > 0) {
                 currentBossData = res;
-                alertWidget.classList.remove('hidden'); // โชว์ปุ่มกระพริบ
+                // 🌟 เพิ่มให้เด้งแจ้งเตือนบนจอทันที ถ้านักเรียนยังไม่เห็น
+                if (alertWidget.classList.contains('hidden')) {
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: '⚠️ บอสปรากฏตัวแล้ว! รีบไปตีเร็วเข้า!', showConfirmButton: false, timer: 4000 });
+                }
+                alertWidget.classList.remove('hidden'); 
+                alertWidget.classList.add('urgent-pulse'); // เพิ่มกระพริบแรงๆ
             } else {
-                alertWidget.classList.add('hidden'); // ซ่อนปุ่ม
+                alertWidget.classList.add('hidden'); 
                 currentBossData = null;
             }
         }).getActiveBoss(globalPortalStudent.room, globalPortalStudent.id);
@@ -1823,20 +1827,35 @@
     // ฟังก์ชันเริ่มสู้บอส
     function startBossBattle() {
         if (!currentBossData) return;
-        currentQuestionIndex = 0; currentCorrectCount = 0;
         
-        // 🌟 แยก Emoji กับ ชื่อบอส ออกจากกัน (ที่เราคั่นด้วย | ไว้ตอนเซฟ)
+        // 🌟 1. ดึงสถานะที่ค้างไว้จากเครื่องเด็ก (เผื่อปัดจอทิ้ง)
+        const savedStateStr = localStorage.getItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`);
+        if (savedStateStr) {
+            const savedState = JSON.parse(savedStateStr);
+            currentQuestionIndex = savedState.qIndex || 0;
+            currentCorrectCount = savedState.correctCount || 0;
+        } else {
+            currentQuestionIndex = 0; 
+            currentCorrectCount = 0;
+        }
+        
         let bossParts = currentBossData.bossName.split('|');
         let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
         let bName = bossParts.length > 1 ? bossParts[1] : currentBossData.bossName;
 
         document.getElementById('bbBossName').innerText = bName;
         document.getElementById('bbBossTopic').innerText = "หัวข้อ: " + currentBossData.topic;
-        
-        // เอา Emoji ไปใส่แทนรูปภาพ
         document.getElementById('bbBossIcon').innerText = bIcon;
         
+        // 🌟 2. อัปเดตเลือดบอสให้ตรงกับหลังบ้าน 100% เสมอ
         updateBossHpUI(currentBossData.hp, currentBossData.maxHp);
+        
+        // ถ้านักเรียนเผลอกดออกตอนข้อสุดท้ายพอดี แล้วกลับเข้ามาใหม่ ให้จบเกมเลย
+        if (currentQuestionIndex >= currentBossData.questions.length) {
+            finishBossBattle();
+            return;
+        }
+
         loadBossQuestion();
         showAppModal('bossBattleModal');
     }
@@ -1896,7 +1915,13 @@
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        const totalQ = currentBossData.questions.length; // เช็คจำนวนข้อทั้งหมด
+        const totalQ = currentBossData.questions.length; 
+        
+        // 🌟 เซฟสถานะข้อล่าสุดลงเครื่องนักเรียน
+        localStorage.setItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`, JSON.stringify({
+            qIndex: currentQuestionIndex + 1,
+            correctCount: currentCorrectCount
+        }));
         
         setTimeout(() => {
             currentQuestionIndex++;
@@ -1944,9 +1969,8 @@
         let expGain = currentCorrectCount * 100; // ข้อละ 100 EXP
         let extraMsg = "";
         
-        // ถ้าตอบถูกหมด (เพอร์เฟกต์)
         if (currentCorrectCount === totalQ && totalQ > 0) {
-            expGain += 300; // โบนัสพิเศษ 300 EXP
+            expGain += 300; 
             extraMsg = "<br><span class='text-success fw-bold'>โบนัสเพอร์เฟกต์ +300 EXP! 🎉</span>";
         }
         
@@ -1966,6 +1990,10 @@
                     if (resDB.success) {
                         Toast.fire({ icon: 'success', title: `บันทึกแต้ม +${resDB.exp} EXP เรียบร้อย` });
                         document.getElementById('bossAlertWidget').classList.add('hidden'); 
+                        
+                        // 🌟 ล้างข้อมูลที่เซฟค้างไว้ออกไป เพราะส่งสำเร็จแล้ว
+                        localStorage.removeItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`);
+                        
                         loadFullDashboard(globalPortalStudent.id, true);
                     }
                 }).attackBoss(currentBossData.bossId, globalPortalStudent.id, currentCorrectCount);

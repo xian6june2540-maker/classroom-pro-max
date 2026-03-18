@@ -2073,3 +2073,84 @@
             }
         }).generateBossWithAI(currentRoom, topic, qCount, hp); // ส่ง qCount กับ hp ไปให้หลังบ้านด้วย
     }
+
+    // =========================================================
+    // 🛡️ เช็คสถานะบอส และลบถาวร (เพิ่มใหม่)
+    // =========================================================
+    async function openBossStatusModal() {
+        if (!currentRoom) return Swal.fire('เตือน', 'กรุณาเลือกห้องก่อนครับ', 'warning');
+        
+        showAppModal('bossStatusModal');
+        document.getElementById('bossStatusContainer').innerHTML = '<div class="text-center py-4"><span class="spinner-border text-primary"></span> กำลังโหลดข้อมูลจากมิติ...</div>';
+        
+        // ดึงข้อมูลบอสทั้งหมดของห้องนี้
+        let { data: bosses, error } = await supabaseClient
+            .from('boss_quizzes')
+            .select('*')
+            .eq('room_name', currentRoom)
+            .order('id', { ascending: false });
+            
+        if (error) {
+            document.getElementById('bossStatusContainer').innerHTML = '<div class="text-danger text-center">ดึงข้อมูลไม่ได้: ' + error.message + '</div>';
+            return;
+        }
+        
+        if (!bosses || bosses.length === 0) {
+            document.getElementById('bossStatusContainer').innerHTML = '<div class="text-muted text-center py-4">มิตินี้สงบสุข ยังไม่มีบอสเลยครับ ✨</div>';
+            return;
+        }
+        
+        let html = '';
+        bosses.forEach(b => {
+            let bossParts = b.boss_name.split('|');
+            let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
+            let bName = bossParts.length > 1 ? bossParts[1] : b.boss_name;
+            
+            let statusBadge = b.status === 'active' ? '<span class="badge bg-danger pulse-text">กำลังอาละวาด!</span>' : '<span class="badge bg-secondary">พ่ายแพ้/ถูกลบ</span>';
+            
+            html += `
+            <div class="card mb-2 shadow-sm border-0">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1 fw-bold">${bIcon} ${bName}</h5>
+                        <div class="small text-muted">หัวข้อ: ${b.topic} | เลือด: ${b.boss_hp}/${b.boss_max_hp}</div>
+                        <div class="mt-1">สถานะ: ${statusBadge}</div>
+                    </div>
+                    <div>
+                        <button class="btn btn-danger btn-sm rounded-pill px-3 shadow-sm" onclick="deleteBossCompletely(${b.id})">
+                            <i class="bi bi-trash-fill"></i> ลบถาวร
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        });
+        document.getElementById('bossStatusContainer').innerHTML = html;
+    }
+
+    async function deleteBossCompletely(bossId) {
+        Swal.fire({
+            title: 'ลบบอสตัวนี้ทิ้งถาวร?',
+            text: 'ข้อมูลบอสและประวัติที่เด็กๆ เคยตีบอสตัวนี้ จะหายวับไปกับตาทันที!',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'ลบทิ้งถาวร'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                Swal.fire({ title: 'กำลังลบความทรงจำ...', didOpen: () => Swal.showLoading() });
+                
+                // ลบประวัติการตีบอสจากตาราง boss_logs ก่อน (เคลียร์ขยะ)
+                await supabaseClient.from('boss_logs').delete().eq('boss_id', bossId);
+                
+                // ลบตัวบอสออก
+                let { error } = await supabaseClient.from('boss_quizzes').delete().eq('id', bossId);
+                
+                if (error) {
+                    Swal.fire('ผิดพลาด', error.message, 'error');
+                } else {
+                    Swal.fire('ลบสำเร็จ!', 'ล้างข้อมูลบอสเรียบร้อยแล้ว', 'success');
+                    openBossStatusModal(); // โหลดข้อมูลให้ดูใหม่
+                }
+            }
+        });
+    }
