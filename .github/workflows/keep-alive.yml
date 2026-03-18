@@ -1,9 +1,9 @@
-name: 24/7 Wake Up Vercel
+name: Daily Repo Keep-Alive
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
+    - cron: '0 0 * * *'  # ยิงวันละครั้งตอนเที่ยงคืนเป๊ะ (เวลา UTC)
+  workflow_dispatch:     # ยังเก็บปุ่มกดรันเองเอาไว้เผื่ออยากเทสต์
 
 permissions:
   contents: write
@@ -15,14 +15,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Ping Vercel
-        run: curl -s https://classroom-pro-max.vercel.app/api/cron
-
       - name: Auto-commit to keep repo active
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           date +%F > keepalive-vercel.txt
           git add keepalive-vercel.txt
-          git commit -m "Auto update to prevent GitHub Actions from pausing" || exit 0
+          git commit -m "Daily keep-alive update" || exit 0
           git push --force
