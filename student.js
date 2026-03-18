@@ -2378,7 +2378,7 @@
     };
 
 // --- แก้ไขจุดที่ 1: กดเข้าคนเดียวแล้วเปลี่ยนหน้าทันที ---
-    async function joinLiveQuiz() {
+    function joinLiveQuiz() {
         if (sqHasJoined) return;
         sqHasJoined = true;
         
@@ -2386,8 +2386,8 @@
         document.getElementById('sqWaitText').innerHTML = 'เข้าร่วมคนเดียวเรียบร้อย!<br>เตรียมตัวให้พร้อม... รอสัญญาณจากครู';
         document.getElementById('partyActionArea').innerHTML = ''; 
         
-        try {
-            // ยิงข้อมูลออกแบบเบื้องหลัง
+        // ยิงข้อมูลออกแบบเบื้องหลัง (เอา await/try-catch ออกเพื่อไม่ให้บล็อก UI)
+        if (supabaseClient && sqSessionData) {
             supabaseClient.from('live_quiz_responses').insert({
                 session_id: sqSessionData.id,
                 q_index: -1, 
@@ -2396,12 +2396,10 @@
                 response_time: 0,
                 is_correct: false
             }).catch(e => console.error("Error joining quiz:", e));
-        } catch(e) {
-            console.error("Error joining quiz:", e);
         }
     }
 
-    async function submitSqAnswer(btnElement, selectedAnswer) {
+    function submitSqAnswer(btnElement, selectedAnswer) {
         if (sqHasAnswered) return;
         sqHasAnswered = true;
         if(sqTimerInterval) clearInterval(sqTimerInterval);
@@ -2410,6 +2408,7 @@
         if (activePowerUp === 'p2') responseTime = 0; 
         const isCorrect = (selectedAnswer === sqCurrentCorrectAnswer);
 
+        // 1. ให้ปุ่มเด้งตอบสนองทันทีแบบไร้ดีเลย์
         if (btnElement) {
             btnElement.style.border = "6px solid white";
             btnElement.style.transform = "scale(1.05)";
@@ -2417,7 +2416,7 @@
         const allBtns = document.querySelectorAll('.quiz-btn-gigantic');
         allBtns.forEach(b => b.disabled = true);
 
-        // เปลี่ยนหน้าจอทันที (ลดดีเลย์เหลือ 150ms ให้ตาเห็นว่ากดติด)
+        // 2. เปลี่ยนหน้าจอทันที (ลดดีเลย์เหลือ 150ms ให้ตาเห็นว่ากดปุ่มติดแล้วเปลี่ยนหน้าเลย)
         setTimeout(() => {
             showSqScreen('wait');
             let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
@@ -2436,8 +2435,8 @@
             }
         }, 150);
 
-        // ส่งข้อมูลเข้า Database เบื้องหลัง (ไม่ล็อกหน้าจอรอ)
-        try {
+        // 3. ส่งข้อมูลเข้า Database แบบเบื้องหลัง (ไม่ต้องใช้ await ไม่ต้องรอ)
+        if (supabaseClient && sqSessionData) {
             if (!window.windowPartyMembers || window.windowPartyMembers.length === 0) {
                 window.windowPartyMembers = [globalPortalStudent.id];
             }
@@ -2457,11 +2456,10 @@
 
             if (!isCorrect && activePowerUp === 'p3') {
                 window.windowPartyMembers.forEach(sid => {
+                    // ปล่อยยิง Google Apps Script เบื้องหลัง
                     google.script.run.addManualEXP(sid, 75); 
                 });
             }
-        } catch(e) {
-            console.error("Party Submit Error:", e);
         }
     }
 
@@ -2840,7 +2838,7 @@ window.toggleSelectMember = function(el, id) {
     }
 }
 
-    async function joinWithParty() {
+    function joinWithParty() {
         if (sqHasJoined) return;
         
         if (!window.windowPartyMembers || window.windowPartyMembers.length < 2) {
@@ -2853,7 +2851,8 @@ window.toggleSelectMember = function(el, id) {
         document.getElementById('sqWaitText').innerHTML = `ปาร์ตี้ ${window.windowPartyMembers.length} คน เข้าห้องแล้ว!<br>รอสัญญาณจากครูน้า`;
         document.getElementById('partyActionArea').innerHTML = '';
 
-        try {
+        // ยิงข้อมูลออกแบบเบื้องหลัง (เอา await/try-catch ออก)
+        if (supabaseClient && sqSessionData) {
             const joinTasks = window.windowPartyMembers.map(sid => {
                 return supabaseClient.from('live_quiz_responses').insert({
                     session_id: sqSessionData.id,
@@ -2865,11 +2864,7 @@ window.toggleSelectMember = function(el, id) {
                 });
             });
 
-            // ยิงข้อมูลออกแบบเบื้องหลัง
             Promise.all(joinTasks).catch(e => console.error("Error joining party:", e));
-        } catch(e) {
-            sqHasJoined = false;
-            Swal.fire('Error', 'ไม่สามารถพาปาร์ตี้เข้าห้องได้', 'error');
         }
     }
 
