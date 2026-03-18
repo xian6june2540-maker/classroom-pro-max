@@ -1924,54 +1924,37 @@
 
     function startBossBattle() {
         if (!currentBossData) return;
+        
+        // 🌟 รีเซ็ตสถานะการเล่นใหม่ทุกครั้ง
+        currentQuestionIndex = 0; 
+        currentCorrectCount = 0;
+        
+        // 🌟 เปิดท่อ Realtime: ทำหน้าที่ "ขยับหลอดเลือด" อย่างเดียว ห้ามสั่งจบเกม
         if (supabaseClient) {
             if (window.bossRealtimeChannel) supabaseClient.removeChannel(window.bossRealtimeChannel);
-            
-            // 🌟 ปล่อยท่อให้รับทุกสัญญาณ PATCH แล้วมา Filter ID ข้างใน จะไวกว่าและชัวร์กว่า
             window.bossRealtimeChannel = supabaseClient.channel('boss-sync-global')
                 .on('postgres_changes', { event: 'PATCH', schema: 'public', table: 'boss_quizzes' }, payload => {
                     if (!currentBossData || payload.new.id !== currentBossData.bossId) return;
-
+                    
                     const newHp = payload.new.boss_hp;
+                    currentBossData.hp = newHp; // ซิงค์ค่า HP ล่าสุดไว้ในตัวแปรเครื่องเรา
                     
-                    // 🐉 จุดตาย: ต้องแก้ค่า HP ในตัวแปรเครื่องเราด้วย (เพื่อใช้คำนวณดาเมจข้อต่อไป)
-                    currentBossData.hp = newHp; 
-                    updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
-                    
-                    if (newHp <= 0) {
-                        if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer); // 🛑 สั่งฆ่า Timer ทันที
-                        finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
-                    }
+                    // ✅ อัปเดตแค่ภาพหลอดเลือดบนหน้าจอให้เด็กเห็นเพื่อนช่วยกันตี
+                    updateBossHpUI_Realtime(newHp, currentBossData.maxHp);
                 }).subscribe();
         }
-        currentQuestionIndex = 0; currentCorrectCount = 0;
+
         let bossParts = currentBossData.bossName.split('|');
         let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
         let bName = bossParts.length > 1 ? bossParts[1] : currentBossData.bossName;
+        
         document.getElementById('bbBossName').innerText = bName;
         document.getElementById('bbBossTopic').innerText = "หัวข้อ: " + currentBossData.topic;
         document.getElementById('bbBossIcon').innerText = bIcon;
+        
         updateBossHpUI(currentBossData.hp, currentBossData.maxHp);
         loadBossQuestion();
         showAppModal('bossBattleModal');
-
-        // 🌟 เพิ่มตรงนี้: ดึงเลือดบอสมาอัปเดตให้เพื่อนเห็นสดๆ แม้เราจะไม่ได้กดตอบ
-        if (window.bossSyncTimer) clearInterval(window.bossSyncTimer);
-        window.bossSyncTimer = setInterval(async function() {
-            if (!currentBossData) return;
-            try {
-                // ดึงเลือดล่าสุดจาก Supabase โดยตรง (ไวกว่าผ่าน GAS)
-                let { data: b } = await supabaseClient.from('boss_quizzes').select('boss_hp').eq('id', currentBossData.bossId).single();
-                if (b) {
-                    currentBossData.hp = b.boss_hp;
-                    updateBossHpUI_Realtime(b.boss_hp, currentBossData.maxHp);
-                    if (b.boss_hp <= 0) {
-                        clearInterval(window.bossSyncTimer);
-                        finishBossBattleEarly("บอสพ่ายแพ้แล้ว! เพื่อนๆ ช่วยกันตีจนชนะ! ⚔️");
-                    }
-                }
-            } catch(e) { console.log("Sync HP Error"); }
-        }, 3000); 
     }
 
     // 1. โหลดคำถามขึ้นหน้าจอ (เปลี่ยนจากเลข 5 เป็น นับจำนวนข้อจริง)
@@ -2003,30 +1986,26 @@
     }
 
     function selectBossAnswer(btnElement, selected, correct) {
-        // 1. ล็อกปุ่มกันกดซ้ำแค่ในเครื่องตัวเองพอ
+        // 1. ล็อกปุ่มทั้งหมดทันที กันเด็กกดย้ำจนค้าง (ล็อกถาวรในข้อนี้)
         const allBtns = document.querySelectorAll('.boss-opt-btn');
-        allBtns.forEach(b => b.disabled = true);
+        allBtns.forEach(b => {
+            b.disabled = true;
+            b.style.pointerEvents = 'none'; 
+        });
         
         if (selected === correct) {
-            // ✅ ตอบถูก: โชว์สีเขียว และเล่นท่าฟันทันที (ไม่ต้องรอเซิร์ฟเวอร์)
+            // ✅ ตอบถูก: แสดงสีเขียว + ลดเลือดในจอตัวเองทันที (ไม่ต้องรอ Server)
             btnElement.classList.replace('btn-outline-light', 'btn-success');
             btnElement.style.color = "#fff";
             currentCorrectCount++;
             
-            // ลดเลือดในจอตัวเองทันทีให้รู้สึกว่าแรง!
-            playAttackAnimation(10); 
+            playAttackAnimation(10); // ฟันบอสโชว์ในเครื่องตัวเองทันที
 
-            // 🚀 ยิงดาเมจไปหลังบ้านแบบ "ไม่ต้องรอคำตอบ" (ถ้าเน็ตช้าก็ช่างมัน เดี๋ยวหน้าจอไปต่อเลย)
+            // 🚀 ยิงดาเมจไปที่ Server แบบเบื้องหลัง (ไม่ใช้ SuccessHandler เพื่อความลื่นไหล)
             google.script.run.sendBossHit(currentBossData.bossId, globalPortalStudent.id);
 
-            // ⏱️ ตั้งเวลา 1.2 วินาที แล้วข้ามไปข้อถัดไปทันที
-            if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
-            window.bossNextQTimer = setTimeout(() => {
-                moveToNextBossQuestion();
-            }, 1200);
-
         } else {
-            // ❌ ตอบผิด: โชว์สีแดง และเฉลยข้อถูก
+            // ❌ ตอบผิด: แสดงสีแดง + เฉลยข้อถูก
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
             allBtns.forEach(b => { 
@@ -2036,29 +2015,26 @@
                 } 
             });
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
-            
-            // ตั้งเวลา 1.5 วินาที แล้วข้ามไปข้อถัดไป
-            if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
-            window.bossNextQTimer = setTimeout(() => {
-                moveToNextBossQuestion();
-            }, 1500);
         }
+        
+        // ⏱️ รอ 1.5 วินาทีให้เด็กดูเฉลย แล้วไปข้อต่อไปทันที (เน็ตช้าก็ไม่ค้าง เพราะเราไม่รอ Server แล้ว)
+        if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
+        window.bossNextQTimer = setTimeout(() => {
+            moveToNextBossQuestion();
+        }, 1500);
     }
 
     function moveToNextBossQuestion() {
-        // ถ้าบอสตายไปแล้ว (เช็คจากค่าล่าสุดในเครื่อง) ให้ปิดหน้าจอเลย
-        if (!currentBossData || currentBossData.hp <= 0) {
-            finishBossBattle();
-            return;
-        }
-
+        // ล้าง Timer เพื่อความปลอดภัย
+        if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
+        
         currentQuestionIndex++;
         
-        // เช็คว่ายังมีข้อต่อไปไหม
+        // 1. ตรวจสอบว่ายังมีคำถามเหลืออยู่ไหม (ให้เล่นจนครบ 5 ข้อตามสิทธิ์)
         if (currentQuestionIndex < currentBossData.questions.length) {
-            loadBossQuestion();
+            loadBossQuestion(); 
         } else {
-            // ถ้าจบทุกข้อแล้ว
+            // 2. ถ้าเล่นครบทุกข้อแล้ว ถึงจะสั่งจบเกมและปิด Modal
             finishBossBattle();
         }
     }
@@ -2094,26 +2070,28 @@
     }
 
     function finishBossBattle() {
-        // ล้างทุก Timer กันเครื่องรวน
+        // 1. เคลียร์ Timer และท่อสื่อสารทั้งหมด ป้องกันอาการรวน
         if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
         
-        // ปิดท่อ Realtime
         if (window.bossRealtimeChannel) {
             supabaseClient.removeChannel(window.bossRealtimeChannel);
             window.bossRealtimeChannel = null;
         }
 
+        // 2. ปิดหน้าจอ Modal บอส
+        hideAppModal('bossBattleModal');
+        
+        // 3. แจ้งสรุปผล (เน้นว่าระบบบันทึกคะแนนให้แล้ว)
         Swal.fire({
-            title: 'จบการต่อสู้!',
-            text: 'คุณทำเต็มที่แล้ว! ระบบกำลังบันทึกคะแนนสะสม...',
-            icon: 'info',
-            timer: 2000,
+            title: 'การต่อสู้สิ้นสุด!',
+            text: 'คุณใช้สิทธิ์โจมตีครบแล้ว ระบบกำลังบันทึก EXP ทั้งหมดของคุณ...',
+            icon: 'success',
+            timer: 3000,
             showConfirmButton: false
-        }).then(() => {
-            hideAppModal('bossBattleModal');
-            // รีโหลดข้อมูลแบบเงียบๆ เพื่ออัปเดต EXP ล่าสุด
-            loadFullDashboard(globalPortalStudent.id, true);
         });
+
+        // 4. รีโหลดข้อมูล Dashboard เพื่อแสดง EXP ล่าสุดที่ได้จากการตีบอส
+        loadFullDashboard(globalPortalStudent.id, true);
     }
 
     function finishBossBattleEarly(message) {
