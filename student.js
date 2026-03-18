@@ -2094,19 +2094,24 @@
     }
 
     function finishBossBattle() {
-        clearTimeout(window.bossNextQTimer); // ล้าง Timer ทิ้ง
+        // ล้างทุก Timer กันเครื่องรวน
+        if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
+        
+        // ปิดท่อ Realtime
         if (window.bossRealtimeChannel) {
             supabaseClient.removeChannel(window.bossRealtimeChannel);
             window.bossRealtimeChannel = null;
         }
+
         Swal.fire({
             title: 'จบการต่อสู้!',
-            text: 'คุณทำเต็มที่แล้ว! ระบบบันทึก EXP เรียบร้อย',
+            text: 'คุณทำเต็มที่แล้ว! ระบบกำลังบันทึกคะแนนสะสม...',
             icon: 'info',
             timer: 2000,
             showConfirmButton: false
         }).then(() => {
             hideAppModal('bossBattleModal');
+            // รีโหลดข้อมูลแบบเงียบๆ เพื่ออัปเดต EXP ล่าสุด
             loadFullDashboard(globalPortalStudent.id, true);
         });
     }
