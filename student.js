@@ -2003,42 +2003,30 @@
     }
 
     function selectBossAnswer(btnElement, selected, correct) {
+        // 1. ล็อกปุ่มกันกดซ้ำแค่ในเครื่องตัวเองพอ
         const allBtns = document.querySelectorAll('.boss-opt-btn');
-        allBtns.forEach(b => b.disabled = true); // ล็อกปุ่มกันกดซ้ำ
+        allBtns.forEach(b => b.disabled = true);
         
         if (selected === correct) {
-            // ✅ ลบ Swal.fire โหลดทิ้งไปเลยครับ
+            // ✅ ตอบถูก: โชว์สีเขียว และเล่นท่าฟันทันที (ไม่ต้องรอเซิร์ฟเวอร์)
             btnElement.classList.replace('btn-outline-light', 'btn-success');
             btnElement.style.color = "#fff";
+            currentCorrectCount++;
             
-            // เล่นแอนิเมชั่นลดเลือดในเครื่องตัวเองทันที (ฟลุ๊คมีฟังก์ชันนี้อยู่แล้ว)
+            // ลดเลือดในจอตัวเองทันทีให้รู้สึกว่าแรง!
             playAttackAnimation(10); 
-            
-            // ส่งข้อมูลไปเซิร์ฟเวอร์แบบเงียบๆ (Background)
-            google.script.run
-            .withSuccessHandler(function(res) {
-                if(res && res.isDead) {
-                    if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
-                    finishBossBattleEarly("คุณปลิดชีพเจ้าบอสตัวนี้สำเร็จ! 🏆");
-                }
-            })
-            .sendBossHit(currentBossData.bossId, globalPortalStudent.id);
-            
-            // ตั้งเวลาไปข้อต่อไปอัตโนมัติ
+
+            // 🚀 ยิงดาเมจไปหลังบ้านแบบ "ไม่ต้องรอคำตอบ" (ถ้าเน็ตช้าก็ช่างมัน เดี๋ยวหน้าจอไปต่อเลย)
+            google.script.run.sendBossHit(currentBossData.bossId, globalPortalStudent.id);
+
+            // ⏱️ ตั้งเวลา 1.2 วินาที แล้วข้ามไปข้อถัดไปทันที
             if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
             window.bossNextQTimer = setTimeout(() => {
-                if (currentBossData && currentBossData.hp > 0) {
-                    currentQuestionIndex++;
-                    if (currentQuestionIndex < currentBossData.questions.length) {
-                        loadBossQuestion();
-                    } else {
-                        finishBossBattle(); 
-                    }
-                }
-            }, 1500);
+                moveToNextBossQuestion();
+            }, 1200);
 
         } else {
-            // กรณีตอบผิด (โค้ดเดิมของฟลุ๊ค)
+            // ❌ ตอบผิด: โชว์สีแดง และเฉลยข้อถูก
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
             allBtns.forEach(b => { 
@@ -2049,15 +2037,29 @@
             });
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
             
+            // ตั้งเวลา 1.5 วินาที แล้วข้ามไปข้อถัดไป
             if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
             window.bossNextQTimer = setTimeout(() => {
-                currentQuestionIndex++;
-                if (currentQuestionIndex < currentBossData.questions.length) {
-                    loadBossQuestion();
-                } else {
-                    finishBossBattle();
-                }
+                moveToNextBossQuestion();
             }, 1500);
+        }
+    }
+
+    function moveToNextBossQuestion() {
+        // ถ้าบอสตายไปแล้ว (เช็คจากค่าล่าสุดในเครื่อง) ให้ปิดหน้าจอเลย
+        if (!currentBossData || currentBossData.hp <= 0) {
+            finishBossBattle();
+            return;
+        }
+
+        currentQuestionIndex++;
+        
+        // เช็คว่ายังมีข้อต่อไปไหม
+        if (currentQuestionIndex < currentBossData.questions.length) {
+            loadBossQuestion();
+        } else {
+            // ถ้าจบทุกข้อแล้ว
+            finishBossBattle();
         }
     }
 
