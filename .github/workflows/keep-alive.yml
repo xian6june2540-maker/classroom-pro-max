@@ -3,23 +3,31 @@ name: Daily Repo Keep-Alive
 on:
   schedule:
     - cron: '0 0 * * *'  # ยิงวันละครั้งตอนเที่ยงคืนเป๊ะ (เวลา UTC)
-  workflow_dispatch:     # ยังเก็บปุ่มกดรันเองเอาไว้เผื่ออยากเทสต์
+  workflow_dispatch:     # ปุ่มกดรันเองเอาไว้เทสต์
 
 permissions:
   contents: write
 
 jobs:
-  ping:
+  keep_alive:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Backup Ping to Vercel
+        # ถึงจะมี UptimeRobot แล้ว แต่ยิงเผื่อไว้อีกนัดจาก GitHub ก็ไม่เสียหายครับ
+        run: curl -s https://classroom-pro-max.vercel.app/api/cron
+
       - name: Auto-commit to keep repo active
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          date +%F > keepalive-vercel.txt
+          
+          # บันทึกเวลาลงไฟล์เพื่อให้ไฟล์มีการเปลี่ยนแปลงจริงในทุกวัน
+          echo "Last Active: $(date)" > keepalive-vercel.txt
+          
           git add keepalive-vercel.txt
-          git commit -m "Daily keep-alive update" || exit 0
-          git push --force
+          # ถ้าไม่มีอะไรเปลี่ยน (ซึ่งเปลี่ยนแน่เพราะ echo date) ให้ข้ามไป ไม่ต้องขึ้น Error
+          git commit -m "Daily maintenance: $(date +'%Y-%m-%d')" || exit 0
+          git push
