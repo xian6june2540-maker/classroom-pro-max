@@ -1,4 +1,3 @@
-<<<<<<< HEAD
     // =====================================
     // ตัวแปรและฟังก์ชันจัดการสถานะ
     // =====================================
@@ -2926,7 +2925,7 @@ async function renderPartySelection() {
             </div>
         `;
     }
-=======
+
     // =====================================
     // ตัวแปรและฟังก์ชันจัดการสถานะ
     // =====================================
@@ -4960,7 +4959,7 @@ async function renderPartySelection() {
         }
     }
 
-// 3. จัดการสถานะหน้าจอตามคำสั่งครู (รวมระบบคัดกรองและแสดงโจทย์ก่อน)
+    // 3. จัดการสถานะหน้าจอตามคำสั่งครู (รวมระบบคัดกรองและแสดงโจทย์ก่อน)
     async function handleLiveQuizChange(sessionData) {
         // ==========================================
         // 🛠️ ส่วนที่แก้ไข: ป้องกัน Supabase ไม่ส่ง JSON คำถามมาด้วย
@@ -5854,7 +5853,6 @@ async function renderPartySelection() {
             </div>
         `;
     }
->>>>>>> 5af5b21 (add cron job logic)
 }
 
 // =========================================================
@@ -5867,12 +5865,13 @@ function initSmartRealtime() {
 
     console.log("👂 หูทิพย์เริ่มทำงานสำหรับ ID:", myId);
 
-    // 1. ฟังเฉพาะข้อมูลส่วนตัว (EXP, Items)
+    // 1. ฟังเฉพาะข้อมูลส่วนตัวของเรา (EXP, Items)
     supabaseClient.channel('sync-profile-' + myId)
         .on('postgres_changes', { 
             event: 'UPDATE', schema: 'public', table: 'students', 
             filter: `id=eq.${myId}` 
         }, payload => {
+            // โหลดข้อมูลใหม่แบบเงียบๆ (isSilent = true)
             loadFullDashboard(myId, true);
             if (payload.new.exp > payload.old.exp) {
                 Toast.fire({ icon: 'success', title: `ได้รับเพิ่ม ${Math.floor(payload.new.exp - payload.old.exp)} EXP ✨` });
@@ -5894,7 +5893,7 @@ function initSmartRealtime() {
         }).subscribe();
 }
 
-// เรียกใช้งานหูทิพย์หลังจากโหลดหน้าจอเสร็จ
+// สั่งรันหูทิพย์หลังโหลดหน้าเสร็จ
 document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(initSmartRealtime, 3000); // ดีเลย์นิดนึงรอให้ระบบล็อกอินเสร็จ
+    setTimeout(initSmartRealtime, 3000); 
 });
