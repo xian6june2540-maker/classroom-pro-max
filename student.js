@@ -1883,7 +1883,6 @@
             if (!globalPortalStudent || !supabaseClient) return;
             
             try {
-                // 🌟 ปรับให้ดึงบอสตัวล่าสุดเสมอ (ไม่จำกัดเฉพาะ active) เพื่อจะได้รู้ว่ามันตาย (defeated) หรือยัง
                 let { data } = await supabaseClient.from('boss_quizzes')
                     .select('id, status, boss_hp, boss_max_hp')
                     .eq('room_name', globalPortalStudent.room)
@@ -1894,13 +1893,16 @@
                     let boss = data[0];
                     const bossModal = document.getElementById('bossBattleModal');
                     if (bossModal && bossModal.classList.contains('show')) {
-                        // 🌟 ถ้านักเรียนกำลังสู้ แล้วบอสเลือดเหลือ 0 หรือสถานะเปลี่ยนเป็น defeated ให้ตัดจบเกมทันที!
                         if (currentBossData && currentBossData.bossId === boss.id) {
-                            currentBossData.hp = boss.boss_hp;
-                            updateBossHpUI(boss.boss_hp, currentBossData.maxHp);
+                            
+                            // 🌟 เช็คว่าเพิ่งตีไปหรือเปล่า ถ้าเพิ่งตีให้ข้ามการดึงเลือดเก่ามาทับ!
+                            if (!window.isBossHpUpdating) {
+                                currentBossData.hp = boss.boss_hp;
+                                updateBossHpUI(boss.boss_hp, currentBossData.maxHp);
+                            }
                             
                             if (boss.boss_hp <= 0 || boss.status === 'defeated') {
-                                handleBossDefeated(); // เรียกฟังก์ชันบอสตาย
+                                handleBossDefeated(); 
                             }
                         }
                         return; 
@@ -2038,16 +2040,18 @@
             btnElement.style.color = "#fff";
             currentCorrectCount++;
             
-            // ส่งดาเมจ 1 ฮิตไปหักเลือดหลังบ้านทันที
+            // 🌟 บอกเรดาร์ว่า "ฉันเพิ่งตีไปนะ ขอเวลา DB อัปเดต 3 วินาที ห้ามเอาเลือดเก่ามาทับ!"
+            window.isBossHpUpdating = true;
+            setTimeout(() => { window.isBossHpUpdating = false; }, 3000);
+
             google.script.run.attackBoss(currentBossData.bossId, globalPortalStudent.id, 1);
             
             playAttackAnimation(10); 
             Toast.fire({ icon: 'success', title: 'โจมตีโดนบอสเต็มๆ! ⚔️' });
             
-            // 🌟 เช็คเลือดตัวเองว่าลดจนบอสตายคามือเราเลยหรือไม่
             if (currentBossData.hp <= 0) {
-                handleBossDefeated(); // ฉันนี่แหละ Last hit!
-                return; // หยุดทำงาน ไม่ต้องไปข้อถัดไป
+                handleBossDefeated(); 
+                return; 
             }
             
         } else {
