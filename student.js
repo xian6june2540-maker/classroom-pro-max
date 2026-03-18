@@ -1048,8 +1048,13 @@
                 let item = dbData.find(function(i) { return i.id === id; });
                 if (!item) return;
                 let isEquipped = (id === equippedId);
-                let btn = isEquipped ? '<button class="btn btn-sm btn-success w-100 disabled">กำลังสวมใส่</button>' : '<button class="btn btn-sm btn-primary w-100 fw-bold" onclick="equipGearFromBag(\'' + item.id + '\')">สวมใส่</button>';
-                out += '<div class="col-md-3 col-6"><div class="shop-item-card"><div class="shop-icon">' + item.icon + '</div><h6 class="fw-bold text-dark">' + item.name + '</h6><p class="small text-danger fw-bold mb-2">' + item.passive + '</p>' + btn + '</div></div>';
+                let btn = isEquipped ? '<button class="btn btn-sm btn-success w-100 disabled mb-1">กำลังสวมใส่</button>' : '<button class="btn btn-sm btn-primary w-100 fw-bold mb-1" onclick="equipGearFromBag(\'' + item.id + '\')">สวมใส่</button>';
+                
+                // 🌟 ปุ่มขายคืน (คืนทุน 30%)
+                let sellPrice = Math.floor((item.price || 0) * 0.3);
+                let sellBtn = `<button class="btn btn-sm btn-outline-danger w-100 fw-bold mt-1" onclick="sellItemToShop('${item.id}', ${sellPrice}, '${item.name}')">ขายคืน (+${sellPrice} EXP)</button>`;
+
+                out += '<div class="col-md-3 col-6"><div class="shop-item-card"><div class="shop-icon">' + item.icon + '</div><h6 class="fw-bold text-dark">' + item.name + '</h6><p class="small text-danger fw-bold mb-2">' + (item.passive || '') + '</p>' + btn + sellBtn + '</div></div>';
             });
             return out;
         };
@@ -1064,8 +1069,12 @@
             myBgs.forEach(function(id) {
                 let b = bgData.find(function(bg) { return bg.id === id; }); if (!b) return;
                 let isEquipped = (b.id === currentBg);
-                let btn = isEquipped ? '<button class="btn btn-sm btn-success w-100 disabled">กำลังใช้งาน</button>' : '<button class="btn btn-sm btn-info text-white w-100 fw-bold" onclick="equipBg(\'' + b.id + '\')">เปลี่ยนฉากพื้นหลัง</button>';
-                htmlBgs += '<div class="col-md-4"><div class="shop-item-card"><div class="bg-preview" style="background: ' + b.css + ';"></div><h6 class="fw-bold">' + b.name + '</h6><p class="small text-danger fw-bold mb-2">' + b.passive + '</p>' + btn + '</div></div>';
+                let btn = isEquipped ? '<button class="btn btn-sm btn-success w-100 disabled mb-1">กำลังใช้งาน</button>' : '<button class="btn btn-sm btn-info text-white w-100 fw-bold mb-1" onclick="equipBg(\'' + b.id + '\')">เปลี่ยนฉาก</button>';
+                
+                let sellPrice = Math.floor((b.price || 0) * 0.3);
+                let sellBtn = `<button class="btn btn-sm btn-outline-danger w-100 fw-bold mt-1" onclick="sellItemToShop('${b.id}', ${sellPrice}, '${b.name}')">ขายคืน (+${sellPrice} EXP)</button>`;
+
+                htmlBgs += '<div class="col-md-4"><div class="shop-item-card"><div class="bg-preview" style="background: ' + b.css + ';"></div><h6 class="fw-bold">' + b.name + '</h6><p class="small text-danger fw-bold mb-2">' + (b.passive || '') + '</p>' + btn + sellBtn + '</div></div>';
             });
         }
         document.getElementById('invBgList').innerHTML = htmlBgs;
@@ -1076,17 +1085,19 @@
         } else {
             Object.keys(foodCounts).forEach(function(id) {
                 let f = foodData.find(function(food) { return food.id === id; }); if (!f) return;
+                let sellPrice = Math.floor((f.price || 0) * 0.3);
                 htmlFoods += `
-                    <div class="col-md-3 col-6">
-                        <div class="shop-item-card">
-                            <div class="shop-icon position-relative">${f.icon}
-                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white">x${foodCounts[id]}</span>
-                            </div>
-                            <h6 class="fw-bold">${f.name}</h6>
-                            <p class="small text-primary fw-bold mb-2">คูณ *${f.multiplier} (${f.durationMin} นาที)</p>
-                            <button class="btn btn-sm btn-danger w-100 fw-bold shadow-sm" onclick="useFoodFromBag('${f.id}', '${f.msg}')">ป้อนอาหาร</button>
+                <div class="col-md-3 col-6">
+                    <div class="shop-item-card">
+                        <div class="shop-icon position-relative">${f.icon}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white">x${foodCounts[id]}</span>
                         </div>
-                    </div>`;
+                        <h6 class="fw-bold">${f.name}</h6>
+                        <p class="small text-primary fw-bold mb-2">คูณ *${f.multiplier} (${f.durationMin} นาที)</p>
+                        <button class="btn btn-sm btn-danger w-100 fw-bold shadow-sm mb-1" onclick="useFoodFromBag('${f.id}', '${f.msg}')">ป้อนอาหาร</button>
+                        <button class="btn btn-sm btn-outline-danger w-100 fw-bold mt-1" onclick="sellItemToShop('${f.id}', ${sellPrice}, '${f.name}')">ขายคืน (+${sellPrice} EXP)</button>
+                    </div>
+                </div>`;
             });
         }
         document.getElementById('invFoodList').innerHTML = htmlFoods;
@@ -1098,10 +1109,47 @@
         else {
             Object.keys(powerupCounts).forEach(function(id) {
                 let p = powerupData.find(function(item) { return item.id === id; }); if (!p) return;
-                htmlPowerups += '<div class="col-md-3 col-6"><div class="shop-item-card"><div class="shop-icon position-relative">' + p.icon + '<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger fs-6 border border-white">x' + powerupCounts[id] + '</span></div><h6>' + p.name + '</h6><p class="small text-muted mb-0">กดใช้ในจอเกม Live Quiz</p></div></div>';
+                let sellPrice = Math.floor((p.price || 0) * 0.3);
+                htmlPowerups += `
+                <div class="col-md-3 col-6">
+                    <div class="shop-item-card">
+                        <div class="shop-icon position-relative">${p.icon}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger fs-6 border border-white">x${powerupCounts[id]}</span>
+                        </div>
+                        <h6 class="mb-1">${p.name}</h6>
+                        <p class="small text-muted mb-2">กดใช้ในเกม Live Quiz</p>
+                        <button class="btn btn-sm btn-outline-danger w-100 fw-bold mt-1" onclick="sellItemToShop('${p.id}', ${sellPrice}, '${p.name}')">ขายคืน (+${sellPrice} EXP)</button>
+                    </div>
+                </div>`;
             });
         }
         document.getElementById('invPowerupList').innerHTML = htmlPowerups;
+    }
+
+    // 🌟 ฟังก์ชันใหม่เอี่ยม: ระบบขายของคืน
+    window.sellItemToShop = function(itemId, earnExp, itemName) {
+        Swal.fire({
+            title: 'ขายไอเทม?',
+            text: `คุณต้องการขาย "${itemName}" เพื่อรับ ${earnExp} EXP คืนใช่ไหม? (ขายแล้วเอาคืนไม่ได้นะ!)`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'ขายทิ้งเลย',
+            cancelButtonText: 'เก็บไว้ก่อน'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({ title: 'กำลังแลกเปลี่ยน...', didOpen: () => Swal.showLoading() });
+                google.script.run.withSuccessHandler(function(res) {
+                    if (res.success) {
+                        Swal.fire({ toast: true, position: 'top', icon: 'success', title: `ขายสำเร็จ ได้รับ ${earnExp} EXP`, showConfirmButton: false, timer: 2000 });
+                        loadFullDashboard(globalPortalStudent.id, true); // รีโหลด EXP ใหม่
+                        setTimeout(() => renderInventory(), 1000); // รีเฟรชหน้ากระเป๋า
+                    } else {
+                        Swal.fire('ผิดพลาด', res.message, 'error');
+                    }
+                }).sellItemBack(globalPortalStudent.id, itemId, earnExp);
+            }
+        });
     }
 
     function equipGearFromBag(gearId) {
