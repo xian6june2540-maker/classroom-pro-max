@@ -1920,47 +1920,32 @@
 
     function startBossBattle() {
         if (!currentBossData) return;
-        
-        // 🌟 1. เปิดท่อดักฟังเลือดบอสแบบ Real-time ทันทีที่เข้าหน้าตีบอส
         if (supabaseClient) {
-            // ถ้ามีท่อเก่าค้างอยู่ให้ปิดก่อน
             if (window.bossRealtimeChannel) supabaseClient.removeChannel(window.bossRealtimeChannel);
-
-            window.bossRealtimeChannel = supabaseClient.channel('realtime-boss-hp')
-                .on('postgres_changes', { 
-                    event: 'PATCH', 
-                    schema: 'public', 
-                    table: 'boss_quizzes', 
-                    filter: `id=eq.${currentBossData.bossId}` 
-                }, payload => {
+            window.bossRealtimeChannel = supabaseClient.channel('boss-' + currentBossData.bossId)
+                .on('postgres_changes', { event: 'PATCH', schema: 'public', table: 'boss_quizzes', filter: `id=eq.${currentBossData.bossId}` }, payload => {
                     const newHp = payload.new.boss_hp;
-                    // อัปเดตหลอดเลือดบนจอเด็กทุกคนทันที
+                    // 🌟 จุดสำคัญ: ต้องแก้ตัวแปรในเครื่องด้วย เลือดอีกจอถึงจะลดตามจริง
+                    currentBossData.hp = newHp; 
                     updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
-                    
-                    // 🌟 2. ถ้าเลือดเหลือ 0 (เพื่อนคนอื่นฆ่าตาย) ให้เด้งออกทันที!
                     if (newHp <= 0) {
+                        clearTimeout(window.bossNextQTimer); // 🛑 หยุดการโหลดข้อต่อไปทันที
                         finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
                     }
-                })
-                .subscribe();
+                }).subscribe();
         }
-
         currentQuestionIndex = 0; 
         currentCorrectCount = 0;
-        
         let bossParts = currentBossData.bossName.split('|');
         let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
         let bName = bossParts.length > 1 ? bossParts[1] : currentBossData.bossName;
-
         document.getElementById('bbBossName').innerText = bName;
         document.getElementById('bbBossTopic').innerText = "หัวข้อ: " + currentBossData.topic;
         document.getElementById('bbBossIcon').innerText = bIcon;
-        
         updateBossHpUI(currentBossData.hp, currentBossData.maxHp);
         loadBossQuestion();
         showAppModal('bossBattleModal');
     }
-
     // 1. โหลดคำถามขึ้นหน้าจอ (เปลี่ยนจากเลข 5 เป็น นับจำนวนข้อจริง)
     function loadBossQuestion() {
         const qData = currentBossData.questions[currentQuestionIndex];
@@ -1992,39 +1977,30 @@
     function selectBossAnswer(btnElement, selected, correct) {
         const allBtns = document.querySelectorAll('.boss-opt-btn');
         allBtns.forEach(b => b.disabled = true);
-        
         if (selected === correct) {
             btnElement.classList.replace('btn-outline-light', 'btn-success');
             btnElement.style.color = "#fff";
             currentCorrectCount++;
             playAttackAnimation(10); 
-            
-            // 🌟 ส่งดาเมจไปหักเลือดในฐานข้อมูลทันที
             google.script.run.withSuccessHandler(function(res) {
                 if(res.isDead) {
+                    clearTimeout(window.bossNextQTimer);
                     finishBossBattleEarly("คุณปลิดชีพเจ้าบอสตัวนี้สำเร็จ! 🏆");
-                    return; 
                 }
             }).sendBossHit(currentBossData.bossId, globalPortalStudent.id);
         } else {
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
-            allBtns.forEach(b => {
-                if (b.innerText.includes(correct)) {
-                    b.classList.replace('btn-outline-light', 'btn-success');
-                    b.style.color = "#fff";
-                }
-            });
+            allBtns.forEach(b => { if (b.innerText.includes(correct)) { b.classList.replace('btn-outline-light', 'btn-success'); b.style.color = "#fff"; } });
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        setTimeout(() => {
+        // 🌟 เก็บค่า Timer ไว้ใน window.bossNextQTimer
+        window.bossNextQTimer = setTimeout(() => {
+            if (!currentBossData || currentBossData.hp <= 0) return;
             currentQuestionIndex++;
-            if (currentQuestionIndex < currentBossData.questions.length) {
-                loadBossQuestion();
-            } else {
-                finishBossBattle(); // จบกรณีตอบครบแต่บอสไม่ตาย
-            }
+            if (currentQuestionIndex < currentBossData.questions.length) loadBossQuestion();
+            else finishBossBattle();
         }, 1500);
     }
 
@@ -2060,16 +2036,16 @@
 
     // 3. สรุปผลหลังตอบครบทุกข้อ (กรณีบอสยังไม่ตาย)
     function finishBossBattle() {
+        clearTimeout(window.bossNextQTimer);
         if (window.bossRealtimeChannel) {
             supabaseClient.removeChannel(window.bossRealtimeChannel);
             window.bossRealtimeChannel = null;
         }
-        
         Swal.fire({
             title: 'จบการต่อสู้!',
-            text: 'คุณทำเต็มที่แล้ว! ระบบบันทึก EXP ที่ได้จากการโจมตีเรียบร้อย',
+            text: 'คุณทำเต็มที่แล้ว! ระบบบันทึก EXP เรียบร้อย',
             icon: 'info',
-            timer: 2500,
+            timer: 2000,
             showConfirmButton: false
         }).then(() => {
             hideAppModal('bossBattleModal');
@@ -3036,6 +3012,7 @@ async function renderPartySelection() {
 }
 
     function finishBossBattleEarly(message) {
+        clearTimeout(window.bossNextQTimer);
         if (window.bossRealtimeChannel) {
             supabaseClient.removeChannel(window.bossRealtimeChannel);
             window.bossRealtimeChannel = null;
