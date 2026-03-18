@@ -1801,17 +1801,23 @@
         if (!globalPortalStudent) return;
         google.script.run.withSuccessHandler(function(res) {
             const alertWidget = document.getElementById('bossAlertWidget');
+            // 🌟 เช็คว่านักเรียนกำลังสู้บอสอยู่หรือไม่
+            const bossModal = document.getElementById('bossBattleModal');
+            const isBattling = bossModal && bossModal.classList.contains('show');
+
             if (res.hasBoss && !res.alreadyFought && res.hp > 0) {
-                currentBossData = res;
-                // 🌟 เพิ่มให้เด้งแจ้งเตือนบนจอทันที ถ้านักเรียนยังไม่เห็น
+                // 🌟 ถ้าไม่ได้เปิดหน้าจอสู้อยู่ ให้อัปเดตข้อมูลบอสใหม่ (ป้องกันเลือดเด้งกลับตอนกำลังตี)
+                if (!isBattling) {
+                    currentBossData = res;
+                }
                 if (alertWidget.classList.contains('hidden')) {
                     Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: '⚠️ บอสปรากฏตัวแล้ว! รีบไปตีเร็วเข้า!', showConfirmButton: false, timer: 4000 });
                 }
                 alertWidget.classList.remove('hidden'); 
-                alertWidget.classList.add('urgent-pulse'); // เพิ่มกระพริบแรงๆ
+                alertWidget.classList.add('urgent-pulse'); 
             } else {
                 alertWidget.classList.add('hidden'); 
-                currentBossData = null;
+                if (!isBattling) currentBossData = null;
             }
         }).getActiveBoss(globalPortalStudent.room, globalPortalStudent.id);
     }
@@ -1828,7 +1834,7 @@
     function startBossBattle() {
         if (!currentBossData) return;
         
-        // 🌟 1. ดึงสถานะที่ค้างไว้จากเครื่องเด็ก (เผื่อปัดจอทิ้ง)
+        // 1. ดึงสถานะที่ค้างไว้จากเครื่องเด็ก (เผื่อปัดจอทิ้ง)
         const savedStateStr = localStorage.getItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`);
         if (savedStateStr) {
             const savedState = JSON.parse(savedStateStr);
@@ -1839,6 +1845,12 @@
             currentCorrectCount = 0;
         }
         
+        // 🌟 2. แก้ปัญหาเลือดบอสไม่ตรง!
+        // เอาเลือดล่าสุดจากหลังบ้าน มาหักออกด้วยดาเมจที่เราตีไปแล้ว (แต่ยังไม่ได้กดส่งตอนจบ)
+        let displayHp = currentBossData.hp - (currentCorrectCount * 10);
+        if (displayHp < 0) displayHp = 0;
+        currentBossData.hp = displayHp; // จำค่านี้ไว้ เพื่อให้ตีครั้งต่อไปเลือดลดลงอย่างต่อเนื่อง
+        
         let bossParts = currentBossData.bossName.split('|');
         let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
         let bName = bossParts.length > 1 ? bossParts[1] : currentBossData.bossName;
@@ -1847,10 +1859,8 @@
         document.getElementById('bbBossTopic').innerText = "หัวข้อ: " + currentBossData.topic;
         document.getElementById('bbBossIcon').innerText = bIcon;
         
-        // 🌟 2. อัปเดตเลือดบอสให้ตรงกับหลังบ้าน 100% เสมอ
         updateBossHpUI(currentBossData.hp, currentBossData.maxHp);
         
-        // ถ้านักเรียนเผลอกดออกตอนข้อสุดท้ายพอดี แล้วกลับเข้ามาใหม่ ให้จบเกมเลย
         if (currentQuestionIndex >= currentBossData.questions.length) {
             finishBossBattle();
             return;
