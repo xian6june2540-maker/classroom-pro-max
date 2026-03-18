@@ -1989,7 +1989,6 @@
         document.getElementById('bbOptionsContainer').innerHTML = optionsHtml;
     }
 
-    // 2. เมื่อเด็กกดตอบ
     function selectBossAnswer(btnElement, selected, correct) {
         const allBtns = document.querySelectorAll('.boss-opt-btn');
         allBtns.forEach(b => b.disabled = true);
@@ -2000,30 +1999,34 @@
             currentCorrectCount++;
             playAttackAnimation(10); 
             Toast.fire({ icon: 'success', title: 'โจมตีโดนบอสเต็มๆ! ⚔️' });
+
+            // 🌟 ตอบถูกปุ๊บ ยิงดาเมจไปที่หลังบ้านทันที เพื่อลดเลือดบอสใน DB
+            google.script.run.withSuccessHandler(function(res) {
+                if(res.isDead) finishBossBattleEarly("คุณเป็นผู้ปลิดชีพเจ้าบอสตัวนี้! 🏆");
+            }).sendBossHit(currentBossData.bossId, globalPortalStudent.id);
+
         } else {
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
-            
             allBtns.forEach(b => {
                 if (b.innerText.includes(correct)) {
                     b.classList.replace('btn-outline-light', 'btn-success');
                     b.style.color = "#fff";
                 }
             });
-            
             document.getElementById('bossBattleModal').classList.add('anim-panic');
             setTimeout(() => document.getElementById('bossBattleModal').classList.remove('anim-panic'), 500);
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        const totalQ = currentBossData.questions.length; // เช็คจำนวนข้อทั้งหมด
+        const totalQ = currentBossData.questions.length;
         
         setTimeout(() => {
             currentQuestionIndex++;
             if (currentQuestionIndex < totalQ) {
                 loadBossQuestion();
             } else {
-                finishBossBattle();
+                finishBossBattle(); // จบตามปกติถ้าตอบครบ
             }
         }, 1500);
     }
@@ -3051,32 +3054,35 @@ async function renderPartySelection() {
     }
 }
 
-// ฟังก์ชันสำหรับเด้งออกจากหน้าตีบอสทันที
-function finishBossBattleEarly(message) {
-    if (window.bossRealtimeChannel) {
-        supabaseClient.removeChannel(window.bossRealtimeChannel);
-        window.bossRealtimeChannel = null;
+    // ฟังก์ชันสำหรับเด้งออกจากหน้าตีบอสทันที
+    function finishBossBattleEarly(message) {
+        if (window.bossRealtimeChannel) {
+            supabaseClient.removeChannel(window.bossRealtimeChannel);
+            window.bossRealtimeChannel = null;
+        }
+
+        Swal.fire({
+            title: message,
+            timer: 2500,
+            showConfirmButton: false,
+            icon: 'success'
+        });
+
+        hideAppModal('bossBattleModal'); 
+        loadFullDashboard(globalPortalStudent.id, true); 
     }
 
-    Swal.fire({
-        title: message,
-        timer: 2000,
-        showConfirmButton: false,
-        icon: 'success'
-    });
-
-    hideAppModal('bossBattleModal'); 
-    loadFullDashboard(globalPortalStudent.id, true); 
-}
-
-// ฟังก์ชันอัปเดตหลอดเลือดบอสบนหน้าจอเด็ก
-function updateBossHpUI(hp) {
-    const hpBar = document.getElementById('bossHpBar');
-    const hpText = document.getElementById('bossHpText');
-    if (hpBar) {
-        let pct = (hp / currentBossData.maxHp) * 100;
-        hpBar.style.width = pct + '%';
-        hpBar.classList.add('bg-danger'); // ให้เป็นสีแดงเด่นๆ
+    // ฟังก์ชันอัปเดตหลอดเลือดบอสแบบ Real-time บนหน้าจอ
+    function updateBossHpUI_Realtime(hp, maxHp) {
+        if (hp < 0) hp = 0;
+        const pct = Math.max(0, Math.round((hp / maxHp) * 100));
+        const hpText = document.getElementById('bbHpText');
+        const hpBar = document.getElementById('bbHpBar');
+        
+        if(hpText) hpText.innerText = `${hp} / ${maxHp}`;
+        if(hpBar) {
+            hpBar.style.width = pct + '%';
+            // ถ้าเลือดเหลือน้อยกว่า 30% ให้หลอดเป็นสีแดงกระพริบ
+            if (pct < 30) hpBar.classList.add('bg-danger');
+        }
     }
-    if (hpText) hpText.innerText = hp;
-}
