@@ -2004,32 +2004,41 @@
 
     function selectBossAnswer(btnElement, selected, correct) {
         const allBtns = document.querySelectorAll('.boss-opt-btn');
-        // 1. ล็อกปุ่มทันที
-        allBtns.forEach(b => b.disabled = true);
+        allBtns.forEach(b => b.disabled = true); // ล็อกปุ่มกันกดซ้ำ
         
         if (selected === correct) {
-            // 2. โชว์ Loading กันค้าง
-            Swal.fire({ title: 'กำลังโจมตี...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-
+            // ✅ ลบ Swal.fire โหลดทิ้งไปเลยครับ
             btnElement.classList.replace('btn-outline-light', 'btn-success');
             btnElement.style.color = "#fff";
-            currentCorrectCount++;
+            
+            // เล่นแอนิเมชั่นลดเลือดในเครื่องตัวเองทันที (ฟลุ๊คมีฟังก์ชันนี้อยู่แล้ว)
             playAttackAnimation(10); 
             
+            // ส่งข้อมูลไปเซิร์ฟเวอร์แบบเงียบๆ (Background)
             google.script.run
             .withSuccessHandler(function(res) {
-                Swal.close(); // ปิด Loading เมื่อเสร็จ
                 if(res && res.isDead) {
                     if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
                     finishBossBattleEarly("คุณปลิดชีพเจ้าบอสตัวนี้สำเร็จ! 🏆");
                 }
             })
-            .withFailureHandler(function() {
-                Swal.close();
-                allBtns.forEach(b => b.disabled = false); // ถ้าเน็ตหลุด ให้เปิดปุ่มให้กดใหม่
-            })
             .sendBossHit(currentBossData.bossId, globalPortalStudent.id);
+            
+            // ตั้งเวลาไปข้อต่อไปอัตโนมัติ
+            if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
+            window.bossNextQTimer = setTimeout(() => {
+                if (currentBossData && currentBossData.hp > 0) {
+                    currentQuestionIndex++;
+                    if (currentQuestionIndex < currentBossData.questions.length) {
+                        loadBossQuestion();
+                    } else {
+                        finishBossBattle(); 
+                    }
+                }
+            }, 1500);
+
         } else {
+            // กรณีตอบผิด (โค้ดเดิมของฟลุ๊ค)
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
             allBtns.forEach(b => { 
@@ -2039,22 +2048,17 @@
                 } 
             });
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
+            
+            if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
+            window.bossNextQTimer = setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex < currentBossData.questions.length) {
+                    loadBossQuestion();
+                } else {
+                    finishBossBattle();
+                }
+            }, 1500);
         }
-        
-        // 🌟 แก้ตรงนี้: ถ้าบอสตาย (ไม่ว่าใครฟัน) ต้องสั่งปิด Modal ทันที อย่าปล่อยให้ค้าง!
-        if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
-        window.bossNextQTimer = setTimeout(() => {
-            if (!currentBossData || currentBossData.hp <= 0) {
-                finishBossBattleEarly("การต่อสู้สิ้นสุดลงแล้ว! ⚔️"); 
-                return;
-            }
-            currentQuestionIndex++;
-            if (currentQuestionIndex < currentBossData.questions.length) {
-                loadBossQuestion();
-            } else {
-                finishBossBattle(); 
-            }
-        }, 1500);
     }
 
     // เอฟเฟกต์ตีบอส
