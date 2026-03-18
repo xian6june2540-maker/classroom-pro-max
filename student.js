@@ -1790,6 +1790,7 @@
     let currentQuestionIndex = 0;
     let currentCorrectCount = 0;
 
+    window.bossRealtimeChannel = null; // ตัวแปรสำหรับเปิด/ปิดท่อดูเลือดบอส
     // =========================================================
     // 🛡️ SYSTEM CORE: RADAR & AUTO-SAVE (ระบบคุมเสถียรภาพ)
     // =========================================================
@@ -1915,20 +1916,44 @@
         startAutoSaveExp();
     };
 
-    // ฟังก์ชันเริ่มสู้บอส
+    window.bossRealtimeChannel = null;
+
     function startBossBattle() {
         if (!currentBossData) return;
-        currentQuestionIndex = 0; currentCorrectCount = 0;
         
-        // 🌟 แยก Emoji กับ ชื่อบอส ออกจากกัน (ที่เราคั่นด้วย | ไว้ตอนเซฟ)
+        // 🌟 1. เปิดท่อดักฟังเลือดบอสแบบ Real-time ทันทีที่เข้าหน้าตีบอส
+        if (supabaseClient) {
+            // ถ้ามีท่อเก่าค้างอยู่ให้ปิดก่อน
+            if (window.bossRealtimeChannel) supabaseClient.removeChannel(window.bossRealtimeChannel);
+
+            window.bossRealtimeChannel = supabaseClient.channel('realtime-boss-hp')
+                .on('postgres_changes', { 
+                    event: 'PATCH', 
+                    schema: 'public', 
+                    table: 'boss_quizzes', 
+                    filter: `id=eq.${currentBossData.bossId}` 
+                }, payload => {
+                    const newHp = payload.new.boss_hp;
+                    // อัปเดตหลอดเลือดบนจอเด็กทุกคนทันที
+                    updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
+                    
+                    // 🌟 2. ถ้าเลือดเหลือ 0 (เพื่อนคนอื่นฆ่าตาย) ให้เด้งออกทันที!
+                    if (newHp <= 0) {
+                        finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
+                    }
+                })
+                .subscribe();
+        }
+
+        currentQuestionIndex = 0; 
+        currentCorrectCount = 0;
+        
         let bossParts = currentBossData.bossName.split('|');
         let bIcon = bossParts.length > 1 ? bossParts[0] : '👾';
         let bName = bossParts.length > 1 ? bossParts[1] : currentBossData.bossName;
 
         document.getElementById('bbBossName').innerText = bName;
         document.getElementById('bbBossTopic').innerText = "หัวข้อ: " + currentBossData.topic;
-        
-        // เอา Emoji ไปใส่แทนรูปภาพ
         document.getElementById('bbBossIcon').innerText = bIcon;
         
         updateBossHpUI(currentBossData.hp, currentBossData.maxHp);
@@ -3024,4 +3049,34 @@ async function renderPartySelection() {
             </div>
         `;
     }
+}
+
+// ฟังก์ชันสำหรับเด้งออกจากหน้าตีบอสทันที
+function finishBossBattleEarly(message) {
+    if (window.bossRealtimeChannel) {
+        supabaseClient.removeChannel(window.bossRealtimeChannel);
+        window.bossRealtimeChannel = null;
+    }
+
+    Swal.fire({
+        title: message,
+        timer: 2000,
+        showConfirmButton: false,
+        icon: 'success'
+    });
+
+    hideAppModal('bossBattleModal'); 
+    loadFullDashboard(globalPortalStudent.id, true); 
+}
+
+// ฟังก์ชันอัปเดตหลอดเลือดบอสบนหน้าจอเด็ก
+function updateBossHpUI(hp) {
+    const hpBar = document.getElementById('bossHpBar');
+    const hpText = document.getElementById('bossHpText');
+    if (hpBar) {
+        let pct = (hp / currentBossData.maxHp) * 100;
+        hpBar.style.width = pct + '%';
+        hpBar.classList.add('bg-danger'); // ให้เป็นสีแดงเด่นๆ
+    }
+    if (hpText) hpText.innerText = hp;
 }
