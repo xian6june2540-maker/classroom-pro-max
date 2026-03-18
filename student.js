@@ -2378,24 +2378,27 @@
     };
 
 // --- แก้ไขจุดที่ 1: กดเข้าคนเดียวแล้วเปลี่ยนหน้าทันที ---
-    function joinLiveQuiz() {
+    async function joinLiveQuiz() {
         if (sqHasJoined) return;
         sqHasJoined = true;
         
-        // สั่งเปลี่ยนหน้าจอ UI ทันทีไม่ต้องรอฐานข้อมูลตอบกลับ
+        // 1. เปลี่ยนหน้าจอทันที (ความเร็ว)
         document.getElementById('sqWaitText').innerHTML = 'เข้าร่วมคนเดียวเรียบร้อย!<br>เตรียมตัวให้พร้อม... รอสัญญาณจากครู';
         document.getElementById('partyActionArea').innerHTML = ''; 
         
-        // ยิงข้อมูลออกแบบเบื้องหลัง (เอา await/try-catch ออกเพื่อไม่ให้บล็อก UI)
-        if (supabaseClient && sqSessionData) {
-            supabaseClient.from('live_quiz_responses').insert({
+        try {
+            // 2. ส่งข้อมูลเข้าห้องและรอให้เสร็จ (ความชัวร์)
+            await supabaseClient.from('live_quiz_responses').insert({
                 session_id: sqSessionData.id,
                 q_index: -1, 
                 student_id: globalPortalStudent.id,
                 answer: 'JOINED',
                 response_time: 0,
                 is_correct: false
-            }).catch(e => console.error("Error joining quiz:", e));
+            });
+        } catch(e) {
+            console.error("Error joining quiz:", e);
+            sqHasJoined = false;
         }
     }
 
@@ -2408,31 +2411,23 @@
         if (activePowerUp === 'p2') responseTime = 0; 
         const isCorrect = (selectedAnswer === sqCurrentCorrectAnswer);
 
-        // เปลี่ยนหน้าจอทันทีก่อนส่งข้อมูล
+        // 1. ปรับหน้าจอให้กระพริบตอบรับและเปลี่ยนหน้าทันที
         if (btnElement) {
             btnElement.style.border = "6px solid white";
             btnElement.style.transform = "scale(1.05)";
         }
-        const allBtns = document.querySelectorAll('.quiz-btn-gigantic');
-        allBtns.forEach(b => b.disabled = true);
+        document.querySelectorAll('.quiz-btn-gigantic').forEach(b => b.disabled = true);
 
         showSqScreen('wait');
         let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
         
         if (selectedAnswer === "TIMEOUT_NO_ANSWER") {
-            document.getElementById('sqWaitText').innerHTML = `
-                <div class="mb-3 text-danger"><i class="bi bi-clock-history"></i> หมดเวลาส่งคำตอบ!</div>
-                สมาชิกปาร์ตี้ ${partyCount} คนไม่ได้ส่งคำตอบในข้อนี้ครับ
-            `;
+            document.getElementById('sqWaitText').innerHTML = `<div class="mb-3 text-danger"><i class="bi bi-clock-history"></i> หมดเวลาส่งคำตอบ!</div>สมาชิกปาร์ตี้ ${partyCount} คนไม่ได้ส่งคำตอบในข้อนี้ครับ`;
         } else {
-            document.getElementById('sqWaitText').innerHTML = `
-                <div class="mb-3 text-warning"><i class="bi bi-stars"></i> ส่งคำตอบเรียบร้อย!</div>
-                สถานะ: <b>แฝงร่างส่งแทนสมาชิก ${partyCount} คน</b><br>
-                รอดูผลลัพธ์พร้อมกันน้า...
-            `;
+            document.getElementById('sqWaitText').innerHTML = `<div class="mb-3 text-warning"><i class="bi bi-stars"></i> ส่งคำตอบเรียบร้อย!</div>สถานะ: <b>แฝงร่างส่งแทนสมาชิก ${partyCount} คน</b><br>รอดูผลลัพธ์พร้อมกันน้า...`;
         }
 
-        // ปล่อยฐานข้อมูลทำงานเบื้องหลัง
+        // 2. ส่งคำตอบไปยังฐานข้อมูล
         try {
             if (!window.windowPartyMembers || window.windowPartyMembers.length === 0) {
                 window.windowPartyMembers = [globalPortalStudent.id];
@@ -2449,7 +2444,7 @@
                 });
             });
 
-            Promise.all(partyTasks).catch(e => console.error("Party Submit Error:", e));
+            await Promise.all(partyTasks);
 
             if (!isCorrect && activePowerUp === 'p3') {
                 window.windowPartyMembers.forEach(sid => {
@@ -2836,21 +2831,19 @@ window.toggleSelectMember = function(el, id) {
     }
 }
 
-    function joinWithParty() {
+    async function joinWithParty() {
         if (sqHasJoined) return;
-        
         if (!window.windowPartyMembers || window.windowPartyMembers.length < 2) {
             return Swal.fire('เตือน', 'กรุณาเลือกเพื่อนเข้าปาร์ตี้อย่างน้อย 1 คนครับ', 'warning');
         }
 
         sqHasJoined = true;
         
-        // สั่งเปลี่ยนหน้าจอ UI ทันที
+        // 1. เปลี่ยนหน้าจอทันที
         document.getElementById('sqWaitText').innerHTML = `ปาร์ตี้ ${window.windowPartyMembers.length} คน เข้าห้องแล้ว!<br>รอสัญญาณจากครูน้า`;
         document.getElementById('partyActionArea').innerHTML = '';
 
-        // ยิงข้อมูลออกแบบเบื้องหลัง (เอา await/try-catch ออก)
-        if (supabaseClient && sqSessionData) {
+        try {
             const joinTasks = window.windowPartyMembers.map(sid => {
                 return supabaseClient.from('live_quiz_responses').insert({
                     session_id: sqSessionData.id,
@@ -2861,8 +2854,11 @@ window.toggleSelectMember = function(el, id) {
                     is_correct: false
                 });
             });
-
-            Promise.all(joinTasks).catch(e => console.error("Error joining party:", e));
+            // 2. ส่งข้อมูลเข้าห้องแบบกลุ่ม
+            await Promise.all(joinTasks);
+        } catch(e) {
+            console.error("Error joining party:", e);
+            sqHasJoined = false;
         }
     }
 

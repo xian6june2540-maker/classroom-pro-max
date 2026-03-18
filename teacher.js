@@ -1839,28 +1839,26 @@
         document.getElementById('tqOptionsContainer').innerHTML = html;
     }
 
-    // 3. [จังหวะที่ 1] ครูกด "ปล่อยคำถาม" -> ส่งแค่โจทย์ให้นักเรียนอ่านก่อน
     async function releaseLiveQuestion() {
         if (!supabaseClient || !liveQuizSessionId) return;
         
-        // เปลี่ยนหน้าจอทันทีก่อนส่งข้อมูล
+        // 1. หน้าจอครูเปลี่ยนทันทีก่อน
         document.getElementById('btnReleaseQ').classList.add('hidden');
         document.getElementById('btnReleaseOpt').classList.remove('hidden'); 
         document.getElementById('tqStatusText').innerText = "นักเรียนกำลังอ่านคำถาม...";
         document.getElementById('tqStatusText').className = "text-info fw-bold mb-3";
 
-        // ลบ await ออก ยิงฐานข้อมูลไปเบื้องหลัง
-        supabaseClient.from('live_quiz_sessions').update({ 
+        // 2. ยิงข้อมูลไปให้เด็กเห็นคำถาม (มี await เพื่อให้ชัวร์)
+        await supabaseClient.from('live_quiz_sessions').update({ 
             status: 'show_question', 
             current_q_index: liveQuizCurrentIndex 
         }).eq('id', liveQuizSessionId);
     }
 
-    // 4. [จังหวะที่ 2] ครูกด "ปล่อยตัวเลือก" -> ส่งช้อยส์ให้เด็กตอบ และเริ่มจับเวลาจริง
     async function releaseLiveOptions() {
         if (!supabaseClient || !liveQuizSessionId) return;
 
-        // เปลี่ยนหน้าจอทันทีก่อนส่งข้อมูล
+        // 1. หน้าจอครูและเวลานับทันทีก่อน
         let tqAnsCountEl = document.getElementById('tqAnswerCount');
         if (tqAnsCountEl && tqAnsCountEl.previousElementSibling) {
             tqAnsCountEl.previousElementSibling.innerText = "ตอบแล้ว:";
@@ -1886,12 +1884,12 @@
             }
         }, 1000);
 
-        // ลบ await ออก ยิงฐานข้อมูลไปเบื้องหลัง
-        supabaseClient.from('live_quiz_sessions').update({ 
+        // 2. ยิงตัวเลือกไปให้เด็กตอบ
+        await supabaseClient.from('live_quiz_sessions').update({ 
             status: 'active' 
         }).eq('id', liveQuizSessionId);
     }
-
+    
     function showLiveAnswer() {
         if (!supabaseClient || !liveQuizSessionId) return;
         if(teacherQuizTimer) clearInterval(teacherQuizTimer);
