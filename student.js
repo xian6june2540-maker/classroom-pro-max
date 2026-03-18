@@ -2384,33 +2384,32 @@
         
         // สั่งเปลี่ยนหน้าจอ UI ทันทีไม่ต้องรอฐานข้อมูลตอบกลับ
         document.getElementById('sqWaitText').innerHTML = 'เข้าร่วมคนเดียวเรียบร้อย!<br>เตรียมตัวให้พร้อม... รอสัญญาณจากครู';
-        document.getElementById('partyActionArea').innerHTML = ''; // ล้างปุ่มออกทันที
+        document.getElementById('partyActionArea').innerHTML = ''; 
         
         try {
-            await supabaseClient.from('live_quiz_responses').insert({
+            // ยิงข้อมูลออกแบบเบื้องหลัง
+            supabaseClient.from('live_quiz_responses').insert({
                 session_id: sqSessionData.id,
                 q_index: -1, 
                 student_id: globalPortalStudent.id,
                 answer: 'JOINED',
                 response_time: 0,
                 is_correct: false
-            });
+            }).catch(e => console.error("Error joining quiz:", e));
         } catch(e) {
             console.error("Error joining quiz:", e);
         }
     }
 
-    // 5. เมื่อนักเรียนกดเลือกคำตอบ (เวอร์ชั่นรองรับระบบปาร์ตี้แชร์เครื่อง)
     async function submitSqAnswer(btnElement, selectedAnswer) {
         if (sqHasAnswered) return;
         sqHasAnswered = true;
         if(sqTimerInterval) clearInterval(sqTimerInterval);
 
         let responseTime = Date.now() - sqQuestionStartMs;
-        if (activePowerUp === 'p2') responseTime = 0; // ถ้านาฬิกาหยุดเวลา ให้เวลาเป็น 0 เพื่อโบนัสเต็ม
+        if (activePowerUp === 'p2') responseTime = 0; 
         const isCorrect = (selectedAnswer === sqCurrentCorrectAnswer);
 
-        // จัดการ UI ปุ่มที่กดและปิดการทำงานปุ่มอื่นทั้งหมด
         if (btnElement) {
             btnElement.style.border = "6px solid white";
             btnElement.style.transform = "scale(1.05)";
@@ -2418,42 +2417,7 @@
         const allBtns = document.querySelectorAll('.quiz-btn-gigantic');
         allBtns.forEach(b => b.disabled = true);
 
-        // --- ส่วนส่งคำตอบแทนทุกคนในปาร์ตี้ลง Database ---
-        try {
-            // ป้องกันกรณีตัวแปรรายชื่อปาร์ตี้ว่าง ให้ถือว่ามีแค่ตัวเอง (Fallback)
-            if (!window.windowPartyMembers || window.windowPartyMembers.length === 0) {
-                window.windowPartyMembers = [globalPortalStudent.id];
-            }
-
-            // เตรียมรายการส่งข้อมูลทุกคนในปาร์ตี้พร้อมกัน (Parallel)
-            const partyTasks = window.windowPartyMembers.map(sid => {
-                return supabaseClient.from('live_quiz_responses').insert({
-                    session_id: sqSessionData.id,
-                    q_index: sqSessionData.current_q_index,
-                    student_id: sid,           // ใช้ ID ของเพื่อนแต่ละคน
-                    answer: selectedAnswer,
-                    response_time: responseTime,
-                    is_correct: isCorrect
-                });
-            });
-
-            // สั่งยิงข้อมูลทุกคนลง Supabase และรอจนกว่าจะเสร็จทั้งหมด
-            await Promise.all(partyTasks);
-
-            // ระบบปลอบใจ: ถ้ามีไอเทมโล่ (p3) และตอบผิด ให้แต้มทุกคนในปาร์ตี้
-            if (!isCorrect && activePowerUp === 'p3') {
-                window.windowPartyMembers.forEach(sid => {
-                    google.script.run.addManualEXP(sid, 75); 
-                });
-            }
-            
-            // กรณีใช้ Pass Key (p6) จะมีตรรกะฝั่ง Server จัดการแจกแต้มตอนจบเกมให้เองตามปกติ
-        } catch(e) {
-            console.error("Party Submit Error:", e);
-        }
-        // ----------------------------------------------
-
-        // ดีเลย์นิดนึงให้ดูรู้ว่ากดติด แล้วเปลี่ยนไปหน้า "รอ"
+        // เปลี่ยนหน้าจอทันที (ลดดีเลย์เหลือ 150ms ให้ตาเห็นว่ากดติด)
         setTimeout(() => {
             showSqScreen('wait');
             let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
@@ -2470,7 +2434,35 @@
                     รอดูผลลัพธ์พร้อมกันน้า...
                 `;
             }
-        }, 1000);
+        }, 150);
+
+        // ส่งข้อมูลเข้า Database เบื้องหลัง (ไม่ล็อกหน้าจอรอ)
+        try {
+            if (!window.windowPartyMembers || window.windowPartyMembers.length === 0) {
+                window.windowPartyMembers = [globalPortalStudent.id];
+            }
+
+            const partyTasks = window.windowPartyMembers.map(sid => {
+                return supabaseClient.from('live_quiz_responses').insert({
+                    session_id: sqSessionData.id,
+                    q_index: sqSessionData.current_q_index,
+                    student_id: sid,           
+                    answer: selectedAnswer,
+                    response_time: responseTime,
+                    is_correct: isCorrect
+                });
+            });
+
+            Promise.all(partyTasks).catch(e => console.error("Party Submit Error:", e));
+
+            if (!isCorrect && activePowerUp === 'p3') {
+                window.windowPartyMembers.forEach(sid => {
+                    google.script.run.addManualEXP(sid, 75); 
+                });
+            }
+        } catch(e) {
+            console.error("Party Submit Error:", e);
+        }
     }
 
 // 6. เมื่อครูกดโชว์เฉลย ให้เช็คผลลัพธ์ของตัวเอง
@@ -2848,37 +2840,38 @@ window.toggleSelectMember = function(el, id) {
     }
 }
 
-async function joinWithParty() {
-    if (sqHasJoined) return;
-    
-    // ตรวจสอบว่ามีสมาชิกปาร์ตี้มากกว่าแค่ตัวเองหรือไม่
-    if (!window.windowPartyMembers || window.windowPartyMembers.length < 2) {
-        return Swal.fire('เตือน', 'กรุณาเลือกเพื่อนเข้าปาร์ตี้อย่างน้อย 1 คนครับ', 'warning');
-    }
+    async function joinWithParty() {
+        if (sqHasJoined) return;
+        
+        if (!window.windowPartyMembers || window.windowPartyMembers.length < 2) {
+            return Swal.fire('เตือน', 'กรุณาเลือกเพื่อนเข้าปาร์ตี้อย่างน้อย 1 คนครับ', 'warning');
+        }
 
-    sqHasJoined = true;
-    document.getElementById('sqWaitText').innerHTML = '<div class="spinner-border text-light"></div><br>กำลังพาทุกคนเข้าห้อง...';
-
-    try {
-        const joinTasks = window.windowPartyMembers.map(sid => {
-            return supabaseClient.from('live_quiz_responses').insert({
-                session_id: sqSessionData.id,
-                q_index: -1,
-                student_id: sid,
-                answer: 'JOINED_PARTY',
-                response_time: 0,
-                is_correct: false
-            });
-        });
-
-        await Promise.all(joinTasks);
+        sqHasJoined = true;
+        
+        // สั่งเปลี่ยนหน้าจอ UI ทันที
         document.getElementById('sqWaitText').innerHTML = `ปาร์ตี้ ${window.windowPartyMembers.length} คน เข้าห้องแล้ว!<br>รอสัญญาณจากครูน้า`;
         document.getElementById('partyActionArea').innerHTML = '';
-    } catch(e) {
-        sqHasJoined = false;
-        Swal.fire('Error', 'ไม่สามารถพาปาร์ตี้เข้าห้องได้', 'error');
+
+        try {
+            const joinTasks = window.windowPartyMembers.map(sid => {
+                return supabaseClient.from('live_quiz_responses').insert({
+                    session_id: sqSessionData.id,
+                    q_index: -1,
+                    student_id: sid,
+                    answer: 'JOINED_PARTY',
+                    response_time: 0,
+                    is_correct: false
+                });
+            });
+
+            // ยิงข้อมูลออกแบบเบื้องหลัง
+            Promise.all(joinTasks).catch(e => console.error("Error joining party:", e));
+        } catch(e) {
+            sqHasJoined = false;
+            Swal.fire('Error', 'ไม่สามารถพาปาร์ตี้เข้าห้องได้', 'error');
+        }
     }
-}
 
 // --- ฟังก์ชันดึงรายชื่อเพื่อน เวอร์ชั่น "ล็อกจอนิ่ง" (แก้ไขระบบแก้ค้างและกรองชื่อ) ---
 async function renderPartySelection() {
