@@ -1835,10 +1835,10 @@
             if (!globalPortalStudent || !supabaseClient) return;
             
             try {
+                // 🌟 ปรับให้ดึงบอสตัวล่าสุดเสมอ (ไม่จำกัดเฉพาะ active) เพื่อจะได้รู้ว่ามันตาย (defeated) หรือยัง
                 let { data } = await supabaseClient.from('boss_quizzes')
                     .select('id, status, boss_hp, boss_max_hp')
                     .eq('room_name', globalPortalStudent.room)
-                    .eq('status', 'active')
                     .order('id', { ascending: false })
                     .limit(1);
                 
@@ -1846,30 +1846,68 @@
                     let boss = data[0];
                     const bossModal = document.getElementById('bossBattleModal');
                     if (bossModal && bossModal.classList.contains('show')) {
-                        // 🌟 ถ้านักเรียนกำลังตีบอสอยู่ ให้อัปเดตเลือดให้ตรงกับหลังบ้านแบบ Real-time!
+                        // 🌟 ถ้านักเรียนกำลังสู้ แล้วบอสเลือดเหลือ 0 หรือสถานะเปลี่ยนเป็น defeated ให้ตัดจบเกมทันที!
                         if (currentBossData && currentBossData.bossId === boss.id) {
                             currentBossData.hp = boss.boss_hp;
                             updateBossHpUI(boss.boss_hp, currentBossData.maxHp);
+                            
+                            if (boss.boss_hp <= 0 || boss.status === 'defeated') {
+                                handleBossDefeated(); // เรียกฟังก์ชันบอสตาย
+                            }
                         }
                         return; 
                     }
 
-                    if (!currentBossData || currentBossData.bossId !== boss.id || currentBossData.hp !== boss.boss_hp) {
+                    if (boss.status === 'active' && (!currentBossData || currentBossData.bossId !== boss.id || currentBossData.hp !== boss.boss_hp)) {
                         checkActiveBoss();
-                    }
-                } else if (currentBossData) {
-                    const bossModal = document.getElementById('bossBattleModal');
-                    if (bossModal && bossModal.classList.contains('show')) {
-                        // บอสตายแล้วตอนกำลังตี
-                        currentBossData.hp = 0;
-                        updateBossHpUI(0, currentBossData.maxHp);
-                    } else {
+                    } else if (boss.status !== 'active' && currentBossData) {
                         checkActiveBoss(); 
                     }
                 }
             } catch(e) { console.error("Boss Sync Error:", e); }
         }, 2500);
     }
+
+    // 🌟 ฟังก์ชันใหม่: แจ้งเตือนบอสตายและแจกของ
+    window.handleBossDefeated = function() {
+        if (window.isBossDefeatedHandled) return; // ป้องกันแอนิเมชันรันซ้ำ
+        window.isBossDefeatedHandled = true;
+
+        // ล็อกปุ่มทั้งหมดไม่ให้กดต่อ
+        const allBtns = document.querySelectorAll('.boss-opt-btn');
+        allBtns.forEach(b => b.disabled = true);
+        
+        // แอนิเมชันบอสสลายตัว
+        const bossIcon = document.getElementById('bbBossIcon');
+        if (bossIcon) {
+            bossIcon.style.transform = 'scale(0)';
+            bossIcon.style.opacity = '0';
+            bossIcon.style.transition = 'all 1s ease-in';
+        }
+
+        setTimeout(() => {
+            Swal.fire({
+                title: '🎉 บอสถูกกำจัดแล้ว! 👑',
+                html: 'มีผู้กล้าปลิดชีพบอสสำเร็จ!<br>ระบบได้แจกรางวัลและ EXP ให้ผู้ที่มีส่วนร่วมทุกคนแล้ว (เช็คได้ที่กล่องจดหมาย/DM ของคุณเลย)',
+                icon: 'success',
+                allowOutsideClick: false,
+                confirmButtonText: 'ตรวจสอบรางวัล'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    hideAppModal('bossBattleModal');
+                    document.getElementById('bossAlertWidget').classList.add('hidden'); 
+                    if (currentBossData) {
+                        localStorage.removeItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`);
+                    }
+                    window.isBossDefeatedHandled = false;
+                    currentBossData = null;
+                    
+                    // 🌟 โหลดหน้าจอใหม่ เพื่อให้แต้มเด้งและแจ้งเตือนของขวัญปรากฏ
+                    loadFullDashboard(globalPortalStudent.id, false); 
+                }
+            });
+        }, 1000);
+    };
 
     // 🟢 แอบแทรกการเปิดเรดาร์เข้าไปตอนที่โหลด Dashboard เสร็จ
     const originalLoadFullDashboard = window.loadFullDashboard;
@@ -1952,12 +1990,18 @@
             btnElement.style.color = "#fff";
             currentCorrectCount++;
             
-            // 🌟 เคล็ดลับ Last Hit: ยิงดาเมจ 10 หน่วยไปหักเลือดบอสที่หลังบ้าน "ทันที" (ข้อละ 1 ฮิต)
-            // พอเลือดหลังบ้านลดปุ๊บ เรดาร์ Real-time จะดึงเลือดใหม่มากระจายให้หน้าจอทุกคนเห็นทันที!
+            // ส่งดาเมจ 1 ฮิตไปหักเลือดหลังบ้านทันที
             google.script.run.attackBoss(currentBossData.bossId, globalPortalStudent.id, 1);
             
             playAttackAnimation(10); 
             Toast.fire({ icon: 'success', title: 'โจมตีโดนบอสเต็มๆ! ⚔️' });
+            
+            // 🌟 เช็คเลือดตัวเองว่าลดจนบอสตายคามือเราเลยหรือไม่
+            if (currentBossData.hp <= 0) {
+                handleBossDefeated(); // ฉันนี่แหละ Last hit!
+                return; // หยุดทำงาน ไม่ต้องไปข้อถัดไป
+            }
+            
         } else {
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
@@ -2024,7 +2068,7 @@
     // 3. สรุปผลหลังตอบครบทุกข้อ
     function finishBossBattle() {
         const totalQ = currentBossData.questions.length;
-        let expGain = currentCorrectCount * 100; // คิดคำนวณไว้โชว์สรุปบนจอเฉยๆ (ของจริงทยอยส่งเข้า DB ไปแล้วตอนกดตอบ)
+        let expGain = currentCorrectCount * 100; // แต้มที่ได้จากการตอบถูก
         let extraMsg = "";
         
         let isPerfect = (currentCorrectCount === totalQ && totalQ > 0);
@@ -2033,12 +2077,13 @@
             extraMsg = "<br><span class='text-success fw-bold'>โบนัสเพอร์เฟกต์ +300 EXP! 🎉</span>";
         }
         
+        // 🌟 เปลี่ยนข้อความ เพราะตอบครบแล้วแต่บอสยังไม่ตาย
         Swal.fire({
-            title: 'จบการต่อสู้!',
-            html: `โจมตีโดน: <b>${currentCorrectCount}/${totalQ}</b> ครั้ง<br>ได้รับ EXP รวม: <b>${expGain}</b> ${extraMsg}`,
+            title: 'อาวุธหมดแล้ว!',
+            html: `โจมตีโดน: <b>${currentCorrectCount}/${totalQ}</b> ครั้ง<br>ได้รับ EXP รวม: <b>${expGain}</b> ${extraMsg}<br><br><small class="text-danger fw-bold">คุณตีโควตาครบแล้ว รอให้เพื่อนๆ มาช่วยตีบอสให้ตายนะ!</small>`,
             icon: currentCorrectCount >= Math.ceil(totalQ/2) ? 'success' : 'info',
             allowOutsideClick: false,
-            confirmButtonText: 'รับรางวัล',
+            confirmButtonText: 'กลับฐาน',
         }).then((res) => {
             if (res.isConfirmed) {
                 Swal.fire({ title: 'กำลังสรุปผล...', didOpen: () => Swal.showLoading() });
@@ -2046,17 +2091,17 @@
                 const finalizeBossExit = function() {
                     hideAppModal('bossBattleModal');
                     Swal.close();
-                    Toast.fire({ icon: 'success', title: `ยอดเยี่ยมมาก!` });
-                    document.getElementById('bossAlertWidget').classList.add('hidden'); 
+                    Toast.fire({ icon: 'info', title: `ฝากเพื่อนๆ ตีบอสต่อด้วยนะ` });
+                    
+                    // ปลดล็อกการเซฟสถานะข้อทิ้งไป เพื่อให้หน้าแดชบอร์ดซ่อนปุ่ม
                     localStorage.removeItem(`bossState_${currentBossData.bossId}_${globalPortalStudent.id}`);
                     loadFullDashboard(globalPortalStudent.id, true);
                 };
 
-                // ถ้าตอบถูกหมด (Perfect) ให้เรียกหลังบ้านเพื่อแจกโบนัส 300 EXP เพิ่มต่างหาก
+                // ถ้าตอบถูกหมด (Perfect) ให้เรียกหลังบ้านเพื่อแจกโบนัส 300 EXP เพิ่ม
                 if (isPerfect) {
                     google.script.run.withSuccessHandler(finalizeBossExit).addManualEXP(globalPortalStudent.id, 300);
                 } else {
-                    // ถ้าไม่ Perfect ก็จบได้เลย เพราะแต้มย่อยส่งเข้าหลังบ้านไปหมดแล้ว
                     finalizeBossExit();
                 }
             }
