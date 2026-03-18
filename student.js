@@ -2016,10 +2016,12 @@
         }, 2500);
     });
 
+    window.liveQuizSyncTimer = null; 
+
     async function checkCurrentLiveQuiz() {
         if (!globalPortalStudent || !supabaseClient) return;
         
-        // ดึงเซสชันล่าสุดที่ยังค้างอยู่ในห้อง
+        // 1. ดึงข้อมูลครั้งแรกตอนโหลดหน้า
         let { data } = await supabaseClient.from('live_quiz_sessions')
             .select('*')
             .eq('room_name', globalPortalStudent.room)
@@ -2028,6 +2030,37 @@
         
         if (data && data.length > 0) {
             handleLiveQuizChange(data[0]);
+        }
+        
+        // 2. 🌟 ตั้งเวลาให้เรดาร์เช็ค "ตลอดเวลา" (ทุกๆ 2 วินาที) ไม่ว่าจะมีควิซอยู่หรือไม่
+        if (!window.liveQuizSyncTimer) {
+            window.liveQuizSyncTimer = setInterval(async () => {
+                if (!globalPortalStudent) return; // ถ้านักเรียนล็อกเอาท์ ให้หยุดทำ
+
+                try {
+                    let { data: syncData } = await supabaseClient.from('live_quiz_sessions')
+                        .select('*')
+                        .eq('room_name', globalPortalStudent.room)
+                        .order('created_at', { ascending: false })
+                        .limit(1);
+                    
+                    if (syncData && syncData.length > 0) {
+                        let isChanged = !sqSessionData || 
+                                        sqSessionData.status !== syncData[0].status || 
+                                        sqSessionData.current_q_index !== syncData[0].current_q_index;
+                        
+                        // ถ้าเจอห้องและสถานะเปลี่ยน ให้เด้งหน้าจอขึ้นมาทันที!
+                        if (isChanged) {
+                            handleLiveQuizChange(syncData[0]);
+                        }
+                    } else if (sqSessionData) {
+                        // ถ้าก่อนหน้านี้มีควิซ แต่ตอนนี้หายไปแล้ว (ครูปิด) ให้บังคับปิดหน้าจอ
+                        forceCloseLiveQuiz();
+                    }
+                } catch (err) { 
+                    console.error("Quiz Sync Error:", err); 
+                }
+            }, 2000);
         }
     }
 
@@ -2528,12 +2561,12 @@
         sqSessionData = null;
         sqHasAnswered = false;
         sqLastSeenQIndex = -1;
-        sqHasJoined = false; // รีเซ็ตให้พร้อมสำหรับเกมรอบหน้า
+        sqHasJoined = false; 
         if(sqTimerInterval) clearInterval(sqTimerInterval);
         
+        // ❌ ไม่ต้องสั่งหยุด liveQuizSyncTimer ตรงนี้แล้ว ปล่อยให้มันเช็คต่อไปเรื่อยๆ เผื่อครูสร้างเกมรอบ 2
+        
         hideAppModal('studentLiveQuizModal');
-        // 🌟 FIX 1: ลบคำสั่งโหลด Dashboard ตรงนี้ออก เพื่อกันลูปนรกเด้งเข้าออก
-        // (ให้ปิดหน้าต่างไปเฉยๆ ก็พอ)
     }
 
     // =========================================================
