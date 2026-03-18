@@ -1889,12 +1889,12 @@
             status: 'active' 
         }).eq('id', liveQuizSessionId);
     }
-    
-    function showLiveAnswer() {
+
+    async function showLiveAnswer() {
         if (!supabaseClient || !liveQuizSessionId) return;
         if(teacherQuizTimer) clearInterval(teacherQuizTimer);
 
-        // 1. แสดงปุ่มเฉลยและสรุปผลทันที
+        // 1. เปลี่ยนหน้าจอครูทันทีก่อน (ลดความหน่วง UI)
         document.getElementById('tqStatusText').innerText = "กำลังโชว์เฉลย...";
         document.getElementById('tqStatusText').className = "text-primary fw-bold mb-3";
         document.getElementById('btnShowAns').classList.add('hidden');
@@ -1910,10 +1910,10 @@
             btnNext.onclick = triggerLeaderboard; 
         }
 
-        // 2. ยิงฐานข้อมูลแบบเบื้องหลัง
-        supabaseClient.from('live_quiz_sessions').update({ 
+        // 2. สั่งยิงฐานข้อมูลบอกเด็กให้ไปหน้าเฉลย
+        await supabaseClient.from('live_quiz_sessions').update({ 
             status: 'show_answer' 
-        }).eq('id', liveQuizSessionId).catch(e => console.error(e));
+        }).eq('id', liveQuizSessionId);
     }
 
     function triggerLeaderboard() {

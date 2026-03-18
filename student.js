@@ -2456,79 +2456,80 @@
         }
     }
 
-// 6. เมื่อครูกดโชว์เฉลย ให้เช็คผลลัพธ์ของตัวเอง
     async function checkSqResult() {
-        const screen = document.getElementById('sqResultScreen');
-        const icon = document.getElementById('sqResultIcon');
-        const text = document.getElementById('sqResultText');
-        const sub = document.getElementById('sqResultSubText');
+        try {
+            const screen = document.getElementById('sqResultScreen');
+            const icon = document.getElementById('sqResultIcon');
+            const text = document.getElementById('sqResultText');
+            const sub = document.getElementById('sqResultSubText');
 
-        screen.className = 'w-100'; // รีเซ็ตคลาสสีเก่า
+            screen.className = 'w-100'; // รีเซ็ตคลาสสีเก่า
 
-        // 🌟 ดึงข้อมูลคำถามและคำอธิบาย (Explanation) จาก Session ปัจจุบัน
-        const questions = Array.isArray(sqSessionData.questions_json) ? sqSessionData.questions_json : (sqSessionData.questions_json.questions || []);
-        const qData = questions[sqSessionData.current_q_index];
-        
-        // ดึงข้อความเฉลย และ คำอธิบาย
-        const explanationText = (qData && qData.explanation) ? qData.explanation : "ไม่มีคำอธิบายเพิ่มเติม";
-        const correctAnswerText = (qData && qData.answer) ? qData.answer : "-";
+            const questions = Array.isArray(sqSessionData.questions_json) ? sqSessionData.questions_json : (sqSessionData.questions_json.questions || []);
+            const qData = questions[sqSessionData.current_q_index];
+            
+            const explanationText = (qData && qData.explanation) ? qData.explanation : "ไม่มีคำอธิบายเพิ่มเติม";
+            const correctAnswerText = (qData && qData.answer) ? qData.answer : "-";
 
-        // ดึงผลลัพธ์ที่ตัวเองตอบไว้จาก Database
-        let { data } = await supabaseClient.from('live_quiz_responses')
-            .select('is_correct, response_time')
-            .eq('session_id', sqSessionData.id)
-            .eq('q_index', sqSessionData.current_q_index)
-            .eq('student_id', globalPortalStudent.id)
-            .single();
+            // 🌟 แก้บั๊กตรงนี้: เปลี่ยนจาก .single() เป็น .limit(1) ป้องกันแอปแครชกรณีเด็กตอบไม่ทัน
+            let { data } = await supabaseClient.from('live_quiz_responses')
+                .select('is_correct, response_time')
+                .eq('session_id', sqSessionData.id)
+                .eq('q_index', sqSessionData.current_q_index)
+                .eq('student_id', globalPortalStudent.id)
+                .limit(1);
 
-        let expAndBonusHtml = '';
-        
-        // แทรกกล่องเฉลยเข้าไปใน HTML
-        let explanationHtml = `
-            <div class="mt-3 p-2 bg-white rounded shadow-sm text-dark text-center" style="font-size: 1rem; max-width: 90%; margin: 0 auto; border: 2px solid #198754;">
-                <b class="text-success"><i class="bi bi-check-circle-fill"></i> เฉลย:</b> ${correctAnswerText}
-            </div>
-            <div class="mt-2 p-3 bg-white rounded shadow-sm text-dark text-start" style="font-size: 0.95rem; max-width: 90%; margin: 0 auto; border-left: 5px solid #0d6efd;">
-                <b class="text-primary"><i class="bi bi-lightbulb-fill text-warning"></i> คำอธิบาย:</b><br>${explanationText}
-            </div>
-        `;
+            let myAns = (data && data.length > 0) ? data[0] : null;
 
-        if (data) {
-            if (data.is_correct) {
-                screen.style.background = '';
-                screen.classList.add('anim-correct');
-                icon.innerText = '✅';
-                text.innerText = 'ยอดเยี่ยม! ตอบถูกต้อง';
-                
-                // จำลองคำนวณโบนัสเวลา
-                let timeBonus = 0;
-                if (data.response_time < 10000) timeBonus = Math.floor((10000 - data.response_time) / 66.6);
-                if (timeBonus < 0) timeBonus = 0; if (timeBonus > 150) timeBonus = 150;
-                
-                expAndBonusHtml = `<span class="badge bg-warning text-dark mt-3 fs-5 shadow-sm">+150 EXP | โบนัสความเร็ว +${timeBonus}</span>`;
-                sub.innerHTML = `ตอบใน ${(data.response_time/1000).toFixed(2)} วินาที<br>${expAndBonusHtml}${explanationHtml}`;
-            } else {
-                if (activePowerUp === 'p3') {
+            let expAndBonusHtml = '';
+            let explanationHtml = `
+                <div class="mt-3 p-2 bg-white rounded shadow-sm text-dark text-center" style="font-size: 1rem; max-width: 90%; margin: 0 auto; border: 2px solid #198754;">
+                    <b class="text-success"><i class="bi bi-check-circle-fill"></i> เฉลย:</b> ${correctAnswerText}
+                </div>
+                <div class="mt-2 p-3 bg-white rounded shadow-sm text-dark text-start" style="font-size: 0.95rem; max-width: 90%; margin: 0 auto; border-left: 5px solid #0d6efd;">
+                    <b class="text-primary"><i class="bi bi-lightbulb-fill text-warning"></i> คำอธิบาย:</b><br>${explanationText}
+                </div>
+            `;
+
+            if (myAns) {
+                if (myAns.is_correct) {
+                    screen.style.background = '';
                     screen.classList.add('anim-correct');
-                    screen.style.background = 'linear-gradient(135deg, #f1c40f 0%, #e67e22 100%)';
-                    icon.innerText = '🛡️';
-                    text.innerText = 'รอดหวุดหวิด!';
-                    expAndBonusHtml = `<span class="badge bg-dark text-white mt-3 fs-5 shadow-sm">+75 EXP (ปลอบใจ)</span>`;
-                    sub.innerHTML = `ตอบผิด แต่โล่ทำงาน!<br>${expAndBonusHtml}${explanationHtml}`;
+                    icon.innerText = '✅';
+                    text.innerText = 'ยอดเยี่ยม! ตอบถูกต้อง';
+                    
+                    let timeBonus = 0;
+                    if (myAns.response_time < 10000) timeBonus = Math.floor((10000 - myAns.response_time) / 66.6);
+                    if (timeBonus < 0) timeBonus = 0; if (timeBonus > 150) timeBonus = 150;
+                    
+                    expAndBonusHtml = `<span class="badge bg-warning text-dark mt-3 fs-5 shadow-sm">+150 EXP | โบนัสความเร็ว +${timeBonus}</span>`;
+                    sub.innerHTML = `ตอบใน ${(myAns.response_time/1000).toFixed(2)} วินาที<br>${expAndBonusHtml}${explanationHtml}`;
                 } else {
-                    screen.style.background = ''; // รีเซ็ตสี
-                    screen.classList.add('anim-wrong');
-                    icon.innerText = '❌';
-                    text.innerText = 'ว้า... ผิดไปนิดเดียว';
-                    sub.innerHTML = `ตั้งสติแล้วพยายามใหม่ในข้อถัดไปนะ!<br>${explanationHtml}`;
+                    if (activePowerUp === 'p3') {
+                        screen.classList.add('anim-correct');
+                        screen.style.background = 'linear-gradient(135deg, #f1c40f 0%, #e67e22 100%)';
+                        icon.innerText = '🛡️';
+                        text.innerText = 'รอดหวุดหวิด!';
+                        expAndBonusHtml = `<span class="badge bg-dark text-white mt-3 fs-5 shadow-sm">+75 EXP (ปลอบใจ)</span>`;
+                        sub.innerHTML = `ตอบผิด แต่โล่ทำงาน!<br>${expAndBonusHtml}${explanationHtml}`;
+                    } else {
+                        screen.style.background = ''; 
+                        screen.classList.add('anim-wrong');
+                        icon.innerText = '❌';
+                        text.innerText = 'ว้า... ผิดไปนิดเดียว';
+                        sub.innerHTML = `ตั้งสติแล้วพยายามใหม่ในข้อถัดไปนะ!<br>${explanationHtml}`;
+                    }
                 }
+            } else {
+                // กรณีเด็กไม่ได้กดตอบ หรือหมดเวลาก่อน
+                screen.style.background = '';
+                screen.classList.add('anim-wrong');
+                icon.innerText = '⏳';
+                text.innerText = 'ตอบไม่ทัน!';
+                sub.innerHTML = `คุณไม่ได้ส่งคำตอบในข้อนี้<br>${explanationHtml}`;
             }
-        } else {
-            // กรณีหมดเวลา หรือหลุด
-            screen.classList.add('anim-wrong');
-            icon.innerText = '⏳';
-            text.innerText = 'หมดเวลา!';
-            sub.innerHTML = `คุณไม่ได้ส่งคำตอบในข้อนี้<br>${explanationHtml}`;
+        } catch (e) {
+            console.error("Error showing result:", e);
         }
     }
 
