@@ -1998,13 +1998,14 @@
             btnElement.style.color = "#fff";
             currentCorrectCount++;
             playAttackAnimation(10); 
-            Toast.fire({ icon: 'success', title: 'โจมตีโดนบอสเต็มๆ! ⚔️' });
-
-            // 🌟 ตอบถูกปุ๊บ ยิงดาเมจไปที่หลังบ้านทันที เพื่อลดเลือดบอสใน DB
+            
+            // 🌟 ส่งดาเมจไปหักเลือดในฐานข้อมูลทันที
             google.script.run.withSuccessHandler(function(res) {
-                if(res.isDead) finishBossBattleEarly("คุณเป็นผู้ปลิดชีพเจ้าบอสตัวนี้! 🏆");
+                if(res.isDead) {
+                    finishBossBattleEarly("คุณปลิดชีพเจ้าบอสตัวนี้สำเร็จ! 🏆");
+                    return; 
+                }
             }).sendBossHit(currentBossData.bossId, globalPortalStudent.id);
-
         } else {
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
@@ -2014,19 +2015,15 @@
                     b.style.color = "#fff";
                 }
             });
-            document.getElementById('bossBattleModal').classList.add('anim-panic');
-            setTimeout(() => document.getElementById('bossBattleModal').classList.remove('anim-panic'), 500);
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        const totalQ = currentBossData.questions.length;
-        
         setTimeout(() => {
             currentQuestionIndex++;
-            if (currentQuestionIndex < totalQ) {
+            if (currentQuestionIndex < currentBossData.questions.length) {
                 loadBossQuestion();
             } else {
-                finishBossBattle(); // จบตามปกติถ้าตอบครบ
+                finishBossBattle(); // จบกรณีตอบครบแต่บอสไม่ตาย
             }
         }, 1500);
     }
@@ -2061,38 +2058,22 @@
         checkActiveBoss(); // โหลดใหม่เผื่อปุ่มต้องซ่อน
     }
 
-    // 3. สรุปผลหลังตอบครบทุกข้อ
+    // 3. สรุปผลหลังตอบครบทุกข้อ (กรณีบอสยังไม่ตาย)
     function finishBossBattle() {
-        const totalQ = currentBossData.questions.length;
-        let expGain = currentCorrectCount * 100; // ข้อละ 100 EXP
-        let extraMsg = "";
-        
-        // ถ้าตอบถูกหมด (เพอร์เฟกต์)
-        if (currentCorrectCount === totalQ && totalQ > 0) {
-            expGain += 300; // โบนัสพิเศษ 300 EXP
-            extraMsg = "<br><span class='text-success fw-bold'>โบนัสเพอร์เฟกต์ +300 EXP! 🎉</span>";
+        if (window.bossRealtimeChannel) {
+            supabaseClient.removeChannel(window.bossRealtimeChannel);
+            window.bossRealtimeChannel = null;
         }
         
         Swal.fire({
             title: 'จบการต่อสู้!',
-            html: `โจมตีโดน: <b>${currentCorrectCount}/${totalQ}</b> ครั้ง<br>ได้รับ EXP รวม: <b>${expGain}</b> ${extraMsg}`,
-            icon: currentCorrectCount >= Math.ceil(totalQ/2) ? 'success' : 'info',
-            allowOutsideClick: false,
-            confirmButtonText: 'รับรางวัล',
-        }).then((res) => {
-            if (res.isConfirmed) {
-                Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading() });
-                
-                google.script.run.withSuccessHandler(function(resDB) {
-                    hideAppModal('bossBattleModal');
-                    Swal.close();
-                    if (resDB.success) {
-                        Toast.fire({ icon: 'success', title: `บันทึกแต้ม +${resDB.exp} EXP เรียบร้อย` });
-                        document.getElementById('bossAlertWidget').classList.add('hidden'); 
-                        loadFullDashboard(globalPortalStudent.id, true);
-                    }
-                }).attackBoss(currentBossData.bossId, globalPortalStudent.id, currentCorrectCount);
-            }
+            text: 'คุณทำเต็มที่แล้ว! ระบบบันทึก EXP ที่ได้จากการโจมตีเรียบร้อย',
+            icon: 'info',
+            timer: 2500,
+            showConfirmButton: false
+        }).then(() => {
+            hideAppModal('bossBattleModal');
+            loadFullDashboard(globalPortalStudent.id, true);
         });
     }
 
@@ -3054,20 +3035,12 @@ async function renderPartySelection() {
     }
 }
 
-    // ฟังก์ชันสำหรับเด้งออกจากหน้าตีบอสทันที
     function finishBossBattleEarly(message) {
         if (window.bossRealtimeChannel) {
             supabaseClient.removeChannel(window.bossRealtimeChannel);
             window.bossRealtimeChannel = null;
         }
-
-        Swal.fire({
-            title: message,
-            timer: 2500,
-            showConfirmButton: false,
-            icon: 'success'
-        });
-
+        Swal.fire({ title: message, timer: 2500, showConfirmButton: false, icon: 'success' });
         hideAppModal('bossBattleModal'); 
         loadFullDashboard(globalPortalStudent.id, true); 
     }
