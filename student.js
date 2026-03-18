@@ -1922,16 +1922,22 @@
         if (!currentBossData) return;
         if (supabaseClient) {
             if (window.bossRealtimeChannel) supabaseClient.removeChannel(window.bossRealtimeChannel);
-            window.bossRealtimeChannel = supabaseClient.channel('boss-sync-' + currentBossData.bossId)
-                .on('postgres_changes', { event: 'PATCH', schema: 'public', table: 'boss_quizzes', filter: `id=eq.${currentBossData.bossId}` }, payload => {
+            // 🌟 แก้ชื่อช่องให้ Unique กันบัฟเฟอร์ค้าง
+            window.bossRealtimeChannel = supabaseClient.channel('boss-global-sync')
+                .on('postgres_changes', { 
+                    event: 'PATCH', 
+                    schema: 'public', 
+                    table: 'boss_quizzes', 
+                    filter: `id=eq.${currentBossData.bossId}` 
+                }, payload => {
                     const newHp = payload.new.boss_hp;
                     
-                    // 🌟 จุดสำคัญ: อัปเดตเลือดในตัวแปรเครื่องเด็กทุกคนให้ตรงกับ DB ทันที
+                    // 🌟 จุดตาย: ต้องแก้ค่า HP ในตัวแปรเครื่องเด็กทุกคนให้ตรงกับ DB ทันที
                     if(currentBossData) currentBossData.hp = newHp; 
                     updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
                     
                     if (newHp <= 0) {
-                        clearTimeout(window.bossNextQTimer); // 🛑 สั่งหยุดคิวโหลดข้อต่อไปทันที กันค้าง
+                        clearTimeout(window.bossNextQTimer); // 🛑 หยุดคิวโหลดข้อต่อไปทันที กันค้าง
                         finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
                     }
                 }).subscribe();
@@ -1977,7 +1983,7 @@
     }
 
     function selectBossAnswer(btnElement, selected, correct) {
-        // 🛡️ กันค้าง: ถ้าบอสตายไปแล้ว (เพื่อนฟันตาย) ไม่ต้องทำห่าอะไรต่อทั้งนั้น
+        // 🛡️ ป้องกันค้าง: ถ้าบอสในเครื่องไม่มีแล้ว หรือตายแล้ว ให้หยุดทำงานทันที
         if (!currentBossData || currentBossData.hp <= 0) return; 
 
         const allBtns = document.querySelectorAll('.boss-opt-btn');
@@ -1988,6 +1994,7 @@
             btnElement.style.color = "#fff";
             currentCorrectCount++;
             playAttackAnimation(10); 
+            
             google.script.run.withSuccessHandler(function(res) {
                 if(res.isDead) {
                     clearTimeout(window.bossNextQTimer);
@@ -2001,12 +2008,17 @@
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        // 🌟 เก็บ Timer ไว้ในตัวแปรคุมกลาง เพื่อสั่งลบได้ทันทีถ้าเพื่อนตีบอสตายก่อน
+        // 🌟 สั่งรอนับถอยหลังไปข้อต่อไป (ใส่ความปลอดภัยกัน Error)
         window.bossNextQTimer = setTimeout(() => {
+            // เช็คอีกรอบว่าตอนครบเวลา บอสยังอยู่ไหม (กัน Error ตอนเพื่อนฟันตายกลางคัน)
             if (!currentBossData || currentBossData.hp <= 0) return; 
+            
             currentQuestionIndex++;
-            if (currentQuestionIndex < currentBossData.questions.length) loadBossQuestion();
-            else finishBossBattle();
+            if (currentQuestionIndex < currentBossData.questions.length) {
+                loadBossQuestion();
+            } else {
+                finishBossBattle(); 
+            }
         }, 1500);
     }
 
