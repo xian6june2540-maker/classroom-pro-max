@@ -412,6 +412,8 @@
     function getExpPerMs(id) {
         if (!id || id === 'bg0') return 0;
         let num = parseInt(id.replace(/\D/g, '')) || 0;
+        let rate = 0;          // 🌟 เพิ่มบรรทัดนี้
+        let unitMs = 3600000;
         if (id.startsWith('bg')) {
             const bgRates = [0, 5, 10, 15, 20, 25, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 1, 2, 3, 4, 5, 10];
             const bgUnits = ['', 'hr','hr','hr','hr','hr','hr','hr','hr','day','day','day','day','day','week','min','min','min','min','min','min'];
