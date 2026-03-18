@@ -1839,89 +1839,40 @@
         document.getElementById('tqOptionsContainer').innerHTML = html;
     }
 
-// 3. [จังหวะที่ 1] ครูกด "ปล่อยคำถาม" -> ส่งแค่โจทย์ให้นักเรียนอ่านก่อน
     async function releaseLiveQuestion() {
-        if (!supabaseClient || !liveQuizSessionId) return;
-        
-        // อัปเดตสถานะเป็น show_question (สถานะใหม่) เพื่อให้เด็กเห็นแค่โจทย์
-        await supabaseClient.from('live_quiz_sessions').update({ 
-            status: 'show_question', 
-            current_q_index: liveQuizCurrentIndex 
-        }).eq('id', liveQuizSessionId);
-
-        // จัดการปุ่มหน้าจอครู: ซ่อนปุ่มปล่อยคำถาม และโชว์ปุ่ม "ปล่อยตัวเลือก" แทน
         document.getElementById('btnReleaseQ').classList.add('hidden');
-        document.getElementById('btnReleaseOpt').classList.remove('hidden'); 
+        document.getElementById('btnReleaseOpt').classList.remove('hidden');
+        document.getElementById('tqStatusText').innerText = "กำลังแสดงคำถามให้นักเรียนอ่าน...";
+        document.getElementById('tqStatusText').className = "text-warning fw-bold mb-3";
         
-        document.getElementById('tqStatusText').innerText = "นักเรียนกำลังอ่านคำถาม...";
-        document.getElementById('tqStatusText').className = "text-info fw-bold mb-3";
+        // 🔥 ยิงคำสั่งตรงเข้าฐานข้อมูล Supabase ทันที (ข้าม Google ไปเลย)
+        await supabaseClient.from('live_quiz_sessions')
+            .update({ status: 'show_question' })
+            .eq('room_name', currentRoom);
     }
 
-    // 4. [จังหวะที่ 2] ครูกด "ปล่อยตัวเลือก" -> ส่งช้อยส์ให้เด็กตอบ และเริ่มจับเวลาจริง
     async function releaseLiveOptions() {
-        if (!supabaseClient || !liveQuizSessionId) return;
-
-        // อัปเดตสถานะเป็น active เพื่อให้ตัวเลือกเด้งที่หน้าจอนักเรียน
-        await supabaseClient.from('live_quiz_sessions').update({ 
-            status: 'active' 
-        }).eq('id', liveQuizSessionId);
-
-        // รีเซ็ตตัวเลขจำนวนคนตอบ
-        let tqAnsCountEl = document.getElementById('tqAnswerCount');
-        if (tqAnsCountEl && tqAnsCountEl.previousElementSibling) {
-            tqAnsCountEl.previousElementSibling.innerText = "ตอบแล้ว:";
-        }
-        tqAnsCountEl.innerText = "0 / " + joinedPlayersCount + " คน";
-        
-        // สลับปุ่ม: ซ่อนปุ่มปล่อยตัวเลือก และโชว์ปุ่ม "เฉลย"
-        document.getElementById('btnReleaseOpt').classList.add('hidden');
-        document.getElementById('btnShowAns').classList.remove('hidden');
-
-        // เริ่มต้นระบบนับเวลาถอยหลัง 30 วินาที
-        teacherTimeLeft = 30;
-        document.getElementById('tqStatusText').innerText = `กำลังรับคำตอบ... (เหลือ ${teacherTimeLeft} วิ)`;
-        document.getElementById('tqStatusText').className = "text-success fw-bold mb-3 pulse-text";
-
-        if(teacherQuizTimer) clearInterval(teacherQuizTimer);
-        teacherQuizTimer = setInterval(() => {
-            teacherTimeLeft--;
-            if (teacherTimeLeft > 0) {
-                document.getElementById('tqStatusText').innerText = `กำลังรับคำตอบ... (เหลือ ${teacherTimeLeft} วิ)`;
-            } else {
-                clearInterval(teacherQuizTimer);
-                document.getElementById('tqStatusText').innerText = "หมดเวลา! กำลังปิดรับคำตอบ...";
-                showLiveAnswer(); // หมดเวลาให้เฉลยอัตโนมัติเหมือนเดิม
-            }
-        }, 1000);
+    document.getElementById('btnReleaseOpt').classList.add('hidden');
+    document.getElementById('btnShowAns').classList.remove('hidden');
+    document.getElementById('tqStatusText').innerText = "ปล่อยตัวเลือกแล้ว! เด็กกำลังตอบ...";
+    document.getElementById('tqStatusText').className = "text-success fw-bold mb-3";
+    
+    // 🔥 ยิงคำสั่งตรงเข้าฐานข้อมูลทันที
+    await supabaseClient.from('live_quiz_sessions')
+        .update({ status: 'active' })
+        .eq('room_name', currentRoom);
     }
 
-    // 4. ครูกด "เฉลย/ปิดรับคำตอบ"
     async function showLiveAnswer() {
-        if (!supabaseClient || !liveQuizSessionId) return;
-        if(teacherQuizTimer) clearInterval(teacherQuizTimer); // 🌟 ล้างเวลาที่นับค้างไว้
-
-        // อัปเดต DB เพื่อให้หน้าจอเด็กโชว์เฉลยและโบนัส
-        await supabaseClient.from('live_quiz_sessions').update({ 
-            status: 'show_answer' 
-        }).eq('id', liveQuizSessionId);
-
-        document.getElementById('tqStatusText').innerText = "กำลังโชว์เฉลย...";
-        document.getElementById('tqStatusText').className = "text-primary fw-bold mb-3";
-
-        document.getElementById('btnShowAns').classList.add('hidden');
-        
-        // เช็คว่าใช่ข้อสุดท้ายไหม
-        if (liveQuizCurrentIndex < liveQuizQuestions.length - 1) {
-            document.getElementById('btnNextQ').classList.remove('hidden');
-        } else {
-            // เปลี่ยนปุ่มเป็น "ดูจัดอันดับคะแนน"
-            let btnNext = document.getElementById('btnNextQ');
-            btnNext.innerHTML = 'ดูอันดับคะแนน (Leaderboard) 🏆';
-            btnNext.classList.remove('hidden');
-            btnNext.classList.replace('btn-primary', 'btn-warning');
-            btnNext.classList.replace('text-white', 'text-dark');
-            btnNext.onclick = triggerLeaderboard; // เรียกฟังก์ชันโชว์แท่นรางวัล
-        }
+    document.getElementById('btnShowAns').classList.add('hidden');
+    document.getElementById('btnNextQ').classList.remove('hidden');
+    document.getElementById('tqStatusText').innerText = "แสดงเฉลยและสรุปผลแล้ว";
+    document.getElementById('tqStatusText').className = "text-info fw-bold mb-3";
+    
+    // 🔥 ยิงคำสั่งตรงเข้าฐานข้อมูลทันที
+    await supabaseClient.from('live_quiz_sessions')
+        .update({ status: 'show_answer' })
+        .eq('room_name', currentRoom);
     }
 
     // ฟังก์ชันใหม่: สั่งหน้าจอนักเรียนให้เปลี่ยนเป็น Podium
@@ -1944,22 +1895,41 @@
     }
 
     // 5. ครูกด "ไปข้อถัดไป"
-    function nextLiveQuestion() {
-        liveQuizCurrentIndex++;
-        prepareTeacherQuestionUI();
+    async function nextLiveQuestion() {
+        // โหลดข้อมูลดัชนีข้อปัจจุบันแบบสายฟ้าแลบจาก Supabase
+        const { data } = await supabaseClient.from('live_quiz_sessions')
+            .select('current_q_index, questions_json')
+            .eq('room_name', currentRoom).single();
+            
+        if (!data) return;
         
+        let questions = Array.isArray(data.questions_json) ? data.questions_json : (data.questions_json.questions || []);
+        let nextIndex = data.current_q_index + 1;
+        
+        // ถ้าตอบครบทุกข้อแล้ว ตัดเข้าหน้า Leaderboard
+        if (nextIndex >= questions.length) {
+            Swal.fire('จบเกม!', 'ระบบกำลังคำนวณและสรุปอันดับคะแนน...', 'success');
+            await supabaseClient.from('live_quiz_sessions')
+                .update({ status: 'show_leaderboard' })
+                .eq('room_name', currentRoom);
+            return;
+        }
+
+        // เตรียมหน้าจอเข้าสู่ข้อถัดไป
+        document.getElementById('btnNextQ').classList.add('hidden');
+        document.getElementById('btnReleaseQ').classList.remove('hidden');
         document.getElementById('tqStatusText').innerText = "รอนักเรียนเตรียมตัว...";
         document.getElementById('tqStatusText').className = "text-danger fw-bold mb-3";
         
-        document.getElementById('btnNextQ').classList.add('hidden');
-        document.getElementById('btnReleaseQ').classList.remove('hidden');
-        
-        // 🌟 FIX 2: เปลี่ยน Label กลับเป็น "เข้าร่วมแล้ว:"
-        let tqAnsCountEl = document.getElementById('tqAnswerCount');
-        if (tqAnsCountEl && tqAnsCountEl.previousElementSibling) {
-            tqAnsCountEl.previousElementSibling.innerText = "เข้าร่วมแล้ว:";
-        }
-        tqAnsCountEl.innerText = joinedPlayersCount + " คน";
+        // 🔥 อัปเดตข้อถัดไปขึ้นฐานข้อมูลทันที
+        await supabaseClient.from('live_quiz_sessions')
+            .update({ status: 'setup', current_q_index: nextIndex })
+            .eq('room_name', currentRoom);
+            
+        // รีเฟรช UI ฝั่งครูให้ตรงกับข้อใหม่
+        try {
+            if (typeof loadTeacherQuizUI === 'function') loadTeacherQuizUI(data.questions_json, nextIndex);
+        } catch(e) {}
     }
 
     // 6. ครูกด "จบเกม" (คำนวณคะแนนทั้งหมดและลบห้อง)
