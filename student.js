@@ -16,17 +16,21 @@
     function hideAppModal(id) {
         var el = document.getElementById(id);
         if (el) {
-            var inst = bootstrap.Modal.getInstance(el);
-            if(inst) inst.hide();
+            var inst = bootstrap.Modal.getOrCreateInstance(el);
+            inst.hide();
         }
-        setTimeout(function() {
-            document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = 'auto';
-            document.documentElement.style.overflow = 'auto';
-        }, 300);
+        // ล้าง Backdrop ทันทีป้องกันจอมืดค้าง
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = ''; 
+        document.body.style.paddingRight = '';
+        
+        // 🌟 แก้เป็น bossBattleModal ตามชื่อ ID จริงในโค้ดฟลุ๊ค
+        if (id === 'bossBattleModal' && window.bossSyncTimer) {
+            clearInterval(window.bossSyncTimer);
+            window.bossSyncTimer = null;
+        }
     }
-
     // 🌟 ฟังก์ชันจัดการปุ่ม โชว์/ซ่อน สัตว์เลี้ยง
     window.togglePetVisibility = function() {
         window.isPetHiddenByUser = !window.isPetHiddenByUser;
@@ -1950,6 +1954,24 @@
         updateBossHpUI(currentBossData.hp, currentBossData.maxHp);
         loadBossQuestion();
         showAppModal('bossBattleModal');
+
+        // 🌟 เพิ่มตรงนี้: ดึงเลือดบอสมาอัปเดตให้เพื่อนเห็นสดๆ แม้เราจะไม่ได้กดตอบ
+        if (window.bossSyncTimer) clearInterval(window.bossSyncTimer);
+        window.bossSyncTimer = setInterval(async function() {
+            if (!currentBossData) return;
+            try {
+                // ดึงเลือดล่าสุดจาก Supabase โดยตรง (ไวกว่าผ่าน GAS)
+                let { data: b } = await supabaseClient.from('boss_quizzes').select('boss_hp').eq('id', currentBossData.bossId).single();
+                if (b) {
+                    currentBossData.hp = b.boss_hp;
+                    updateBossHpUI_Realtime(b.boss_hp, currentBossData.maxHp);
+                    if (b.boss_hp <= 0) {
+                        clearInterval(window.bossSyncTimer);
+                        finishBossBattleEarly("บอสพ่ายแพ้แล้ว! เพื่อนๆ ช่วยกันตีจนชนะ! ⚔️");
+                    }
+                }
+            } catch(e) { console.log("Sync HP Error"); }
+        }, 3000); 
     }
 
     // 1. โหลดคำถามขึ้นหน้าจอ (เปลี่ยนจากเลข 5 เป็น นับจำนวนข้อจริง)
@@ -1982,19 +2004,31 @@
 
     function selectBossAnswer(btnElement, selected, correct) {
         const allBtns = document.querySelectorAll('.boss-opt-btn');
+        // 1. ล็อกปุ่มทันที
         allBtns.forEach(b => b.disabled = true);
         
         if (selected === correct) {
+            // 2. โชว์ Loading กันค้าง
+            Swal.fire({ title: 'กำลังโจมตี...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
             btnElement.classList.replace('btn-outline-light', 'btn-success');
             btnElement.style.color = "#fff";
             currentCorrectCount++;
             playAttackAnimation(10); 
-            google.script.run.withSuccessHandler(function(res) {
+            
+            google.script.run
+            .withSuccessHandler(function(res) {
+                Swal.close(); // ปิด Loading เมื่อเสร็จ
                 if(res && res.isDead) {
                     if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
                     finishBossBattleEarly("คุณปลิดชีพเจ้าบอสตัวนี้สำเร็จ! 🏆");
                 }
-            }).sendBossHit(currentBossData.bossId, globalPortalStudent.id);
+            })
+            .withFailureHandler(function() {
+                Swal.close();
+                allBtns.forEach(b => b.disabled = false); // ถ้าเน็ตหลุด ให้เปิดปุ่มให้กดใหม่
+            })
+            .sendBossHit(currentBossData.bossId, globalPortalStudent.id);
         } else {
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
