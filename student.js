@@ -2408,9 +2408,9 @@
     async function submitSqAnswer(btnElement, selectedAnswer) {
         if (sqHasAnswered) return;
         sqHasAnswered = true;
-        
-        // 🌟 ปิด clearInterval ไว้เพื่อให้เวลานับถอยหลังต่อ เผื่อเด็กจะกลับมาเปลี่ยนใจ (แต่เวลาที่ส่งจะบันทึกเป๊ะๆ ตามจังหวะที่กด)
-        // if(sqTimerInterval) clearInterval(sqTimerInterval);
+
+        // ดึงสถานะเวลาปัจจุบันมาเช็ค
+        let currentTimerText = document.getElementById('sqTimer').innerText;
 
         let responseTime = Date.now() - sqQuestionStartMs;
         if (activePowerUp === 'p2') responseTime = 0; 
@@ -2429,34 +2429,38 @@
             }
 
             const partyTasks = window.windowPartyMembers.map(async sid => {
-                // 🌟 ถ้าใช้สิทธิ์เปลี่ยนคำตอบ ให้ลบคำตอบเก่าของข้อนี้ในฐานข้อมูลทิ้งก่อน
-                if (sqHasChangedAnswer) {
-                    await supabaseClient.from('live_quiz_responses')
-                        .delete()
-                        .eq('session_id', sqSessionData.id)
-                        .eq('q_index', sqSessionData.current_q_index)
-                        .eq('student_id', sid);
-                }
-
                 let finalAnswer = selectedAnswer;
-                // 🌟 แนบสถานะเพื่อไปหัก EXP 50% ที่ฝั่งครู
                 if (sqHasChangedAnswer && finalAnswer !== "TIMEOUT_NO_ANSWER") {
                     finalAnswer += "|CHANGED";
                 }
 
-                return supabaseClient.from('live_quiz_responses').insert({
-                    session_id: sqSessionData.id,
-                    q_index: sqSessionData.current_q_index,
-                    student_id: sid,
-                    answer: finalAnswer,
-                    response_time: responseTime,
-                    is_correct: isCorrect
-                });
+                // 🌟 แก้ไข: ใช้ UPDATE แทน DELETE + INSERT เพื่อแก้บั๊กข้อมูลเบิ้ลและลดความหน่วง
+                if (sqHasChangedAnswer) {
+                    return supabaseClient.from('live_quiz_responses')
+                        .update({
+                            answer: finalAnswer,
+                            response_time: responseTime,
+                            is_correct: isCorrect
+                        })
+                        .eq('session_id', sqSessionData.id)
+                        .eq('q_index', sqSessionData.current_q_index)
+                        .eq('student_id', sid);
+                } else {
+                    return supabaseClient.from('live_quiz_responses').insert({
+                        session_id: sqSessionData.id,
+                        q_index: sqSessionData.current_q_index,
+                        student_id: sid,
+                        answer: finalAnswer,
+                        response_time: responseTime,
+                        is_correct: isCorrect
+                    });
+                }
             });
 
             await Promise.all(partyTasks);
 
-            if (!isCorrect && activePowerUp === 'p3') {
+            // 🌟 กันฟาร์ม EXP: ให้แต้มปลอบใจเฉพาะการตอบรอบแรกเท่านั้น
+            if (!isCorrect && activePowerUp === 'p3' && !sqHasChangedAnswer) {
                 window.windowPartyMembers.forEach(sid => {
                     google.script.run.addManualEXP(sid, 75); 
                 });
@@ -2465,6 +2469,7 @@
             console.error("Party Submit Error:", e);
         }
 
+        // 🌟 แก้ไข: ลดดีเลย์ UI ตอนสลับหน้าจอจาก 1000ms เหลือ 300ms ให้ระบบตอบสนองทันใจขึ้น
         setTimeout(() => {
             showSqScreen('wait');
             let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
@@ -2475,8 +2480,6 @@
                     สมาชิกปาร์ตี้ ${partyCount} คนไม่ได้ส่งคำตอบในข้อนี้ครับ
                 `;
             } else {
-                // 🌟 สร้างปุ่มเปลี่ยนคำตอบ โดยเช็คว่าเวลายังไม่หมดและยังไม่เคยใช้สิทธิ์
-                let currentTimerText = document.getElementById('sqTimer').innerText;
                 let changeBtnHtml = '';
                 
                 if (!sqHasChangedAnswer && currentTimerText !== "0.0") {
@@ -2499,7 +2502,7 @@
                     ${changeBtnHtml}
                 `;
             }
-        }, 1000);
+        }, 300); 
     }
 
     // 🌟 เพิ่มฟังก์ชันใหม่ต่อท้าย submitSqAnswer ทันที เพื่อให้เด็กกดสลับจอกลับไปตอบใหม่ได้
