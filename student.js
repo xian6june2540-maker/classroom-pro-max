@@ -1262,7 +1262,7 @@
         let htmlExchange = '<div class="col-12 mt-3 mb-2"><div class="badge bg-success w-100 p-2 fs-6">💰 โซนแลกคะแนนเก็บ (เข้าสมุดพก)</div></div>';
         
         powerupData.forEach(function(p) {
-            // 🌟 แก้ไข: ลบการเช็คของซ้ำออก ทำให้กดแลกตัวช่วยได้เรื่อยๆ ไม่จำกัด
+            // ปลดตัวล็อก isOwned ออกตรงนี้ เพื่อให้ปุ่มพร้อมกดซื้อเสมอ
             let btn = '<button class="btn btn-sm btn-warning text-dark w-100 fw-bold" onclick="buyItem(\'powerup\', \'' + p.id + '\', ' + p.price + ')">แลก ' + p.price + ' EXP</button>';
             let cardHtml = '<div class="col-md-3 col-6"><div class="shop-item-card"><div class="shop-icon">' + p.icon + '</div><h6 class="fw-bold">' + p.name + '</h6><p class="small text-muted mb-2" style="min-height:35px;">' + p.msg + '</p>' + btn + '</div></div>';
             
