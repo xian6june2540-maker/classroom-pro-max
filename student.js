@@ -1,3 +1,4 @@
+    <<<<<<< HEAD
     // =====================================
     // ตัวแปรและฟังก์ชันจัดการสถานะ
     // =====================================
@@ -5853,47 +5854,5 @@ async function renderPartySelection() {
             </div>
         `;
     }
+>>>>>>> 5af5b21 (add cron job logic)
 }
-
-// =========================================================
-// 🧠 SMART REALTIME SYSTEM (Filtered Listener)
-// ใส่หูทิพย์ให้ระบบฝั่งเด็ก แยกแยะข้อมูลส่วนตัว
-// =========================================================
-function initSmartRealtime() {
-    const myId = localStorage.getItem('studentId');
-    if (!myId || !supabaseClient) return;
-
-    console.log("👂 หูทิพย์เริ่มทำงานสำหรับ ID:", myId);
-
-    // 1. ฟังเฉพาะข้อมูลส่วนตัวของเรา (EXP, Items)
-    supabaseClient.channel('sync-profile-' + myId)
-        .on('postgres_changes', { 
-            event: 'UPDATE', schema: 'public', table: 'students', 
-            filter: `id=eq.${myId}` 
-        }, payload => {
-            // โหลดข้อมูลใหม่แบบเงียบๆ (isSilent = true)
-            loadFullDashboard(myId, true);
-            if (payload.new.exp > payload.old.exp) {
-                Toast.fire({ icon: 'success', title: `ได้รับเพิ่ม ${Math.floor(payload.new.exp - payload.old.exp)} EXP ✨` });
-            }
-        }).subscribe();
-
-    // 2. ฟังเฉพาะการเช็คชื่อของเรา
-    supabaseClient.channel('sync-attendance-' + myId)
-        .on('postgres_changes', { 
-            event: '*', schema: 'public', table: 'attendance', 
-            filter: `student_id=eq.${myId}` 
-        }, payload => {
-            loadFullDashboard(myId, true);
-            Swal.fire({
-                toast: true, position: 'top-end', icon: 'info',
-                title: `ครูอัปเดตสถานะ: <b>${payload.new.status}</b>`,
-                showConfirmButton: false, timer: 3000
-            });
-        }).subscribe();
-}
-
-// สั่งรันหูทิพย์หลังโหลดหน้าเสร็จ
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(initSmartRealtime, 3000); 
-});
