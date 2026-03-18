@@ -1923,19 +1923,20 @@
         if (supabaseClient) {
             if (window.bossRealtimeChannel) supabaseClient.removeChannel(window.bossRealtimeChannel);
             
-            // 🌟 เลิกใช้ filter id=eq... ใน config แล้วมาเช็คข้างในแทน เพื่อความชัวร์ 100%
-            window.bossRealtimeChannel = supabaseClient.channel('boss-global-sync')
+            // 🌟 ปล่อยท่อให้รับทุกสัญญาณ PATCH แล้วมา Filter ID ข้างใน จะไวกว่าและชัวร์กว่า
+            window.bossRealtimeChannel = supabaseClient.channel('boss-sync-global')
                 .on('postgres_changes', { event: 'PATCH', schema: 'public', table: 'boss_quizzes' }, payload => {
-                    // เช็คว่าใช่บอสตัวที่เรากำลังตีอยู่ไหม
-                    if (payload.new.id === currentBossData.bossId) {
-                        const newHp = payload.new.boss_hp;
-                        currentBossData.hp = newHp; // อัปเดตตัวแปรในเครื่องทันที
-                        updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
-                        
-                        if (newHp <= 0) {
-                            clearTimeout(window.bossNextQTimer);
-                            finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
-                        }
+                    if (!currentBossData || payload.new.id !== currentBossData.bossId) return;
+
+                    const newHp = payload.new.boss_hp;
+                    
+                    // 🐉 จุดตาย: ต้องแก้ค่า HP ในตัวแปรเครื่องเราด้วย (เพื่อใช้คำนวณดาเมจข้อต่อไป)
+                    currentBossData.hp = newHp; 
+                    updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
+                    
+                    if (newHp <= 0) {
+                        if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer); // 🛑 สั่งฆ่า Timer ทันที
+                        finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
                     }
                 }).subscribe();
         }
@@ -1990,7 +1991,7 @@
             playAttackAnimation(10); 
             google.script.run.withSuccessHandler(function(res) {
                 if(res && res.isDead) {
-                    clearTimeout(window.bossNextQTimer);
+                    if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
                     finishBossBattleEarly("คุณปลิดชีพเจ้าบอสตัวนี้สำเร็จ! 🏆");
                 }
             }).sendBossHit(currentBossData.bossId, globalPortalStudent.id);
@@ -2006,14 +2007,13 @@
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        // 🌟 แก้ตรงนี้: ไม่ว่าบอสจะตายหรือไม่ตาย ต้องมีทางไปต่อเสมอ!
+        // 🌟 แก้ตรงนี้: ถ้าบอสตาย (ไม่ว่าใครฟัน) ต้องสั่งปิด Modal ทันที อย่าปล่อยให้ค้าง!
+        if(window.bossNextQTimer) clearTimeout(window.bossNextQTimer);
         window.bossNextQTimer = setTimeout(() => {
-            // ถ้าบอสตายแล้ว (ไม่ว่าจะเราฟันหรือเพื่อนฟัน) ให้สั่งจบเกมทันที อย่าหยุดทำงานเฉยๆ
             if (!currentBossData || currentBossData.hp <= 0) {
-                finishBossBattleEarly("การต่อสู้สิ้นสุดลงแล้ว! ⚔️");
+                finishBossBattleEarly("การต่อสู้สิ้นสุดลงแล้ว! ⚔️"); 
                 return;
             }
-            
             currentQuestionIndex++;
             if (currentQuestionIndex < currentBossData.questions.length) {
                 loadBossQuestion();
