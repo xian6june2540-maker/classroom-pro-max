@@ -1258,13 +1258,12 @@
         });
         document.getElementById('shopFoodList').innerHTML = htmlFoods;
 
-        // แยกโซนไอเท็มช่วยเล่นกับโซนแลกคะแนน
         let htmlHelper = '<div class="col-12 mb-2"><div class="badge bg-primary w-100 p-2 fs-6">🚀 ไอเท็มตัวช่วยเล่นเกม (กดใช้ใน Live Quiz)</div></div>';
         let htmlExchange = '<div class="col-12 mt-3 mb-2"><div class="badge bg-success w-100 p-2 fs-6">💰 โซนแลกคะแนนเก็บ (เข้าสมุดพก)</div></div>';
         
         powerupData.forEach(function(p) {
-            let isOwned = inv.includes(p.id);
-            let btn = isOwned ? '<button class="btn btn-sm btn-success w-100 disabled">มีแล้ว</button>' : '<button class="btn btn-sm btn-warning text-dark w-100 fw-bold" onclick="buyItem(\'powerup\', \'' + p.id + '\', ' + p.price + ')">แลก ' + p.price + ' EXP</button>';
+            // 🌟 แก้ไข: ลบการเช็คของซ้ำออก ทำให้กดแลกตัวช่วยได้เรื่อยๆ ไม่จำกัด
+            let btn = '<button class="btn btn-sm btn-warning text-dark w-100 fw-bold" onclick="buyItem(\'powerup\', \'' + p.id + '\', ' + p.price + ')">แลก ' + p.price + ' EXP</button>';
             let cardHtml = '<div class="col-md-3 col-6"><div class="shop-item-card"><div class="shop-icon">' + p.icon + '</div><h6 class="fw-bold">' + p.name + '</h6><p class="small text-muted mb-2" style="min-height:35px;">' + p.msg + '</p>' + btn + '</div></div>';
             
             if(p.type === 'quiz_helper') htmlHelper += cardHtml;
