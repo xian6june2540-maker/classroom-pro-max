@@ -1922,23 +1922,20 @@
         if (!currentBossData) return;
         if (supabaseClient) {
             if (window.bossRealtimeChannel) supabaseClient.removeChannel(window.bossRealtimeChannel);
-            // 🌟 แก้ชื่อช่องให้ Unique กันบัฟเฟอร์ค้าง
+            
+            // 🌟 เลิกใช้ filter id=eq... ใน config แล้วมาเช็คข้างในแทน เพื่อความชัวร์ 100%
             window.bossRealtimeChannel = supabaseClient.channel('boss-global-sync')
-                .on('postgres_changes', { 
-                    event: 'PATCH', 
-                    schema: 'public', 
-                    table: 'boss_quizzes', 
-                    filter: `id=eq.${currentBossData.bossId}` 
-                }, payload => {
-                    const newHp = payload.new.boss_hp;
-                    
-                    // 🌟 จุดตาย: ต้องแก้ค่า HP ในตัวแปรเครื่องเด็กทุกคนให้ตรงกับ DB ทันที
-                    if(currentBossData) currentBossData.hp = newHp; 
-                    updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
-                    
-                    if (newHp <= 0) {
-                        clearTimeout(window.bossNextQTimer); // 🛑 หยุดคิวโหลดข้อต่อไปทันที กันค้าง
-                        finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
+                .on('postgres_changes', { event: 'PATCH', schema: 'public', table: 'boss_quizzes' }, payload => {
+                    // เช็คว่าใช่บอสตัวที่เรากำลังตีอยู่ไหม
+                    if (payload.new.id === currentBossData.bossId) {
+                        const newHp = payload.new.boss_hp;
+                        currentBossData.hp = newHp; // อัปเดตตัวแปรในเครื่องทันที
+                        updateBossHpUI_Realtime(newHp, currentBossData.maxHp); 
+                        
+                        if (newHp <= 0) {
+                            clearTimeout(window.bossNextQTimer);
+                            finishBossBattleEarly("บอสถูกพิชิตแล้ว! ⚔️");
+                        }
                     }
                 }).subscribe();
         }
@@ -1983,9 +1980,6 @@
     }
 
     function selectBossAnswer(btnElement, selected, correct) {
-        // 🛡️ ป้องกันค้าง: ถ้าบอสในเครื่องไม่มีแล้ว หรือตายแล้ว ให้หยุดทำงานทันที
-        if (!currentBossData || currentBossData.hp <= 0) return; 
-
         const allBtns = document.querySelectorAll('.boss-opt-btn');
         allBtns.forEach(b => b.disabled = true);
         
@@ -1994,9 +1988,8 @@
             btnElement.style.color = "#fff";
             currentCorrectCount++;
             playAttackAnimation(10); 
-            
             google.script.run.withSuccessHandler(function(res) {
-                if(res.isDead) {
+                if(res && res.isDead) {
                     clearTimeout(window.bossNextQTimer);
                     finishBossBattleEarly("คุณปลิดชีพเจ้าบอสตัวนี้สำเร็จ! 🏆");
                 }
@@ -2004,14 +1997,22 @@
         } else {
             btnElement.classList.replace('btn-outline-light', 'btn-danger');
             btnElement.style.color = "#fff";
-            allBtns.forEach(b => { if (b.innerText.includes(correct)) { b.classList.replace('btn-outline-light', 'btn-success'); b.style.color = "#fff"; } });
+            allBtns.forEach(b => { 
+                if (b.innerText.includes(correct)) { 
+                    b.classList.replace('btn-outline-light', 'btn-success'); 
+                    b.style.color = "#fff"; 
+                } 
+            });
             Toast.fire({ icon: 'error', title: 'โจมตีพลาด! 💨' });
         }
         
-        // 🌟 สั่งรอนับถอยหลังไปข้อต่อไป (ใส่ความปลอดภัยกัน Error)
+        // 🌟 แก้ตรงนี้: ไม่ว่าบอสจะตายหรือไม่ตาย ต้องมีทางไปต่อเสมอ!
         window.bossNextQTimer = setTimeout(() => {
-            // เช็คอีกรอบว่าตอนครบเวลา บอสยังอยู่ไหม (กัน Error ตอนเพื่อนฟันตายกลางคัน)
-            if (!currentBossData || currentBossData.hp <= 0) return; 
+            // ถ้าบอสตายแล้ว (ไม่ว่าจะเราฟันหรือเพื่อนฟัน) ให้สั่งจบเกมทันที อย่าหยุดทำงานเฉยๆ
+            if (!currentBossData || currentBossData.hp <= 0) {
+                finishBossBattleEarly("การต่อสู้สิ้นสุดลงแล้ว! ⚔️");
+                return;
+            }
             
             currentQuestionIndex++;
             if (currentQuestionIndex < currentBossData.questions.length) {
