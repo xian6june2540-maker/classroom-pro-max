@@ -165,7 +165,7 @@ window.google = { script: { run: createGASProxy(null, null) } };
                  
                  clearTimeout(autoRefreshInterval);
                  autoRefreshInterval = setTimeout(() => {
-                     loadFullDashboard(globalPortalStudent.id, false);
+                     loadFullDashboard(globalPortalStudent.id, true);
                  }, 2000);
             }
         }
