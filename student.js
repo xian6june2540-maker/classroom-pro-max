@@ -2142,95 +2142,78 @@
     }
 
 // 3. จัดการสถานะหน้าจอตามคำสั่งครู (รวมระบบคัดกรองและแสดงโจทย์ก่อน)
+// ✅ แก้ไขฟังก์ชันจัดการสถานะควิซฝั่งนักเรียน (วางทับของเดิมได้เลย)
     async function handleLiveQuizChange(sessionData) {
-        // ==========================================
-        // 🛠️ ส่วนที่แก้ไข: ป้องกัน Supabase ไม่ส่ง JSON คำถามมาด้วย
-        // ==========================================
-        if (sqSessionData && sqSessionData.id === sessionData.id) {
-            if (!sessionData.questions_json) {
-                sessionData.questions_json = sqSessionData.questions_json;
-            }
+        if (!sessionData) return;
+
+        // 1. จัดการโครงสร้าง JSON คำถาม (หัวใจสำคัญป้องกัน undefined)
+        let rawQ = sessionData.questions_json;
+        if (typeof rawQ === 'string') {
+            try { rawQ = JSON.parse(rawQ); } catch(e) { console.error("JSON Parse Error"); }
         }
-        if (typeof sessionData.questions_json === 'string') {
-            try { sessionData.questions_json = JSON.parse(sessionData.questions_json); } catch(e) {}
-        }
-        sqSessionData = sessionData;
-        // ==========================================
+        
+        // สกัดเอาเฉพาะ Array ของคำถามออกมาให้ได้ ไม่ว่าจะมาจากคีย์ไหน
+        sessionData.questions_json = Array.isArray(rawQ) ? rawQ : (rawQ.questions || rawQ.data || []);
+        
+        // บันทึกลงตัวแปร Global ของฝั่งเด็ก
+        sqSessionData = sessionData; 
 
         const modal = document.getElementById('studentLiveQuizModal');
         const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
 
-        // ==========================================
-        // 🛠️ ส่วนที่แก้ไข: แก้บั๊กไม่แจ้งเตือนนักเรียนที่เข้าไม่ทัน
-        // ==========================================
-        // 🛡️ ตรวจสอบสิทธิ์: ถ้าเกมเริ่มไปแล้ว (ไม่ใช่ setup) แต่เด็กยังไม่ได้กดเข้าร่วม
+        // 🛡️ ระบบคัดกรอง: ถ้าเกมเริ่มไปแล้วแต่เราเพิ่งเปิดแอปและไม่ได้กดเข้าร่วม ให้ปิดหน้าจอ
         if (sessionData.status !== 'setup' && !sqHasJoined) {
-            forceCloseLiveQuiz(); // บังคับปิดหน้าต่างเกม
-            
-            // แจ้งเตือนแค่ครั้งเดียว ไม่ให้เด้งรัวๆ
-            if (!window.hasAlertedMissedQuiz) {
-                window.hasAlertedMissedQuiz = true;
-                Swal.fire({
-                    icon: 'info',
-                    title: 'เข้าห้องไม่ทัน!',
-                    text: 'คุณครูได้เริ่มเกมไปแล้ว หรือคุณไม่ได้กดเข้าร่วมให้ทันเวลาครับ',
-                    confirmButtonText: 'รับทราบ',
-                    confirmButtonColor: '#0d6efd'
-                });
-            }
-            return; // หยุดการทำงาน
-        }
-        // ==========================================
-
-        // เปิดหน้าจอเกมอัตโนมัติ (สำหรับคนที่อยู่ในช่วง setup หรือคนที่เข้าร่วมแล้ว)
-        if (!modal.classList.contains('show')) {
-            bsModal.show();
+            forceCloseLiveQuiz();
+            return;
         }
 
-        // รีเซ็ตสถานะการตอบเมื่อเปลี่ยนข้อใหม่
+        // เปิดหน้าต่าง Modal อัตโนมัติถ้ายังไม่เปิด
+        if (!modal.classList.contains('show')) bsModal.show();
+
+        // เช็คว่าเป็นการเปลี่ยนข้อใหม่หรือเปล่า ถ้าใช่ให้รีเซ็ตสถานะตอบ
         if (sessionData.current_q_index !== sqLastSeenQIndex) {
             sqHasAnswered = false;
             sqLastSeenQIndex = sessionData.current_q_index;
+            activePowerUp = null; // รีเซ็ตไอเทม
         }
 
-        // --- แก้ไขใน JS_Student.html (ส่วนสถานะ setup) ---
-       if (sessionData.status === 'setup') {
-            window.hasAlertedMissedQuiz = false;
+        // 2. จัดการหน้าจอตามสถานะที่รับมาจากครู
+        if (sessionData.status === 'setup') {
             showSqScreen('wait');
-            
             if (!sqHasJoined) {
-                document.getElementById('sqWaitText').innerHTML = 'เลือกวิธีเข้าสู่สมรภูมิ';
+                document.getElementById('sqWaitText').innerHTML = 'เลือกวิธีเข้าสู่สนามรบ';
+                // วาดปุ่มเข้าร่วมใหม่เพื่อให้มั่นใจว่ากดได้
                 document.getElementById('partyActionArea').innerHTML = `
-                    <div class="d-grid gap-3">
-                        <button class="btn btn-primary btn-lg rounded-pill fw-bold shadow-lg py-3" onclick="joinLiveQuiz()">
-                            <i class="bi bi-person-fill"></i> เข้าร่วมเกม (คนเดียว)
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-lg rounded-pill fw-bold" onclick="joinLiveQuiz()">
+                            <i class="bi bi-person-fill"></i> เข้าเล่นคนเดียว
                         </button>
-                        <button class="btn btn-warning btn-lg rounded-pill fw-bold shadow-lg py-3 text-dark" onclick="openPartySetup()">
-                            <i class="bi bi-people-fill"></i> ตั้งปาร์ตี้ (แชร์เครื่อง)
+                        <button class="btn btn-warning btn-lg rounded-pill fw-bold text-dark" onclick="openPartySetup()">
+                            <i class="bi bi-people-fill"></i> ตั้งทีมปาร์ตี้
                         </button>
-                    </div>
-                `;
+                    </div>`;
             } else {
-                document.getElementById('sqWaitText').innerHTML = 'เข้าห้องเรียบร้อย!<br>เตรียมตัวลุยได้เลย';
+                document.getElementById('sqWaitText').innerHTML = 'เข้าห้องเรียบร้อย!<br>เตรียมสมองให้พร้อมนะ 🧠';
                 document.getElementById('partyActionArea').innerHTML = '';
             }
-        }
-
+        } 
         else if (sessionData.status === 'show_question') {
-            // จังหวะที่ 1: แสดงเฉพาะโจทย์ให้นักเรียนอ่านก่อน (ยังไม่มีตัวเลือก)
+            // ครูปล่อยเฉพาะโจทย์
             renderSqQuestionOnly(sessionData);
         }
         else if (sessionData.status === 'active') {
-            // จังหวะที่ 2: แสดงโจทย์พร้อมตัวเลือก 4 สี และเริ่มจับเวลา
+            // ครูปล่อยตัวเลือกให้ตอบ
             if (!sqHasAnswered) {
                 renderSqQuestion(sessionData);
             }
         }
         else if (sessionData.status === 'show_answer') {
+            // ครูสั่งโชว์เฉลย
             showSqScreen('result');
             checkSqResult();
         }
         else if (sessionData.status === 'show_leaderboard') {
+            // ครูสั่งโชว์อันดับ
             showSqScreen('leaderboard');
             calculateAndShowLeaderboard();
         }
