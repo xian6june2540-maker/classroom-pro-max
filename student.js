@@ -2142,10 +2142,11 @@
         }
     }
 
-    // ✅ แก้ไข: จัดการหน้าจอตามสถานะ (ซ่อมปุ่มหาย + กันจอปาร์ตี้ดีด)
+    // ✅ แก้ไข: จัดการสถานะ (แก้กระพริบ + แก้เด้งกลับ)
     async function handleLiveQuizChange(sessionData) {
         if (!sessionData) return;
 
+        // 1. จัดการโครงสร้างคำถาม
         let rawQ = sessionData.questions_json;
         if (typeof rawQ === 'string') {
             try { rawQ = JSON.parse(rawQ); } catch(e) {}
@@ -2160,35 +2161,30 @@
             forceCloseLiveQuiz();
             return;
         }
-
         if (!modal.classList.contains('show')) bsModal.show();
 
+        // เช็คเปลี่ยนข้อ
         if (sessionData.current_q_index !== sqLastSeenQIndex) {
             sqHasAnswered = false;
-            sqResultSeen = false; 
+            sqResultSeen = false; // รีเซ็ตเพื่อดูเฉลยข้อใหม่
             sqLastSeenQIndex = sessionData.current_q_index;
             activePowerUp = null;
         }
 
+        // 2. ควบคุมหน้าจอตามสถานะ (ล็อกการวาดซ้ำ)
         if (sessionData.status === 'setup') {
-            // 🌟 กันจอดีด: ถ้ากำลังเลื่อนหาเพื่อนปาร์ตี้อยู่ (เช็คจากข้อความในเครื่อง) ห้ามรีเซ็ตหน้าจอ
             let currentWaitText = document.getElementById('sqWaitText').innerHTML;
             if (currentWaitText.includes('ดึงเพื่อนเข้าปาร์ตี้')) return;
-
             showSqScreen('wait');
             if (!sqHasJoined) {
                 document.getElementById('sqWaitText').innerHTML = 'เลือกวิธีเข้าสู่สนามรบ';
                 document.getElementById('partyActionArea').innerHTML = `
                     <div class="d-grid gap-3">
-                        <button class="btn btn-primary btn-lg rounded-pill fw-bold shadow py-3" onclick="joinLiveQuiz()">
-                            <i class="bi bi-person-fill"></i> เข้าเล่นคนเดียว
-                        </button>
-                        <button class="btn btn-warning btn-lg rounded-pill fw-bold text-dark shadow py-3" onclick="openPartySetup()">
-                            <i class="bi bi-people-fill"></i> ตั้งทีมปาร์ตี้ (แชร์เครื่อง)
-                        </button>
+                        <button class="btn btn-primary btn-lg rounded-pill fw-bold shadow" onclick="joinLiveQuiz()">เข้าเล่นคนเดียว</button>
+                        <button class="btn btn-warning btn-lg rounded-pill fw-bold text-dark shadow" onclick="openPartySetup()">ตั้งทีมปาร์ตี้</button>
                     </div>`;
             } else {
-                document.getElementById('sqWaitText').innerHTML = 'เข้าห้องเรียบร้อย!<br>เตรียมตัวให้พร้อม... 🧠';
+                document.getElementById('sqWaitText').innerHTML = 'เข้าห้องเรียบร้อย!<br>เตรียมสมองให้พร้อมนะ 🧠';
                 document.getElementById('partyActionArea').innerHTML = '';
             }
         } 
@@ -2199,15 +2195,21 @@
             if (!sqHasAnswered) renderSqQuestion(sessionData);
         }
         else if (sessionData.status === 'show_answer') {
-            // 🌟 กันกระพริบ: ถ้ายังไม่เคยโชว์เฉลยข้อนี้ ถึงจะวาดหน้าจอ
-            if (!sqResultSeen) {
+            // 🌟 แก้กระพริบ: ถ้ายังไม่เคยเห็นเฉลย "ข้อปัจจุบัน" ถึงจะวาดหน้าจอ
+            // ถ้าหน้าจอกำลังโชว์ result อยู่แล้ว (sqResultScreen ไม่ hidden) ก็ไม่ต้องทำซ้ำ
+            const isAlreadyShowingResult = !document.getElementById('sqResultScreen').classList.contains('hidden');
+            if (!sqResultSeen && !isAlreadyShowingResult) {
                 showSqScreen('result');
                 checkSqResult();
             }
         }
         else if (sessionData.status === 'show_leaderboard') {
-            showSqScreen('leaderboard');
-            calculateAndShowLeaderboard();
+            // 🌟 กันกระพริบหน้า Leaderboard
+            const isAlreadyShowingLead = !document.getElementById('sqLeaderboardScreen').classList.contains('hidden');
+            if (!isAlreadyShowingLead) {
+                showSqScreen('leaderboard');
+                calculateAndShowLeaderboard();
+            }
         }
     }
 
@@ -2584,70 +2586,104 @@
         }
     });
 
-    // ✅ แก้ไข: ดึงอันดับล่าสุดมาแสดง (ดึงตรงจาก Supabase ตาม Session)
-    async function calculateAndShowLeaderboard() {
-        if (!supabaseClient || !sqSessionData) return;
+// ✅ แก้ไข: ดึงอันดับล่าสุด (จบปัญหาหน้าจอว่าง)
+async function calculateAndShowLeaderboard() {
+    if (!supabaseClient || !sqSessionData) return;
 
-        const podium = document.getElementById('podiumContainer');
-        const runners = document.getElementById('runnerUpContainer');
-        podium.innerHTML = '<div class="spinner-border text-warning mt-5"></div>';
+    const podium = document.getElementById('podiumContainer');
+    const runners = document.getElementById('runnerUpContainer');
+    
+    podium.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-warning mb-3"></div><h5 class="text-white">จีมินกำลังสรุปอันดับ...</h5></div>';
+    runners.innerHTML = '';
 
-        try {
-            let { data: responses } = await supabaseClient.from('live_quiz_responses').select('*').eq('session_id', sqSessionData.id);
-            let scores = {};
-            if (responses) {
-                responses.forEach(r => {
-                    if (r.is_correct && r.q_index >= 0) {
-                        let pts = 150 + (r.response_time < 10000 ? Math.floor((10000 - r.response_time) / 66.6) : 0);
-                        scores[r.student_id] = (scores[r.student_id] || 0) + pts;
-                    }
-                });
+    try {
+        // 1. ดึงข้อมูลคนตอบทุกคนใน Session นี้
+        let { data: responses, error } = await supabaseClient
+            .from('live_quiz_responses')
+            .select('student_id, is_correct, response_time, q_index')
+            .eq('session_id', sqSessionData.id);
+
+        if (error) throw error;
+
+        // 2. คำนวณคะแนน (150 + โบนัสความเร็ว)
+        let scores = {};
+        (responses || []).forEach(r => {
+            if (r.is_correct && r.q_index >= 0) {
+                let pts = 150;
+                if (r.response_time < 10000) {
+                    pts += Math.floor((10000 - r.response_time) / 66.6);
+                }
+                scores[r.student_id] = (scores[r.student_id] || 0) + pts;
             }
+        });
 
-            let sortedIds = Object.keys(scores).sort((a,b) => scores[b] - scores[a]).slice(0, 5);
-            if (sortedIds.length === 0) {
-                podium.innerHTML = '<h4 class="text-white mt-5">ไม่มีใครทำคะแนนได้เลยในรอบนี้ 😅</h4>';
-                return;
+        let sortedIds = Object.keys(scores).sort((a, b) => scores[b] - scores[a]).slice(0, 5);
+
+        if (sortedIds.length === 0) {
+            podium.innerHTML = '<div class="col-12 text-center py-5"><h3 class="text-white">ไม่มีใครทำคะแนนได้เลยในรอบนี้ 😅</h3></div>';
+            return;
+        }
+
+        // 3. ดึงชื่อและรูปนักเรียน
+        let { data: students } = await supabaseClient
+            .from('students')
+            .select('id, name, nickname, avatar')
+            .in('id', sortedIds);
+
+        let topMap = {};
+        (students || []).forEach(s => {
+            let dName = s.nickname || s.name.split(' ')[0];
+            topMap[s.id] = { name: dName, avatar: s.avatar || '1' };
+        });
+
+        // 4. วาดแท่นรางวัล
+        let podiumHtml = '';
+        // ลำดับการวาดบนจอ (ซ้าย-2, กลาง-1, ขวา-3)
+        const displayOrder = [
+            { id: sortedIds[1], rank: 2 },
+            { id: sortedIds[0], rank: 1 },
+            { id: sortedIds[2], rank: 3 }
+        ];
+
+        displayOrder.forEach(item => {
+            if (item.id && topMap[item.id]) {
+                const info = topMap[item.id];
+                const score = scores[item.id];
+                podiumHtml += `
+                    <div class="podium-step podium-${item.rank} shadow">
+                        ${item.rank === 1 ? '<i class="bi bi-crown-fill text-warning" style="position:absolute; top:-35px; font-size:2.5rem;"></i>' : ''}
+                        <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${info.avatar}&backgroundColor=transparent" class="podium-avatar" style="${item.rank === 1 ? 'width:80px; height:80px; border-color:#ffd700;' : ''}">
+                        <div class="podium-name">${info.name}</div>
+                        <div class="podium-score">${score}</div>
+                        <div class="rank-num">${item.rank}</div>
+                    </div>`;
             }
+        });
+        podium.innerHTML = podiumHtml;
 
-            let { data: students } = await supabaseClient.from('students').select('id, name, nickname, avatar').in('id', sortedIds);
-            let topMap = {};
-            (students || []).forEach(s => { topMap[s.id] = { name: s.nickname || s.name.split(' ')[0], avatar: s.avatar || '1' }; });
-
-            // วาดแท่นรางวัล
-            let podiumHtml = '';
-            const order = [sortedIds[1], sortedIds[0], sortedIds[2]]; // เรียง 2 -> 1 -> 3
-            order.forEach((id, idx) => {
-                if (!id || !topMap[id]) return;
-                let rank = (idx === 0) ? 2 : (idx === 1 ? 1 : 3);
-                podiumHtml += `<div class="podium-step podium-${rank} shadow">
-                    ${rank === 1 ? '<i class="bi bi-crown-fill text-warning fs-1" style="position:absolute; top:-40px;"></i>' : ''}
-                    <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${topMap[id].avatar}&backgroundColor=transparent" class="podium-avatar">
-                    <div class="podium-name">${topMap[id].name}</div>
-                    <div class="podium-score">${scores[id]}</div>
-                    <div class="rank-num">${rank}</div>
-                </div>`;
-            });
-            podium.innerHTML = podiumHtml;
-
-            // วาดอันดับ 4-5
-            let runnerHtml = '';
-            for (let i = 3; i < sortedIds.length; i++) {
-                let id = sortedIds[i];
-                if (topMap[id]) {
-                    runnerHtml += `<div class="runner-up-item d-flex justify-content-between p-2 bg-white rounded mb-2 shadow-sm">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-secondary">${i+1}</span>
+        // 5. วาดอันดับ 4-5
+        let runnerHtml = '';
+        for (let i = 3; i < sortedIds.length; i++) {
+            let id = sortedIds[i];
+            if (topMap[id]) {
+                runnerHtml += `
+                    <div class="runner-up-item d-flex justify-content-between p-2 bg-white rounded mb-2 shadow-sm">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="badge bg-secondary rounded-pill">${i+1}</span>
                             <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${topMap[id].avatar}&backgroundColor=transparent" style="width:30px;">
-                            <span class="fw-bold">${topMap[id].name}</span>
+                            <span class="fw-bold text-dark">${topMap[id].name}</span>
                         </div>
                         <span class="text-primary fw-bold">${scores[id]} pts</span>
                     </div>`;
-                }
             }
-            runners.innerHTML = runnerHtml;
-        } catch(e) { console.error(e); }
+        }
+        runners.innerHTML = runnerHtml;
+
+    } catch (err) {
+        console.error("Leaderboard Rendering Error:", err);
+        podium.innerHTML = '<h5 class="text-white mt-5">คำนวณอันดับขัดข้อง...</h5>';
     }
+}
 
 // --- START GIFT FEATURE LOGIC ---
 window.openGiftModal = async function() {
