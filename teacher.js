@@ -375,7 +375,23 @@
         
         let rHtml = '';
         roomsData.forEach(function(r) {
-            rHtml += '<div class="col-md-4 col-sm-6"><div class="card room-card h-100 p-3 shadow-sm" onclick="enterRoom(\'' + r + '\')"><div class="card-body text-center"><i class="bi bi-door-open text-primary" style="font-size:3rem;"></i><h4 class="mt-3 fw-bold">' + r + '</h4></div><div class="card-footer bg-transparent border-0 text-center"><button class="btn btn-outline-danger btn-sm" onclick="event.stopPropagation(); deleteRoom(\'' + r + '\')"><i class="bi bi-trash"></i> ลบ</button></div></div></div>';
+            rHtml += `
+                <div class="col-md-4 col-sm-6">
+                    <div class="card room-card h-100 p-3 shadow-sm" onclick="enterRoom('${r}')">
+                        <div class="card-body text-center">
+                            <i class="bi bi-door-open text-primary" style="font-size:3rem;"></i>
+                            <h4 class="mt-3 fw-bold">${r}</h4>
+                        </div>
+                        <div class="card-footer bg-transparent border-0 text-center d-flex justify-content-center gap-2">
+                            <button class="btn btn-outline-warning btn-sm px-3" onclick="event.stopPropagation(); editRoomName('${r}')">
+                                <i class="bi bi-pencil-square"></i> แก้ไข
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm px-3" onclick="event.stopPropagation(); deleteRoom('${r}')">
+                                <i class="bi bi-trash"></i> ลบ
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
         });
         c.innerHTML = rHtml;
     }
@@ -425,6 +441,30 @@
                         loadAllData();
                     }
                 }
+            }
+        });
+    }
+
+    function editRoomName(oldName) {
+        Swal.fire({
+            title: 'เปลี่ยนชื่อห้องเรียน',
+            input: 'text',
+            inputValue: oldName,
+            showCancelButton: true,
+            confirmButtonText: 'บันทึกชื่อใหม่',
+            cancelButtonText: 'ยกเลิก',
+            inputValidator: (value) => {
+                if (!value) return 'กรุณาระบุชื่อห้องด้วยครับ';
+                if (value === oldName) return 'ชื่อห้องต้องไม่ซ้ำกับชื่อเดิมครับ';
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({ title: 'กำลังเปลี่ยนชื่อห้อง...', didOpen: () => Swal.showLoading() });
+                google.script.run.withSuccessHandler(function() {
+                    Swal.close();
+                    Toast.fire({ icon: 'success', title: 'เปลี่ยนชื่อห้องเป็น "' + result.value + '" สำเร็จ' });
+                    loadAllData(); // รีโหลดรายการห้องใหม่
+                }).renameRoom(oldName, result.value.trim());
             }
         });
     }
