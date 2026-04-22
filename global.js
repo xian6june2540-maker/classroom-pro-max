@@ -1,47 +1,46 @@
 // =====================================
-// สะพานเชื่อม Vercel -> Google Apps Script
+// สะพานเชื่อม Frontend -> Vercel API Backend 🚀
 // =====================================
-const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx8vuQbirpiRHJm8QwmypPQ9cJpFPeC0YoqZPBYXg0VO6ByRJX44sGN6L6SSYmg-SSY/exec";
+const BACKEND_URL = "/api/main"; // เปลี่ยนที่อยู่ให้ชี้มาที่ Vercel ของฟลุ๊ค
 
-const createGASProxy = (successHandler, failureHandler) => {
+const createVercelProxy = (successHandler, failureHandler) => {
     return new Proxy({}, {
         get: function(target, prop) {
-            if (prop === 'withSuccessHandler') return (cb) => createGASProxy(cb, failureHandler);
-            if (prop === 'withFailureHandler') return (cb) => createGASProxy(successHandler, cb);
+            if (prop === 'withSuccessHandler') return (cb) => createVercelProxy(cb, failureHandler);
+            if (prop === 'withFailureHandler') return (cb) => createVercelProxy(successHandler, cb);
             
             return function(...args) {
-                // 🛠️ ดักจับ: ถ้าเป็นการยิงแจ้งเตือน ให้ข้ามกำแพง CORS (no-cors)
-                const isNotify = (prop === 'sendOneSignalNotification');
-
-                fetch(GAS_WEB_APP_URL, {
+                // ยิงข้อมูลไปที่ Vercel Serverless Function
+                fetch(BACKEND_URL, {
                     method: 'POST',
-                    mode: isNotify ? 'no-cors' : 'cors', 
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: prop, params: args })
                 })
-                .then(r => {
-                    if (isNotify) return { success: true }; // no-cors อ่าน json ไม่ได้อยู่แล้ว ให้ข้ามไปเลย
-                    return r.json();
-                })
+                .then(r => r.json())
                 .then(res => {
                     if (res && res.success) {
                         if (successHandler) successHandler(res.data);
-                    } else if (res && !isNotify) {
-                        if (failureHandler) failureHandler(new Error(res.message));
-                        else console.error("API Error:", res.message);
+                    } else {
+                        const errorMsg = res.error || res.message || "เกิดข้อผิดพลาดที่ระบบหลังบ้าน";
+                        if (failureHandler) failureHandler(new Error(errorMsg));
+                        else console.error("API Error:", errorMsg);
                     }
                 })
                 .catch(err => {
-                    if (!isNotify && failureHandler) failureHandler(err);
+                    console.error("Fetch Error:", err);
+                    if (failureHandler) failureHandler(err);
                 });
             }
         }
     });
 };
 
-window.google = { script: { run: createGASProxy(null, null) } };
-// =====================================    // =====================================
-    // GLOBAL VARIABLES & UTILS
-    // =====================================
+// จำลอง Object google.script.run ให้ระบบเดิมทำงานต่อได้
+window.google = { script: { run: createVercelProxy(null, null) } };
+
+// =====================================
+// GLOBAL VARIABLES & UTILS
+// =====================================
     
     const Toast = Swal.mixin({
         toast: true,
@@ -96,7 +95,7 @@ window.google = { script: { run: createGASProxy(null, null) } };
                 return;
             }
             
-            // ขอ URL และ Key จาก Backend (ยอมใช้โควตา GAS แค่ 1 ครั้งตอนโหลดเว็บแรกสุด)
+            // ขอ URL และ Key จาก Backend ตัวใหม่บน Vercel
             google.script.run.withSuccessHandler(function(creds) {
                 if(!creds || !creds.url || !creds.key) {
                     console.warn("Supabase credentials missing.");
@@ -124,7 +123,7 @@ window.google = { script: { run: createGASProxy(null, null) } };
                   });
                   
                 resolve(true); // แจ้งว่าเชื่อมต่อสำเร็จแล้ว
-            }).getPublicSupabaseCreds();
+            }).getPublicSupabaseCreds(); // 🌟 ฟังก์ชันนี้ถูกรวมเข้าไปใน api/main.js ของ Vercel แล้ว
         });
     }
 
@@ -495,6 +494,6 @@ window.google = { script: { run: createGASProxy(null, null) } };
     });
 
 window.sendPushNotification = function(title, message) {
-    // ใช้ Proxy ตัวเดิมที่มึงทำไว้ แต่แก้เรื่อง CORS ให้แล้ว
+    // ใช้ Proxy ตัวใหม่ที่วิ่งเข้า Vercel
     google.script.run.sendOneSignalNotification(title, message);
 };
