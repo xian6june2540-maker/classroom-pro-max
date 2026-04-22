@@ -385,14 +385,23 @@
         showAppModal('roomModal');
     }
 
-    function saveRoom() {
+    async function saveRoom() {
         const r = document.getElementById('newRoomName').value.trim();
         if (!r) return;
         hideAppModal('roomModal');
-        google.script.run.withSuccessHandler(function() {
-            Toast.fire({ icon: 'success', title: 'เพิ่มห้องแล้ว' });
-            loadAllData();
-        }).saveRoom(r);
+        
+        Swal.fire({ title: 'กำลังสร้างห้อง...', didOpen: function() { Swal.showLoading(); } });
+        
+        if (supabaseClient) {
+            const { error } = await supabaseClient.from('rooms').insert([{ room_name: r }]);
+            if (error) {
+                Swal.fire('ผิดพลาด', 'ไม่สามารถสร้างห้องได้: ' + error.message, 'error');
+            } else {
+                Swal.close();
+                Toast.fire({ icon: 'success', title: 'เพิ่มห้องแล้ว' });
+                loadAllData();
+            }
+        }
     }
 
     function deleteRoom(r) {
@@ -402,14 +411,20 @@
             showCancelButton: true,
             confirmButtonColor: '#d33',
             confirmButtonText: 'ลบ'
-        }).then(function(res) {
+        }).then(async function(res) {
             if (res.isConfirmed) {
                 Swal.fire({ title: 'กำลังลบ...', didOpen: function() { Swal.showLoading(); } });
-                google.script.run.withSuccessHandler(function() {
-                    Swal.close();
-                    Toast.fire({ icon: 'success', title: 'ลบห้องสำเร็จ' });
-                    loadAllData();
-                }).deleteRoom(r);
+                
+                if (supabaseClient) {
+                    const { error } = await supabaseClient.from('rooms').delete().eq('room_name', r);
+                    if (error) {
+                        Swal.fire('ผิดพลาด', 'ไม่สามารถลบห้องได้: ' + error.message, 'error');
+                    } else {
+                        Swal.close();
+                        Toast.fire({ icon: 'success', title: 'ลบห้องสำเร็จ' });
+                        loadAllData();
+                    }
+                }
             }
         });
     }
