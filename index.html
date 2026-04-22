@@ -127,32 +127,6 @@
         <div class="tab-content">
           <div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
             
-            <div class="ai-chat-card mb-4 shadow-sm border-0" style="border-radius: 15px; overflow: hidden; background: #fff;">
-                <div class="ai-chat-header d-flex justify-content-between align-items-center p-3" data-bs-toggle="collapse" data-bs-target="#aiChatCollapse" style="background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); cursor: pointer; color: white;" onclick="triggerAiChatOnce()">
-                    <div class="d-flex align-items-center gap-2 fw-bold">
-                        <i class="bi bi-robot fs-5"></i>
-                        <span>คุยกับจีมิน (เพื่อน AI) 💬</span>
-                    </div>
-                    <i class="bi bi-chevron-down" id="aiChatToggleIcon" style="transition: transform 0.3s;"></i>
-                </div>
-                <div id="aiChatCollapse" class="collapse">
-                    <div class="card-body p-0">
-                        <div id="aiChatHistory" class="p-3" style="height: 250px; overflow-y: auto; background: #f8f9fa;">
-                            <div class="text-center text-muted small mt-4" id="aiChatPlaceholder">
-                                <i class="bi bi-stars fs-3"></i><br>
-                                รอแป๊บนึงนะ กำลังปลุกจีมิน...
-                            </div>
-                        </div>
-                        <div class="p-2 border-top d-flex gap-2 align-items-center" style="background: #fff;">
-                            <input type="text" id="aiChatInput" class="form-control border-0 bg-light rounded-pill px-3 py-2" placeholder="พิมพ์คุยกับจีมินตรงนี้..." onkeypress="if(event.key === 'Enter') sendAiChatMessage()">
-                            <button class="btn btn-primary rounded-pill px-3 py-2 shadow-sm fw-bold" onclick="sendAiChatMessage()" id="btnSendAiChat">
-                                <i class="bi bi-send-fill"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div id="countdownWidget" class="deadline-widget hidden">
                 <h5 class="fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill text-warning"></i> ภารกิจด่วนที่สุด (ใกล้หมดเวลา!)</h5>
                 <h4 id="cdTaskName" class="text-white mt-2 mb-0">--- ชื่องาน ---</h4>
