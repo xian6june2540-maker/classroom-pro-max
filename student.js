@@ -2143,77 +2143,68 @@
 
 // 3. จัดการสถานะหน้าจอตามคำสั่งครู (รวมระบบคัดกรองและแสดงโจทย์ก่อน)
 // ✅ แก้ไขฟังก์ชันจัดการสถานะควิซฝั่งนักเรียน (วางทับของเดิมได้เลย)
+// ✅ แก้ไขฟังก์ชันจัดการสถานะควิซ (วางทับของเดิมทั้งก้อน)
     async function handleLiveQuizChange(sessionData) {
         if (!sessionData) return;
 
-        // 1. จัดการโครงสร้าง JSON คำถาม (หัวใจสำคัญป้องกัน undefined)
         let rawQ = sessionData.questions_json;
         if (typeof rawQ === 'string') {
-            try { rawQ = JSON.parse(rawQ); } catch(e) { console.error("JSON Parse Error"); }
+            try { rawQ = JSON.parse(rawQ); } catch(e) {}
         }
-        
-        // สกัดเอาเฉพาะ Array ของคำถามออกมาให้ได้ ไม่ว่าจะมาจากคีย์ไหน
         sessionData.questions_json = Array.isArray(rawQ) ? rawQ : (rawQ.questions || rawQ.data || []);
         
-        // บันทึกลงตัวแปร Global ของฝั่งเด็ก
         sqSessionData = sessionData; 
 
         const modal = document.getElementById('studentLiveQuizModal');
         const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
 
-        // 🛡️ ระบบคัดกรอง: ถ้าเกมเริ่มไปแล้วแต่เราเพิ่งเปิดแอปและไม่ได้กดเข้าร่วม ให้ปิดหน้าจอ
         if (sessionData.status !== 'setup' && !sqHasJoined) {
             forceCloseLiveQuiz();
             return;
         }
 
-        // เปิดหน้าต่าง Modal อัตโนมัติถ้ายังไม่เปิด
         if (!modal.classList.contains('show')) bsModal.show();
 
-        // เช็คว่าเป็นการเปลี่ยนข้อใหม่หรือเปล่า ถ้าใช่ให้รีเซ็ตสถานะตอบ
         if (sessionData.current_q_index !== sqLastSeenQIndex) {
             sqHasAnswered = false;
             sqLastSeenQIndex = sessionData.current_q_index;
-            activePowerUp = null; // รีเซ็ตไอเทม
+            activePowerUp = null;
         }
 
-        // 2. จัดการหน้าจอตามสถานะที่รับมาจากครู
         if (sessionData.status === 'setup') {
             showSqScreen('wait');
             if (!sqHasJoined) {
-                document.getElementById('sqWaitText').innerHTML = 'เลือกวิธีเข้าสู่สนามรบ';
-                // วาดปุ่มเข้าร่วมใหม่เพื่อให้มั่นใจว่ากดได้
-                document.getElementById('partyActionArea').innerHTML = `
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-primary btn-lg rounded-pill fw-bold" onclick="joinLiveQuiz()">
-                            <i class="bi bi-person-fill"></i> เข้าเล่นคนเดียว
-                        </button>
-                        <button class="btn btn-warning btn-lg rounded-pill fw-bold text-dark" onclick="openPartySetup()">
-                            <i class="bi bi-people-fill"></i> ตั้งทีมปาร์ตี้
-                        </button>
-                    </div>`;
+                // 🌟 จุดสำคัญ: ถ้ายังไม่ได้กดเริ่ม และยังไม่ได้อยู่ในหน้าเลือกปาร์ตี้ (เช็คจากข้อความบนจอ)
+                // ถึงจะอนุญาตให้วาดปุ่มเลือกวิธีเข้าใหม่ได้ ป้องกันจอดีดตอนเลื่อนหาเพื่อน
+                let currentWaitText = document.getElementById('sqWaitText').innerHTML;
+                if (!currentWaitText.includes('ดึงเพื่อนเข้าปาร์ตี้')) {
+                    document.getElementById('sqWaitText').innerHTML = 'เลือกวิธีเข้าสู่สนามรบ';
+                    document.getElementById('partyActionArea').innerHTML = `
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary btn-lg rounded-pill fw-bold" onclick="joinLiveQuiz()">
+                                <i class="bi bi-person-fill"></i> เข้าเล่นคนเดียว
+                            </button>
+                            <button class="btn btn-warning btn-lg rounded-pill fw-bold text-dark" onclick="openPartySetup()">
+                                <i class="bi bi-people-fill"></i> ตั้งทีมปาร์ตี้
+                            </button>
+                        </div>`;
+                }
             } else {
                 document.getElementById('sqWaitText').innerHTML = 'เข้าห้องเรียบร้อย!<br>เตรียมสมองให้พร้อมนะ 🧠';
                 document.getElementById('partyActionArea').innerHTML = '';
             }
         } 
         else if (sessionData.status === 'show_question') {
-            // ครูปล่อยเฉพาะโจทย์
             renderSqQuestionOnly(sessionData);
         }
         else if (sessionData.status === 'active') {
-            // ครูปล่อยตัวเลือกให้ตอบ
-            if (!sqHasAnswered) {
-                renderSqQuestion(sessionData);
-            }
+            if (!sqHasAnswered) renderSqQuestion(sessionData);
         }
         else if (sessionData.status === 'show_answer') {
-            // ครูสั่งโชว์เฉลย
             showSqScreen('result');
             checkSqResult();
         }
         else if (sessionData.status === 'show_leaderboard') {
-            // ครูสั่งโชว์อันดับ
             showSqScreen('leaderboard');
             calculateAndShowLeaderboard();
         }
@@ -2462,76 +2453,71 @@
         }
     }
 
+    // ✅ แก้ไขฟังก์ชันส่งคำตอบ (วางทับของเดิมทั้งก้อน)
     async function submitSqAnswer(btnElement, selectedAnswer) {
         if (sqHasAnswered) return;
         sqHasAnswered = true;
         if(sqTimerInterval) clearInterval(sqTimerInterval);
 
-        let responseTime = Date.now() - sqQuestionStartMs;
-        if (activePowerUp === 'p2') responseTime = 0; 
-        const isCorrect = (selectedAnswer === sqCurrentCorrectAnswer);
+        // 🌟 1. ตรวจคำตอบแบบล้างช่องว่าง (Case-insensitive & Trim)
+        const correctAnswer = String(sqCurrentCorrectAnswer || "").trim();
+        const studentAnswer = String(selectedAnswer || "").trim();
+        const isCorrect = (studentAnswer === correctAnswer);
 
-        // 1. ปรับหน้าจอให้กระพริบตอบรับและเปลี่ยนหน้าทันที
         if (btnElement) {
             btnElement.style.border = "6px solid white";
             btnElement.style.transform = "scale(1.05)";
         }
         document.querySelectorAll('.quiz-btn-gigantic').forEach(b => b.disabled = true);
-
         showSqScreen('wait');
-        let partyCount = window.windowPartyMembers ? window.windowPartyMembers.length : 1;
-        
-        if (selectedAnswer === "TIMEOUT_NO_ANSWER") {
-            document.getElementById('sqWaitText').innerHTML = `<div class="mb-3 text-danger"><i class="bi bi-clock-history"></i> หมดเวลาส่งคำตอบ!</div>สมาชิกปาร์ตี้ ${partyCount} คนไม่ได้ส่งคำตอบในข้อนี้ครับ`;
-        } else {
-            document.getElementById('sqWaitText').innerHTML = `<div class="mb-3 text-warning"><i class="bi bi-stars"></i> ส่งคำตอบเรียบร้อย!</div>สถานะ: <b>แฝงร่างส่งแทนสมาชิก ${partyCount} คน</b><br>รอดูผลลัพธ์พร้อมกันน้า...`;
+
+        // 🌟 2. จัดการยอดสมาชิกปาร์ตี้
+        if (!window.windowPartyMembers || window.windowPartyMembers.length === 0) {
+            window.windowPartyMembers = [globalPortalStudent.id];
         }
+        let pCount = window.windowPartyMembers.length;
+        document.getElementById('sqWaitText').innerHTML = `ส่งคำตอบแล้ว!<br>แฝงร่างส่งแทนสมาชิก <b>${pCount} คน</b> เรียบร้อย`;
 
-        // 2. ส่งคำตอบไปยังฐานข้อมูล
         try {
-            if (!window.windowPartyMembers || window.windowPartyMembers.length === 0) {
-                window.windowPartyMembers = [globalPortalStudent.id];
-            }
-
-            const partyTasks = window.windowPartyMembers.map(sid => {
+            // 🌟 3. ส่งคำตอบเข้าฐานข้อมูล "ทุกคน" ในปาร์ตี้ (เพื่อให้ครูเห็นยอดตอบเพิ่มขึ้นตามจริง)
+            const answerTasks = window.windowPartyMembers.map(sid => {
                 return supabaseClient.from('live_quiz_responses').insert({
                     session_id: sqSessionData.id,
                     q_index: sqSessionData.current_q_index,
-                    student_id: sid,           
+                    student_id: sid,
                     answer: selectedAnswer,
-                    response_time: responseTime,
+                    response_time: Date.now() - sqQuestionStartMs,
                     is_correct: isCorrect
                 });
             });
+            await Promise.all(answerTasks);
 
-            await Promise.all(partyTasks);
-
+            // 🌟 4. ถ้าใช้โล่ (p3) แล้วตอบผิด ให้แจก EXP ปลอบใจทุกคนในปาร์ตี้
             if (!isCorrect && activePowerUp === 'p3') {
                 window.windowPartyMembers.forEach(sid => {
-                    google.script.run.addManualEXP(sid, 75); 
+                    google.script.run.addManualEXP(sid, 75);
                 });
             }
         } catch(e) {
-            console.error("Party Submit Error:", e);
+            console.error("Answer Submit Error:", e);
         }
     }
 
+    // ✅ แก้ไขฟังก์ชันเช็คผลลัพธ์ (วางทับของเดิมทั้งก้อน)
     async function checkSqResult() {
         try {
             const screen = document.getElementById('sqResultScreen');
             const icon = document.getElementById('sqResultIcon');
             const text = document.getElementById('sqResultText');
             const sub = document.getElementById('sqResultSubText');
+            screen.className = 'w-100';
 
-            screen.className = 'w-100'; // รีเซ็ตคลาสสีเก่า
-
-            const questions = Array.isArray(sqSessionData.questions_json) ? sqSessionData.questions_json : (sqSessionData.questions_json.questions || []);
+            const questions = sqSessionData.questions_json;
             const qData = questions[sqSessionData.current_q_index];
-            
-            const explanationText = (qData && qData.explanation) ? qData.explanation : "ไม่มีคำอธิบายเพิ่มเติม";
-            const correctAnswerText = (qData && qData.answer) ? qData.answer : "-";
+            const explanationText = qData.explanation || "ไม่มีคำอธิบายเพิ่มเติม";
+            const correctAnswerText = String(qData.answer || "").trim();
 
-            // 🌟 แก้บั๊กตรงนี้: เปลี่ยนจาก .single() เป็น .limit(1) ป้องกันแอปแครชกรณีเด็กตอบไม่ทัน
+            // ดึงข้อมูลคำตอบของตัวเองจาก DB มาเช็ค
             let { data } = await supabaseClient.from('live_quiz_responses')
                 .select('is_correct, response_time')
                 .eq('session_id', sqSessionData.id)
@@ -2541,56 +2527,32 @@
 
             let myAns = (data && data.length > 0) ? data[0] : null;
 
-            let expAndBonusHtml = '';
             let explanationHtml = `
                 <div class="mt-3 p-2 bg-white rounded shadow-sm text-dark text-center" style="font-size: 1rem; max-width: 90%; margin: 0 auto; border: 2px solid #198754;">
                     <b class="text-success"><i class="bi bi-check-circle-fill"></i> เฉลย:</b> ${correctAnswerText}
                 </div>
-                <div class="mt-2 p-3 bg-white rounded shadow-sm text-dark text-start" style="font-size: 0.95rem; max-width: 90%; margin: 0 auto; border-left: 5px solid #0d6efd;">
+                <div class="mt-2 p-3 bg-white rounded shadow-sm text-dark text-start" style="font-size: 0.9rem; max-width: 90%; margin: 0 auto; border-left: 5px solid #0d6efd;">
                     <b class="text-primary"><i class="bi bi-lightbulb-fill text-warning"></i> คำอธิบาย:</b><br>${explanationText}
-                </div>
-            `;
+                </div>`;
 
-            if (myAns) {
-                if (myAns.is_correct) {
-                    screen.style.background = '';
-                    screen.classList.add('anim-correct');
-                    icon.innerText = '✅';
-                    text.innerText = 'ยอดเยี่ยม! ตอบถูกต้อง';
-                    
-                    let timeBonus = 0;
-                    if (myAns.response_time < 10000) timeBonus = Math.floor((10000 - myAns.response_time) / 66.6);
-                    if (timeBonus < 0) timeBonus = 0; if (timeBonus > 150) timeBonus = 150;
-                    
-                    expAndBonusHtml = `<span class="badge bg-warning text-dark mt-3 fs-5 shadow-sm">+150 EXP | โบนัสความเร็ว +${timeBonus}</span>`;
-                    sub.innerHTML = `ตอบใน ${(myAns.response_time/1000).toFixed(2)} วินาที<br>${expAndBonusHtml}${explanationHtml}`;
-                } else {
-                    if (activePowerUp === 'p3') {
-                        screen.classList.add('anim-correct');
-                        screen.style.background = 'linear-gradient(135deg, #f1c40f 0%, #e67e22 100%)';
-                        icon.innerText = '🛡️';
-                        text.innerText = 'รอดหวุดหวิด!';
-                        expAndBonusHtml = `<span class="badge bg-dark text-white mt-3 fs-5 shadow-sm">+75 EXP (ปลอบใจ)</span>`;
-                        sub.innerHTML = `ตอบผิด แต่โล่ทำงาน!<br>${expAndBonusHtml}${explanationHtml}`;
-                    } else {
-                        screen.style.background = ''; 
-                        screen.classList.add('anim-wrong');
-                        icon.innerText = '❌';
-                        text.innerText = 'ว้า... ผิดไปนิดเดียว';
-                        sub.innerHTML = `ตั้งสติแล้วพยายามใหม่ในข้อถัดไปนะ!<br>${explanationHtml}`;
-                    }
-                }
+            if (myAns && myAns.is_correct) {
+                screen.classList.add('anim-correct');
+                icon.innerText = '✅';
+                text.innerText = 'ยอดเยี่ยม! คุณตอบถูก';
+                let timeBonus = myAns.response_time < 10000 ? Math.floor((10000 - myAns.response_time) / 66.6) : 0;
+                sub.innerHTML = `ตอบใน ${(myAns.response_time/1000).toFixed(2)} วินาที<br><span class="badge bg-warning text-dark mt-2 fs-6">+150 EXP | โบนัสความเร็ว +${timeBonus}</span>${explanationHtml}`;
+            } else if (myAns && activePowerUp === 'p3') {
+                screen.style.background = 'linear-gradient(135deg, #f1c40f 0%, #e67e22 100%)';
+                icon.innerText = '🛡️';
+                text.innerText = 'รอดเพราะโล่!';
+                sub.innerHTML = `คำตอบของคุณไม่ถูกต้อง แต่โล่ช่วยชีวิตไว้!<br><span class="badge bg-dark text-white mt-2 fs-6">+75 EXP (ปลอบใจ)</span>${explanationHtml}`;
             } else {
-                // กรณีเด็กไม่ได้กดตอบ หรือหมดเวลาก่อน
-                screen.style.background = '';
                 screen.classList.add('anim-wrong');
-                icon.innerText = '⏳';
-                text.innerText = 'ตอบไม่ทัน!';
-                sub.innerHTML = `คุณไม่ได้ส่งคำตอบในข้อนี้<br>${explanationHtml}`;
+                icon.innerText = myAns ? '❌' : '⏳';
+                text.innerText = myAns ? 'ว้า... ผิดไปนิดเดียว' : 'ตอบไม่ทัน!';
+                sub.innerHTML = `พยายามใหม่ในข้อถัดไปนะ!<br>${explanationHtml}`;
             }
-        } catch (e) {
-            console.error("Error showing result:", e);
-        }
+        } catch (e) { console.error(e); }
     }
 
     // 7. นักเรียนกดปุ่ม "รอลุยข้อต่อไป" (หลังดูเฉลยเสร็จ)
@@ -2923,41 +2885,18 @@ window.toggleSelectMember = function(el, id) {
         }
     }
 
-// --- ฟังก์ชันดึงรายชื่อเพื่อน เวอร์ชั่น "ล็อกจอนิ่ง" (แก้ไขระบบแก้ค้างและกรองชื่อ) ---
+// ✅ แก้ไขฟังก์ชันโหลดรายชื่อปาร์ตี้ (วางทับของเดิมทั้งก้อน)
 async function renderPartySelection() {
     const area = document.getElementById('partySelectionArea');
-    if (!area) return;
+    if (!area || sqHasJoined) return; 
 
+    // 🌟 ล็อคตำแหน่งการเลื่อนไว้ก่อนอัปเดตข้อมูล
     const currentScrollPos = area.scrollTop;
 
     try {
-        // ตรวจสอบความพร้อมระบบ
-        if (!supabaseClient) {
-            area.innerHTML = '<div class="text-center text-danger py-4 small">ระบบฐานข้อมูลยังไม่พร้อม<br>กรุณารอสักครู่แล้วลองใหม่ครับ</div>';
-            return;
-        }
-        if (!globalPortalStudent || !globalPortalStudent.room) {
-            area.innerHTML = '<div class="text-center text-danger py-4 small">ไม่พบข้อมูลห้องเรียนของคุณ</div>';
-            return;
-        }
-
-        // 1. ดึงรายชื่อเพื่อน (ทำความสะอาดชื่อห้องก่อนค้นหา)
         const myRoom = globalPortalStudent.room.toString().trim();
-        let { data: friends, error: err1 } = await supabaseClient.from('students')
-            .select('id, name')
-            .eq('room', myRoom)
-            .neq('id', globalPortalStudent.id)
-            .order('id', { ascending: true });
-
-        if (err1) throw err1;
-
-        // 2. ดึงรายชื่อคนที่เข้าห้องไปแล้ว
-        let { data: joined, error: err2 } = await supabaseClient.from('live_quiz_responses')
-            .select('student_id')
-            .eq('session_id', sqSessionData.id)
-            .eq('q_index', -1);
-
-        if (err2) throw err2;
+        let { data: friends } = await supabaseClient.from('students').select('id, name').eq('room', myRoom).neq('id', globalPortalStudent.id).order('id', { ascending: true });
+        let { data: joined } = await supabaseClient.from('live_quiz_responses').select('student_id').eq('session_id', sqSessionData.id).eq('q_index', -1);
 
         let joinedIds = (joined || []).map(j => j.student_id);
         let availableFriends = (friends || []).filter(f => !joinedIds.includes(f.id));
@@ -2965,40 +2904,22 @@ async function renderPartySelection() {
         let html = '';
         if (availableFriends.length > 0) {
             availableFriends.forEach(f => {
-                let cleanName = f.name.replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
                 let isChecked = (window.windowPartyMembers && window.windowPartyMembers.includes(f.id)) ? 'active-party' : '';
-                
                 html += `
-                    <div class="party-item-row ${isChecked}" 
-                         data-id="${f.id}" 
-                         onclick="toggleSelectMember(this, '${f.id}')">
+                    <div class="party-item-row ${isChecked}" onclick="toggleSelectMember(this, '${f.id}')">
                         <div class="d-flex justify-content-between align-items-center w-100">
-                            <span><b>${f.id}</b> - ${cleanName}</span>
+                            <span><b>${f.id}</b> - ${f.name}</span>
                             <i class="bi ${isChecked ? 'bi-check-circle-fill' : 'bi-plus-circle'}"></i>
                         </div>
-                    </div>
-                `;
+                    </div>`;
             });
         } else {
-            if (friends && friends.length === 0) {
-                html = '<div class="text-center text-muted py-4 small">ไม่พบเพื่อนคนอื่นในห้อง ' + myRoom + '</div>';
-            } else {
-                html = '<div class="text-center text-success py-4 small">เพื่อนทุกคนในห้องเข้าเกมหมดแล้วครับ 🚀</div>';
-            }
+            html = '<div class="text-center text-success py-4 small">เพื่อนทุกคนเข้าเกมหมดแล้วครับ 🚀</div>';
         }
         
         area.innerHTML = html;
+        // 🌟 คืนค่าตำแหน่งการเลื่อนเดิม ป้องกันจอกระโดด
         area.scrollTop = currentScrollPos;
 
-    } catch(e) { 
-        console.error("Party List Error:", e);
-        area.innerHTML = `
-            <div class="text-center py-4">
-                <div class="text-danger small mb-2">โหลดข้อมูลไม่สำเร็จ: ${e.message}</div>
-                <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="renderPartySelection()">
-                    <i class="bi bi-arrow-clockwise"></i> ลองโหลดใหม่
-                </button>
-            </div>
-        `;
-    }
+    } catch(e) { console.error(e); }
 }

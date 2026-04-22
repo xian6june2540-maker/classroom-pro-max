@@ -416,21 +416,21 @@
 
           <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
-                  <label class="form-label fw-bold text-info mb-0" style="color: #667eea !important;"><i class="bi bi-robot"></i> GEMINI_API_KEY (AI วิเคราะห์)</label>
-                  <button class="btn btn-sm btn-outline-info fw-bold px-3" style="color: #667eea; border-color: #667eea;" id="btnEdit_GEMINI_API_KEY" onclick="toggleConfigEdit('Groq API Key (คั่นด้วยลูกน้ำ)')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+                  <label class="form-label fw-bold text-info mb-0" style="color: #f51535 !important;"><i class="bi bi-lightning-charge-fill"></i> GROQ_API_KEY (AI ประสิทธิภาพสูง)</label>
+                  <button class="btn btn-sm btn-outline-danger fw-bold px-3" id="btnEdit_GEMINI_API_KEY" onclick="toggleConfigEdit('GEMINI_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
               </div>
               <div class="form-text text-muted small mb-2">
-                  <b>วิธีหา:</b> ไปที่เว็บ <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a> ล็อกอินด้วยบัญชี Google > กดปุ่ม <b>Create API key</b> > คัดลอกรหัสยาวๆ ที่ได้มาใส่<br>
-                  <b>ความสำคัญ:</b> ระบบจะใช้คีย์นี้เชื่อมต่อกับ AI (Gemini) เพื่อทำหน้าที่เป็นผู้ช่วยแนะแนวส่วนตัวให้นักเรียน โดยจะอ่านสถิติ (การมาเรียน, การส่งงาน, EXP) แล้วเขียนคำแนะนำและให้กำลังใจแบบอัตโนมัติในหน้าแดชบอร์ดนักเรียน
+                  <b>วิธีหา:</b> ไปที่เว็บ <a href="https://console.groq.com/keys" target="_blank" class="text-danger fw-bold">Groq Console</a> > กดปุ่ม <b>Create API Key</b> > คัดลอกรหัสที่ขึ้นต้นด้วย <b>gsk_</b> มาใส่ (ใส่หลายคีย์คั่นด้วยลูกน้ำได้เลย)<br>
+                  <b>ความสำคัญ:</b> ระบบจะใช้คีย์นี้เชื่อมต่อกับ AI (Llama 3.3) ซึ่งประมวลผลเร็วกว่าเดิม 10 เท่า เพื่อใช้ในการวิเคราะห์พฤติกรรม ตรวจงานด้วยตา AI และสร้างบอส/ควิซแบบเรียลไทม์
               </div>
               <div id="view_GEMINI_API_KEY" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
-              <div id="edit_GEMINI_API_KEY" class="hidden mt-3 p-3 border rounded bg-light" style="border-color: #667eea !important;">
-                  <label class="small fw-bold mb-1">ระบุข้อมูลใหม่:</label>
-                  <input type="text" id="input_GEMINI_API_KEY" class="form-control mb-2" placeholder="เช่น AIzaSyA...">
+              <div id="edit_GEMINI_API_KEY" class="hidden mt-3 p-3 border border-danger rounded bg-light">
+                  <label class="small fw-bold mb-1">ระบุคีย์ Groq ใหม่ (gsk_...):</label>
+                  <input type="text" id="input_GEMINI_API_KEY" class="form-control mb-2" placeholder="เช่น gsk_xxxxxxx,gsk_yyyyyyy">
                   <label class="small fw-bold text-danger mb-1">ใส่ PIN ของครูเพื่อยืนยันการบันทึก:</label>
                   <input type="password" id="pin_GEMINI_API_KEY" class="form-control mb-3" placeholder="รหัส PIN ปัจจุบัน">
                   <div class="d-flex gap-2">
-                      <button class="btn text-white btn-sm w-50 fw-bold" style="background-color: #667eea;" onclick="saveSingleConfig('GEMINI_API_KEY')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
+                      <button class="btn btn-danger btn-sm w-50 fw-bold" onclick="saveSingleConfig('GEMINI_API_KEY')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
                       <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('GEMINI_API_KEY')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
                   </div>
               </div>

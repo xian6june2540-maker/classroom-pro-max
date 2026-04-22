@@ -1766,75 +1766,73 @@
     async function startTeacherLiveQuizControl() {
         showAppModal('teacherQuizControlModal');
         
-        // รีเซ็ตยอดคนเข้าห้อง
-        if (supabaseClient && liveQuizSessionId) {
-            let { count } = await supabaseClient.from('live_quiz_responses')
-                .select('*', { count: 'exact', head: true })
-                .eq('session_id', liveQuizSessionId)
-                .eq('q_index', -1);
-            joinedPlayersCount = count || 0;
-        } else {
-            joinedPlayersCount = 0;
-        }
+        // รีเซ็ตตัวนับ
+        let { count } = await supabaseClient.from('live_quiz_responses').select('*', { count: 'exact', head: true }).eq('session_id', liveQuizSessionId).eq('q_index', -1);
+        joinedPlayersCount = count || 0;
         
         prepareTeacherQuestionUI();
+        document.getElementById('tqAnswerCount').innerText = joinedPlayersCount + " คน";
         document.getElementById('tqStatusText').innerText = "รอเด็กๆ กดเข้าร่วมเกม...";
-        document.getElementById('tqStatusText').className = "text-danger fw-bold mb-3";
-        
         document.getElementById('btnReleaseQ').classList.remove('hidden');
         document.getElementById('btnReleaseOpt').classList.add('hidden');
         document.getElementById('btnShowAns').classList.add('hidden');
         document.getElementById('btnNextQ').classList.add('hidden');
-        
-        document.getElementById('tqAnswerCount').innerText = joinedPlayersCount + " คน";
 
-        // ดักฟัง Real-time แบบเจาะจง Session ID
         if (supabaseClient) {
             if (liveQuizChannel) supabaseClient.removeChannel(liveQuizChannel);
-            
-            liveQuizChannel = supabaseClient.channel('teacher-quiz-' + liveQuizSessionId)
-                .on('postgres_changes', { 
-                    event: 'INSERT', 
-                    schema: 'public', 
-                    table: 'live_quiz_responses'
-                }, payload => {
+            liveQuizChannel = supabaseClient.channel('teacher-realtime-' + liveQuizSessionId)
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_quiz_responses' }, payload => {
                     if (payload.new.session_id === liveQuizSessionId) {
+                        // 🌟 ถ้ามีคนเข้าห้อง (รวมปาร์ตี้) ยอดจะเด้งตามจำนวนจริง
                         if (payload.new.q_index === -1) {
                             joinedPlayersCount++;
                             document.getElementById('tqAnswerCount').innerText = joinedPlayersCount + " คน";
-                        } else if (payload.new.q_index === liveQuizCurrentIndex) {
-                            // นับจำนวนคนตอบข้อปัจจุบัน
-                            updateLiveAnswerCountUI();
+                        } 
+                        // 🌟 ถ้ามีคนตอบ (รวมปาร์ตี้)
+                        else if (payload.new.q_index === liveQuizCurrentIndex) {
+                            updateLiveAnswerCountUI(); // เรียกฟังก์ชันนับยอดตอบจริง
                         }
                     }
                 }).subscribe();
         }
     }
 
+    // 🌟 เพิ่มฟังก์ชันช่วยนับยอดตอบจริง (วางไว้ใต้ฟังก์ชันข้างบน)
+    async function updateLiveAnswerCountUI() {
+        let { count } = await supabaseClient.from('live_quiz_responses')
+            .select('*', { count: 'exact', head: true })
+            .eq('session_id', liveQuizSessionId)
+            .eq('q_index', liveQuizCurrentIndex)
+            .neq('student_id', 'DUMMY'); // ไม่นับแถวหลอกถ้ามี
+        
+        document.getElementById('tqAnswerCount').innerText = count + " / " + joinedPlayersCount + " คน";
+    }
+
     // เตรียมหน้าจอโชว์คำถามฝั่งครู
     function prepareTeacherQuestionUI() {
         const qData = liveQuizQuestions[liveQuizCurrentIndex];
         if (!qData) return;
-
-        // ระบบกันตาย: รองรับทั้งคีย์ q และ question
-        const questionText = qData.q || qData.question || "ไม่พบโจทย์";
+        const questionText = qData.q || qData.question || "โจทย์หาย";
         const options = qData.options || qData.choices || [];
+        const correctAnswer = String(qData.answer).trim(); // ดึงเฉลยมาเตรียมเทียบ
 
         document.getElementById('tqQuestionNumber').innerText = `ข้อที่ ${liveQuizCurrentIndex + 1} / ${liveQuizQuestions.length}`;
         document.getElementById('tqQuestionText').innerText = questionText;
         
         let html = '';
         options.forEach((opt, idx) => {
-            let isCorrect = (opt === qData.answer);
-            let bgClass = isCorrect ? 'bg-success text-white' : 'bg-light text-dark';
+            // 🌟 ไฮไลท์สีเขียวที่ข้อถูกเหมือนของเดิม
+            let isCorrect = (String(opt).trim() === correctAnswer);
+            let bgClass = isCorrect ? 'bg-success text-white shadow-lg scale-up' : 'bg-white text-dark';
+            let borderStyle = isCorrect ? 'border: 3px solid #198754;' : 'border: 1px solid #dee2e6;';
+            
             html += `
-                <div class="col-md-6">
-                    <div class="p-3 border rounded-3 ${bgClass} fw-bold d-flex justify-content-between mb-2">
-                        <span>${idx+1}. ${opt}</span>
-                        ${isCorrect ? '<span><i class="bi bi-check-circle-fill"></i></span>' : ''}
+                <div class="col-md-6 mb-3">
+                    <div class="p-3 rounded-4 fw-bold d-flex justify-content-between align-items-center ${bgClass}" style="${borderStyle} transition: 0.3s;">
+                        <span class="fs-5">${idx+1}. ${opt}</span>
+                        ${isCorrect ? '<span class="badge bg-white text-success px-2 py-1"><i class="bi bi-check-circle-fill"></i> เฉลย</span>' : ''}
                     </div>
-                </div>
-            `;
+                </div>`;
         });
         document.getElementById('tqOptionsContainer').innerHTML = html;
     }
