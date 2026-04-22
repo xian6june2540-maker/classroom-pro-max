@@ -727,9 +727,9 @@ CREATE INDEX idx_students_room ON students(room);
 CREATE INDEX idx_attendance_student ON attendance(student_id);
 CREATE INDEX idx_submissions_student ON submissions(student_id);
 CREATE INDEX idx_groups_members ON groups USING gin (members);
-CREATE INDEX idx_live_quiz_responses_session_q ON live_quiz_responses(session_id, q_index); -- เพิ่มมาเพื่อความไวของควิซ
-CREATE INDEX idx_boss_logs_boss_id ON boss_logs(boss_id); -- เพิ่มมาเพื่อความไวของเกมบอส
-ALTER TABLE live_quiz_responses SET (parallel_workers = 4); -- ช่วยให้ประมวลผลคำตอบพร้อมกันได้ไวขึ้น
+CREATE INDEX idx_live_quiz_responses_session_q ON live_quiz_responses(session_id, q_index);
+CREATE INDEX idx_boss_logs_boss_id ON boss_logs(boss_id);
+ALTER TABLE live_quiz_responses SET (parallel_workers = 4);
 
 -- ========================================================
 -- ส่วนที่ 2: ระบบตารางทิพย์ (VIEWS) สำหรับแยกรายชื่อนักเรียนตามห้อง
@@ -771,6 +771,24 @@ ALTER TABLE boss_quizzes REPLICA IDENTITY FULL;
 -- เปิดใช้งาน Publication
 DROP PUBLICATION IF EXISTS supabase_realtime;
 CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
+
+-- ========================================================
+-- ส่วนที่ 4: ปิดระบบความปลอดภัย RLS (เพื่อให้ใช้งานได้ทันที ไม่ติด Error)
+-- ========================================================
+ALTER TABLE rooms DISABLE ROW LEVEL SECURITY;
+ALTER TABLE students DISABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE announcements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE leaves DISABLE ROW LEVEL SECURITY;
+ALTER TABLE group_tasks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE groups DISABLE ROW LEVEL SECURITY;
+ALTER TABLE group_submissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE boss_quizzes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE boss_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE live_quiz_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE live_quiz_responses DISABLE ROW LEVEL SECURITY;
 </textarea>
           </div>
         </div>
