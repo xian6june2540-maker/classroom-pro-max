@@ -455,16 +455,30 @@
             cancelButtonText: 'ยกเลิก',
             inputValidator: (value) => {
                 if (!value) return 'กรุณาระบุชื่อห้องด้วยครับ';
-                if (value === oldName) return 'ชื่อห้องต้องไม่ซ้ำกับชื่อเดิมครับ';
+                if (value.trim() === oldName) return 'ชื่อห้องต้องไม่ซ้ำกับชื่อเดิมครับ';
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                Swal.fire({ title: 'กำลังเปลี่ยนชื่อห้อง...', didOpen: () => Swal.showLoading() });
-                google.script.run.withSuccessHandler(function() {
-                    Swal.close();
-                    Toast.fire({ icon: 'success', title: 'เปลี่ยนชื่อห้องเป็น "' + result.value + '" สำเร็จ' });
-                    loadAllData(); // รีโหลดรายการห้องใหม่
-                }).renameRoom(oldName, result.value.trim());
+                Swal.fire({ 
+                    title: 'กำลังเปลี่ยนชื่อห้อง...', 
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); } 
+                });
+
+                google.script.run
+                    .withFailureHandler(function(err) {
+                        Swal.close();
+                        Swal.fire('เกิดข้อผิดพลาดค้างระบบ', err.message, 'error');
+                    })
+                    .withSuccessHandler(function(res) {
+                        Swal.close();
+                        if (res && res.success) {
+                            Toast.fire({ icon: 'success', title: 'เปลี่ยนชื่อห้องเป็น "' + result.value + '" สำเร็จ' });
+                            loadAllData(); // รีโหลดรายการห้องใหม่
+                        } else {
+                            Swal.fire('เปลี่ยนชื่อไม่สำเร็จ', res ? res.message : 'ไม่ทราบสาเหตุ', 'error');
+                        }
+                    }).renameRoom(oldName, result.value.trim());
             }
         });
     }
