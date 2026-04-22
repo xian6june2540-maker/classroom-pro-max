@@ -2142,10 +2142,17 @@
         }
     }
 
+    // ✅ แก้ไข: จัดการสถานะ (เพิ่มระบบ Force Fetch กันหน้าจออันดับค้าง)
     async function handleLiveQuizChange(sessionData) {
-        if (!sessionData) return;
+        if (!sessionData || !sessionData.id) return;
 
-        // 1. จัดการโครงสร้าง JSON คำถาม
+        // 🌟 1. ดึงข้อมูลเต็มจาก DB อีกครั้งเพื่อให้ได้ข้อมูลที่ครบถ้วน (แก้ปัญหา Partial Data)
+        if (sessionData.status === 'show_leaderboard' || !sessionData.questions_json) {
+            const { data: freshData } = await supabaseClient.from('live_quiz_sessions').select('*').eq('id', sessionData.id).single();
+            if (freshData) sessionData = freshData;
+        }
+
+        // จัดการ JSON
         let rawQ = sessionData.questions_json;
         if (typeof rawQ === 'string') {
             try { rawQ = JSON.parse(rawQ); } catch(e) {}
@@ -2156,21 +2163,19 @@
         const modal = document.getElementById('studentLiveQuizModal');
         const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
 
-        // 🛡️ ระบบคัดกรอง: ถ้าเกมเริ่มไปแล้วแต่ไม่ได้กดเข้าร่วม ให้ปิดหน้าจอ
         if (sessionData.status !== 'setup' && !sqHasJoined) {
             forceCloseLiveQuiz();
             return;
         }
         if (!modal.classList.contains('show')) bsModal.show();
 
-        // 🏆 [จุดสำคัญ 1]: ถ้าครูสั่งโชว์อันดับ ให้ข้ามทุกเงื่อนไขแล้วแสดงทันที
+        // 🏆 [จุดสำคัญ]: ถ้าครูสั่งโชว์อันดับ ให้แสดงผลทันที
         if (sessionData.status === 'show_leaderboard') {
             showSqScreen('leaderboard');
             calculateAndShowLeaderboard();
             return; 
         }
 
-        // เช็คการเปลี่ยนข้อใหม่
         if (sessionData.current_q_index !== sqLastSeenQIndex) {
             sqHasAnswered = false;
             sqResultSeen = false; 
@@ -2178,12 +2183,9 @@
             activePowerUp = null;
         }
 
-        // 2. ควบคุมหน้าจอตามสถานะ
         if (sessionData.status === 'setup') {
-            // 🌟 กันจอดีด: ถ้ากำลังเลื่อนหาเพื่อนปาร์ตี้อยู่ ห้ามรีเฟรชหน้าจอทับ
-            let waitText = document.getElementById('sqWaitText').innerHTML;
-            if (waitText.includes('ดึงเพื่อนเข้าปาร์ตี้')) return;
-
+            let currentWaitText = document.getElementById('sqWaitText').innerHTML;
+            if (currentWaitText.includes('ดึงเพื่อนเข้าปาร์ตี้')) return;
             showSqScreen('wait');
             if (!sqHasJoined) {
                 document.getElementById('sqWaitText').innerHTML = 'เลือกวิธีเข้าสู่สมรภูมิ';
@@ -2208,8 +2210,6 @@
             if (!sqHasAnswered) renderSqQuestion(sessionData);
         }
         else if (sessionData.status === 'show_answer') {
-            // 🌟 [จุดสำคัญ 2]: แก้กระพริบ
-            // ถ้ายังไม่เคยเห็นเฉลยข้อนี้ และหน้าจอไม่ได้กำลังโชว์เฉลยอยู่ ถึงจะวาดหน้าจอ
             const isAlreadyShowingResult = !document.getElementById('sqResultScreen').classList.contains('hidden');
             if (!sqResultSeen && !isAlreadyShowingResult) {
                 showSqScreen('result');
@@ -2591,17 +2591,18 @@
         }
     });
 
+// ✅ แก้ไข: แสดงอันดับ (ดึงข้อมูลใหม่ทั้งหมดเพื่อความชัวร์)
 async function calculateAndShowLeaderboard() {
     if (!supabaseClient || !sqSessionData) return;
 
     const podium = document.getElementById('podiumContainer');
     const runners = document.getElementById('runnerUpContainer');
     
-    podium.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-warning mb-3"></div><h5 class="text-white">จีมินกำลังสรุปอันดับ...</h5></div>';
+    podium.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-warning mb-3"></div><h5 class="text-white">กำลังสรุปรางวัล...</h5></div>';
     runners.innerHTML = '';
 
     try {
-        // ดึงข้อมูลคำตอบของ Session นี้
+        // ดึงคำตอบทั้งหมดของ Session ปัจจุบัน
         let { data: responses, error } = await supabaseClient
             .from('live_quiz_responses')
             .select('student_id, is_correct, response_time, q_index')
@@ -2609,7 +2610,7 @@ async function calculateAndShowLeaderboard() {
 
         if (error) throw error;
 
-        // คำนวณคะแนนรวม
+        // คำนวณคะแนน (150 + โบนัสความเร็ว)
         let scores = {};
         (responses || []).forEach(r => {
             if (r.is_correct && r.q_index >= 0) {
@@ -2621,33 +2622,34 @@ async function calculateAndShowLeaderboard() {
         let sortedIds = Object.keys(scores).sort((a, b) => scores[b] - scores[a]).slice(0, 5);
 
         if (sortedIds.length === 0) {
-            podium.innerHTML = '<div class="col-12 text-center py-5"><h3 class="text-white">ไม่มีใครทำคะแนนได้เลยในรอบนี้ 😅</h3></div>';
+            podium.innerHTML = '<div class="col-12 text-center py-5"><h3 class="text-white">จบเกม! ไม่พบผู้ได้รับคะแนน</h3></div>';
             return;
         }
 
-        // ดึงโปรไฟล์คนติดอันดับ
+        // ดึงชื่อและรูป
         let { data: students } = await supabaseClient.from('students').select('id, name, nickname, avatar').in('id', sortedIds);
         let topMap = {};
         (students || []).forEach(s => {
             topMap[s.id] = { name: s.nickname || s.name.split(' ')[0], avatar: s.avatar || '1' };
         });
 
-        // วาดแท่นรางวัล (เรียง 2 -> 1 -> 3)
+        // วาดแท่นรางวัล
         let podiumHtml = '';
-        const displayOrder = [
+        // อันดับที่ต้องแสดง: [2, 1, 3]
+        const order = [
             { id: sortedIds[1], rank: 2 },
             { id: sortedIds[0], rank: 1 },
             { id: sortedIds[2], rank: 3 }
         ];
 
-        displayOrder.forEach(item => {
+        order.forEach(item => {
             if (item.id && topMap[item.id]) {
                 const info = topMap[item.id];
                 podiumHtml += `
                     <div class="podium-step podium-${item.rank} shadow">
-                        ${item.rank === 1 ? '<i class="bi bi-crown-fill text-warning fs-1" style="position:absolute; top:-40px;"></i>' : ''}
+                        ${item.rank === 1 ? '<i class="bi bi-crown-fill text-warning" style="position:absolute; top:-35px; font-size:2.5rem;"></i>' : ''}
                         <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${info.avatar}&backgroundColor=transparent" class="podium-avatar">
-                        <div class="podium-name">${info.name}</div>
+                        <div class="podium-name text-truncate w-100 px-1">${info.name}</div>
                         <div class="podium-score">${scores[item.id]}</div>
                         <div class="rank-num">${item.rank}</div>
                     </div>`;
@@ -2661,11 +2663,11 @@ async function calculateAndShowLeaderboard() {
             let id = sortedIds[i];
             if (topMap[id]) {
                 runnerHtml += `
-                    <div class="runner-up-item d-flex justify-content-between p-2 bg-white rounded mb-2 shadow-sm">
+                    <div class="runner-up-item d-flex justify-content-between align-items-center p-2 bg-white rounded mb-2 shadow-sm">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-secondary">${i+1}</span>
-                            <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${topMap[id].avatar}&backgroundColor=transparent" style="width:30px;">
-                            <span class="fw-bold">${topMap[id].name}</span>
+                            <span class="badge bg-secondary rounded-pill">${i+1}</span>
+                            <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${topMap[id].avatar}&backgroundColor=transparent" style="width:30px; height:30px;">
+                            <span class="fw-bold text-dark">${topMap[id].name}</span>
                         </div>
                         <span class="text-primary fw-bold">${scores[id]} pts</span>
                     </div>`;
@@ -2675,7 +2677,7 @@ async function calculateAndShowLeaderboard() {
 
     } catch (err) {
         console.error("Leaderboard Error:", err);
-        podium.innerHTML = '<h5 class="text-white mt-5">ข้อมูลอันดับยังไม่พร้อม...</h5>';
+        podium.innerHTML = '<h5 class="text-white mt-5">กำลังรอข้อมูลอันดับ...</h5>';
     }
 }
 
