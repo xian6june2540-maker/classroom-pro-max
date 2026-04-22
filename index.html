@@ -545,7 +545,7 @@ DROP TABLE IF EXISTS students CASCADE;
 DROP TABLE IF EXISTS rooms CASCADE;
 
 -- ========================================================
--- ส่วนที่ 1: สร้างตารางทั้งหมดใหม่ให้สมบูรณ์
+-- ส่วนที่ 1: สร้างตารางทั้งหมดใหม่ (รองรับระบบเปลี่ยนชื่อห้อง ON UPDATE CASCADE)
 -- ========================================================
 
 -- 1. ตารางห้องเรียน
@@ -560,7 +560,8 @@ CREATE TABLE students (
     name TEXT NOT NULL,
     nickname TEXT DEFAULT '',
     gender TEXT DEFAULT '',
-    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    -- เพิ่ม ON UPDATE CASCADE เพื่อให้เปลี่ยนชื่อห้องตามตาราง rooms
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     accumulated_score NUMERIC DEFAULT 0,
     pin TEXT DEFAULT '',
     phone TEXT DEFAULT '',
@@ -594,7 +595,7 @@ CREATE TABLE attendance (
     check_date TEXT NOT NULL,
     student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
     student_name TEXT,
-    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     status TEXT,
     timestamp TEXT,
     UNIQUE(check_date, student_id)
@@ -606,7 +607,7 @@ CREATE TABLE tasks (
     title TEXT,
     description TEXT,
     due_date TEXT,
-    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     max_score NUMERIC
 );
 
@@ -628,7 +629,7 @@ CREATE TABLE submissions (
 -- 6. ตารางประกาศ
 CREATE TABLE announcements (
     id SERIAL PRIMARY KEY,
-    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     message TEXT,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
@@ -639,7 +640,7 @@ CREATE TABLE leaves (
     date_req TEXT,
     student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
     student_name TEXT,
-    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     leave_date TEXT,
     reason TEXT,
     status TEXT DEFAULT 'รออนุมัติ'
@@ -651,7 +652,7 @@ CREATE TABLE group_tasks (
     title TEXT,
     max_members INT,
     due_date TEXT,
-    room TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     max_score NUMERIC
 );
 
@@ -677,10 +678,10 @@ CREATE TABLE group_submissions (
     UNIQUE(task_id, group_id)
 );
 
--- 11. ตารางเก็บข้อมูลบอสและคำถาม
+-- 11. ตารางเก็บข้อมูลบอส
 CREATE TABLE boss_quizzes (
     id SERIAL PRIMARY KEY,
-    room_name TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    room_name TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     topic TEXT,
     boss_name TEXT,
     boss_hp INT,
@@ -703,14 +704,14 @@ CREATE TABLE boss_logs (
 -- 13. ตารางเก็บเซสชันของ Live Quiz
 CREATE TABLE live_quiz_sessions (
     id TEXT PRIMARY KEY,
-    room_name TEXT REFERENCES rooms(room_name) ON DELETE CASCADE,
+    room_name TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     status TEXT DEFAULT 'setup',
     questions_json JSONB,
     current_q_index INT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
 
--- 14. ตารางเก็บคำตอบของนักเรียนแบบเรียลไทม์
+-- 14. ตารางเก็บคำตอบ Live Quiz
 CREATE TABLE live_quiz_responses (
     id SERIAL PRIMARY KEY,
     session_id TEXT REFERENCES live_quiz_sessions(id) ON DELETE CASCADE,
@@ -722,31 +723,44 @@ CREATE TABLE live_quiz_responses (
     UNIQUE(session_id, q_index, student_id)
 );
 
--- [ส่วนที่แก้ไขและเพิ่มใหม่: สร้าง INDEX เพื่อเพิ่มความเร็วในการค้นหาและแก้หน่วง]
+-- สร้าง INDEX เพิ่มความเร็ว
 CREATE INDEX idx_students_room ON students(room);
 CREATE INDEX idx_attendance_student ON attendance(student_id);
 CREATE INDEX idx_submissions_student ON submissions(student_id);
 CREATE INDEX idx_groups_members ON groups USING gin (members);
 CREATE INDEX idx_live_quiz_responses_session_q ON live_quiz_responses(session_id, q_index);
 CREATE INDEX idx_boss_logs_boss_id ON boss_logs(boss_id);
-ALTER TABLE live_quiz_responses SET (parallel_workers = 4);
 
 -- ========================================================
--- ส่วนที่ 2: ระบบตารางทิพย์ (VIEWS) สำหรับแยกรายชื่อนักเรียนตามห้อง
+-- ส่วนที่ 2: ระบบ VIEWS (ปรับปรุงให้รองรับการเปลี่ยนชื่อห้อง)
 -- ========================================================
 
 CREATE OR REPLACE FUNCTION manage_room_student_views()
 RETURNS TRIGGER AS $$
 DECLARE
-    safe_view_name TEXT;
+    old_view_name TEXT;
+    new_view_name TEXT;
 BEGIN
+    -- กรณีเพิ่มห้องใหม่
     IF TG_OP = 'INSERT' THEN
-        safe_view_name := 'room_students_' || NEW.room_name;
-        EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT * FROM students WHERE room = %L', safe_view_name, NEW.room_name);
+        new_view_name := 'room_students_' || NEW.room_name;
+        EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT * FROM students WHERE room = %L', new_view_name, NEW.room_name);
         RETURN NEW;
+    
+    -- กรณีเปลี่ยนชื่อห้อง (UPDATE)
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF OLD.room_name <> NEW.room_name THEN
+            old_view_name := 'room_students_' || OLD.room_name;
+            new_view_name := 'room_students_' || NEW.room_name;
+            EXECUTE format('DROP VIEW IF EXISTS %I', old_view_name);
+            EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT * FROM students WHERE room = %L', new_view_name, NEW.room_name);
+        END IF;
+        RETURN NEW;
+
+    -- กรณีลบห้อง
     ELSIF TG_OP = 'DELETE' THEN
-        safe_view_name := 'room_students_' || OLD.room_name;
-        EXECUTE format('DROP VIEW IF EXISTS %I', safe_view_name);
+        old_view_name := 'room_students_' || OLD.room_name;
+        EXECUTE format('DROP VIEW IF EXISTS %I', old_view_name);
         RETURN OLD;
     END IF;
     RETURN NULL;
@@ -755,25 +769,22 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS trigger_room_views ON rooms;
 CREATE TRIGGER trigger_room_views
-AFTER INSERT OR DELETE ON rooms
+AFTER INSERT OR UPDATE OR DELETE ON rooms
 FOR EACH ROW
 EXECUTE FUNCTION manage_room_student_views();
 
 -- ========================================================
--- ส่วนที่ 3: เปิดใช้งานระบบ Real-time และการส่งข้อมูลแบบ Full
+-- ส่วนที่ 3: เปิดใช้งานระบบ Real-time
 -- ========================================================
-
--- [ส่วนที่เพิ่มใหม่: ตั้งค่าให้ส่งข้อมูลครบถ้วนสำหรับตารางที่มีการอัปเดตบ่อย]
 ALTER TABLE students REPLICA IDENTITY FULL;
 ALTER TABLE live_quiz_responses REPLICA IDENTITY FULL;
 ALTER TABLE boss_quizzes REPLICA IDENTITY FULL;
 
--- เปิดใช้งาน Publication
 DROP PUBLICATION IF EXISTS supabase_realtime;
 CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
 
 -- ========================================================
--- ส่วนที่ 4: ปิดระบบความปลอดภัย RLS (เพื่อให้ใช้งานได้ทันที ไม่ติด Error)
+-- ส่วนที่ 4: ปิดระบบความปลอดภัย RLS
 -- ========================================================
 ALTER TABLE rooms DISABLE ROW LEVEL SECURITY;
 ALTER TABLE students DISABLE ROW LEVEL SECURITY;
