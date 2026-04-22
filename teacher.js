@@ -1888,27 +1888,34 @@
         }).eq('id', liveQuizSessionId);
     }
 
+    // ✅ แก้ไข: โชว์เฉลยและเช็คว่ามีข้อต่อไปไหม (ทับของเดิม)
     async function showLiveAnswer() {
         if (!supabaseClient || !liveQuizSessionId) return;
         if(teacherQuizTimer) clearInterval(teacherQuizTimer);
 
-        // 1. เปลี่ยนหน้าจอครูทันทีก่อน (ลดความหน่วง UI)
         document.getElementById('tqStatusText').innerText = "กำลังโชว์เฉลย...";
         document.getElementById('tqStatusText').className = "text-primary fw-bold mb-3";
         document.getElementById('btnShowAns').classList.add('hidden');
         
-        if (liveQuizCurrentIndex < liveQuizQuestions.length - 1) {
+        // 🌟 จุดสำคัญ: เช็คจำนวนข้อที่เหลือจาก Array คำถามจริง
+        const totalQuestions = liveQuizQuestions.length;
+        
+        if (liveQuizCurrentIndex < totalQuestions - 1) {
+            // ถ้ายังมีข้อต่อไป
+            document.getElementById('btnNextQ').innerHTML = 'ไปข้อถัดไป <i class="bi bi-arrow-right-circle"></i>';
             document.getElementById('btnNextQ').classList.remove('hidden');
+            document.getElementById('btnNextQ').classList.replace('btn-warning', 'btn-primary');
+            document.getElementById('btnNextQ').onclick = nextLiveQuestion;
         } else {
+            // ถ้าหมดแล้วจริงๆ
             let btnNext = document.getElementById('btnNextQ');
             btnNext.innerHTML = 'ดูอันดับคะแนน (Leaderboard) 🏆';
             btnNext.classList.remove('hidden');
             btnNext.classList.replace('btn-primary', 'btn-warning');
-            btnNext.classList.replace('text-white', 'text-dark');
+            btnNext.classList.add('text-dark');
             btnNext.onclick = triggerLeaderboard; 
         }
 
-        // 2. สั่งยิงฐานข้อมูลบอกเด็กให้ไปหน้าเฉลย
         await supabaseClient.from('live_quiz_sessions').update({ 
             status: 'show_answer' 
         }).eq('id', liveQuizSessionId);
