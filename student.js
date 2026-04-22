@@ -2063,9 +2063,14 @@
                             handleLiveQuizChange(payload.new);
                         } 
                         else if (globalPortalStudent && payload.eventType === 'DELETE' && sqSessionData && payload.old.id === sqSessionData.id) {
-                            forceCloseLiveQuiz();
+                            let leadScreen = document.getElementById('sqLeaderboardScreen');
+                            if (leadScreen && !leadScreen.classList.contains('hidden')) {
+                                sqSessionData = null; // ปล่อยหน้าจอไว้ให้ดูอันดับ
+                            } else {
+                                forceCloseLiveQuiz();
+                            }
                         }
-                    }) 
+                    })
                     // +++ เพิ่มใหม่: ดักฟังคนเข้าห้องเพื่ออัปเดตรายชื่อปาร์ตี้ทันที +++
                     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_quiz_responses' }, payload => {
                         // ถ้ามีใครส่งข้อมูลเข้าห้อง (q_index -1)
@@ -2122,7 +2127,12 @@
                         }
                     } else if (sqSessionData) {
                         // ถ้าก่อนหน้านี้มีควิซ แต่ตอนนี้หายไปแล้ว (ครูปิด) ให้บังคับปิดหน้าจอ
-                        forceCloseLiveQuiz();
+                        let leadScreen = document.getElementById('sqLeaderboardScreen');
+                        if (leadScreen && !leadScreen.classList.contains('hidden')) {
+                            sqSessionData = null; // ปล่อยหน้าจอไว้ให้ดูอันดับ
+                        } else {
+                            forceCloseLiveQuiz();
+                        }
                     }
                 } catch (err) { 
                     console.error("Quiz Sync Error:", err); 
