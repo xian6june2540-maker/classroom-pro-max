@@ -889,82 +889,88 @@
         openTaskSubmissions(id, t, d, m, false);
     }
 
-    // 🟢 อัปเกรด: โหลดหน้าตรวจงานตรงจาก Supabase พร้อมรองรับการเปิด AI
+    // 🟢 อัปเกรด: โหลดหน้าตรวจงานตรงจาก Supabase พร้อมปุ่มพรีวิวรูปภาพ
     async function openTaskSubmissions(id, tTitle, d, m, isGroup) {
-        if(!supabaseClient) return;
-        
-        if(isGroup) {
+        if (!supabaseClient) return;
+
+        if (isGroup) {
             let { data: groups } = await supabaseClient.from('groups').select('*').eq('task_id', id);
             let { data: allStudents } = await supabaseClient.from('students').select('id,name');
-            
-            let formattedGroups = (groups||[]).map(g => {
-                let nms = (g.members||[]).map(sid => { 
-                    let std = (allStudents||[]).find(x => x.id===sid); 
-                    return std ? `${std.id} ${std.name}` : sid; 
+
+            let formattedGroups = (groups || []).map(g => {
+                let nms = (g.members || []).map(sid => {
+                    let std = (allStudents || []).find(x => x.id === sid);
+                    return std ? `${std.id} ${std.name}` : sid;
                 });
-                return {groupId: g.group_id, groupName: g.group_name, memberIds: g.members||[], memberNames: nms, status: g.status};
+                return { groupId: g.group_id, groupName: g.group_name, memberIds: g.members || [], memberNames: nms, status: g.status };
             });
-            
-            let approvedGroups = formattedGroups.filter(function(g) { return g.status === 'อนุมัติแล้ว'; });
-            if(approvedGroups.length === 0) {
+
+            let approvedGroups = formattedGroups.filter(function (g) { return g.status === 'อนุมัติแล้ว'; });
+            if (approvedGroups.length === 0) {
                 document.getElementById('groupTaskTableBody').innerHTML = '<tr><td colspan="6" class="text-center py-4">ยังไม่มีกลุ่มที่ได้รับอนุมัติให้แสดงในหน้านี้</td></tr>';
                 return;
             }
-            
+
             let { data: subs } = await supabaseClient.from('group_submissions').select('*').eq('task_id', id);
             let res = {};
-            // 🌟 เพิ่มการดึง screenshot_url จากฐานข้อมูลมาด้วย
-            if(subs) subs.forEach(r => res[r.group_id] = {status: r.status, score: r.score||"", url: r.url||"", screenshot_url: r.screenshot_url||"", timestamp: r.timestamp||""});
+            if (subs) subs.forEach(r => res[r.group_id] = { status: r.status, score: r.score || "", url: r.url || "", screenshot_url: r.screenshot_url || "", timestamp: r.timestamp || "" });
 
             groupSubmissionData = {};
-            approvedGroups.forEach(function(g) {
+            approvedGroups.forEach(function (g) {
                 groupSubmissionData[g.groupId] = res[g.groupId] || { status: 'ยังไม่ส่ง', score: '', url: '', screenshot_url: '' };
             });
-            
+
             let html = '';
-            approvedGroups.forEach(function(g) {
-                let st = groupSubmissionData[g.groupId].status;
-                let sc = groupSubmissionData[g.groupId].score;
-                let u = groupSubmissionData[g.groupId].url;
-                let imgUrl = groupSubmissionData[g.groupId].screenshot_url; // ลิงก์รูปภาพ
+            approvedGroups.forEach(function (g) {
+                let sub = groupSubmissionData[g.groupId];
+                let st = sub.status;
+                let sc = sub.score;
+                let u = sub.url;
+                let imgUrl = sub.screenshot_url;
+
+                let pb = u ? '<button class="btn btn-sm btn-info text-white me-1 shadow-sm" onclick="window.open(\'' + u + '\',\'_blank\')" title="ดูลิงก์ต้นฉบับ"><i class="bi bi-link-45deg"></i></button>' : '';
                 
-                let pb = u ? '<button class="btn btn-sm btn-info text-white me-1" onclick="window.open(\'' + u + '\',\'_blank\')" title="ดูลิงก์ต้นฉบับ"><i class="bi bi-link-45deg"></i></button>' : '';
-                
+                // 🌟 ปุ่มพรีวิวรูปภาพ (Manual Preview)
+                let previewBtn = imgUrl ? `<button class="btn btn-sm btn-outline-info me-1 shadow-sm" onclick="previewWorkImage('${imgUrl}')" title="พรีวิวรูปงาน"><i class="bi bi-image"></i></button>` : '';
+
                 // 🌟 ปุ่ม AI ตรวจงาน
-                let aiBtn = imgUrl ? '<button class="btn btn-sm btn-warning text-dark shadow-sm" onclick="triggerAiGrader(\'' + imgUrl + '\', \'' + g.groupId + '\', true)" title="ให้ AI ช่วยตรวจ"><i class="bi bi-magic"></i> AI</button>' : '<span class="text-muted small">ไม่มีรูปให้ตรวจ</span>';
-                
-                let membersShort = g.memberNames.map(function(n) { return n.split(' ')[1] || n; }).join(', ');
-                
-                html += '<tr> <td><strong class="text-success">' + g.groupName + '</strong></td> <td style="font-size: 0.8em;" class="text-muted">' + membersShort + '</td> <td class="text-center" id="td-grouplink-' + g.groupId + '">' + pb + aiBtn + '</td> <td class="text-center"><input type="number" id="grouptaskscore-' + g.groupId + '" class="form-control form-control-sm text-center mx-auto" style="width:70px;" value="' + sc + '" onchange="autoSaveGroupScore(\'' + g.groupId + '\')"></td> <td class="text-center"> <div class="btn-group"> <button id="grouptaskbtn-ส่งแล้ว-' + g.groupId + '" class="btn ' + (st === 'ส่งแล้ว' ? 'btn-success text-white' : 'btn-outline-success') + ' btn-sm" onclick="setGroupTaskStatus(\'' + g.groupId + '\',\'ส่งแล้ว\')">ส่งแล้ว</button> <button id="grouptaskbtn-ยังไม่ส่ง-' + g.groupId + '" class="btn ' + (st === 'ยังไม่ส่ง' ? 'btn-danger text-white' : 'btn-outline-danger') + ' btn-sm" onclick="setGroupTaskStatus(\'' + g.groupId + '\',\'ยังไม่ส่ง\')">ยังไม่ส่ง</button> </div> </td> <td class="text-center"><span id="grouptaskbadge-' + g.groupId + '" class="badge ' + getBadgeColor(st) + ' text-white">' + st + '</span></td> </tr>';
+                let aiBtn = imgUrl ? '<button class="btn btn-sm btn-warning text-dark shadow-sm" onclick="triggerAiGrader(\'' + imgUrl + '\', \'' + g.groupId + '\', true)" title="ให้ AI ช่วยตรวจ"><i class="bi bi-magic"></i> AI</button>' : '<span class="text-muted small">ไม่มีรูป</span>';
+
+                let membersShort = g.memberNames.map(function (n) { return n.split(' ')[1] || n; }).join(', ');
+
+                html += '<tr> <td><strong class="text-success">' + g.groupName + '</strong></td> <td style="font-size: 0.8em;" class="text-muted">' + membersShort + '</td> <td class="text-center" id="td-grouplink-' + g.groupId + '">' + pb + previewBtn + aiBtn + '</td> <td class="text-center"><input type="number" id="grouptaskscore-' + g.groupId + '" class="form-control form-control-sm text-center mx-auto" style="width:70px;" value="' + sc + '" onchange="autoSaveGroupScore(\'' + g.groupId + '\')"></td> <td class="text-center"> <div class="btn-group"> <button id="grouptaskbtn-ส่งแล้ว-' + g.groupId + '" class="btn ' + (st === 'ส่งแล้ว' ? 'btn-success text-white' : 'btn-outline-success') + ' btn-sm" onclick="setGroupTaskStatus(\'' + g.groupId + '\',\'ส่งแล้ว\')">ส่งแล้ว</button> <button id="grouptaskbtn-ยังไม่ส่ง-' + g.groupId + '" class="btn ' + (st === 'ยังไม่ส่ง' ? 'btn-danger text-white' : 'btn-outline-danger') + ' btn-sm" onclick="setGroupTaskStatus(\'' + g.groupId + '\',\'ยังไม่ส่ง\')">ยังไม่ส่ง</button> </div> </td> <td class="text-center"><span id="grouptaskbadge-' + g.groupId + '" class="badge ' + getBadgeColor(st) + ' text-white">' + st + '</span></td> </tr>';
             });
             document.getElementById('groupTaskTableBody').innerHTML = html;
-            
+
         } else {
             let { data: subs } = await supabaseClient.from('submissions').select('*').eq('task_id', id);
             let res = {};
-            // 🌟 เพิ่มการดึง screenshot_url จากฐานข้อมูลมาด้วย
-            if(subs) subs.forEach(r => res[r.student_id] = {status: r.status, score: r.score||"", url: r.url||"", screenshot_url: r.screenshot_url||"", timestamp: r.timestamp||""});
+            if (subs) subs.forEach(r => res[r.student_id] = { status: r.status, score: r.score || "", url: r.url || "", screenshot_url: r.screenshot_url || "", timestamp: r.timestamp || "" });
 
             submissionData = {};
-            const f = studentsData.filter(function(s) { return s[4] === currentRoom; });
-            f.forEach(function(s) { submissionData[s[0]] = res[s[0]] || { status: 'ยังไม่ส่ง', score: '', url: '', screenshot_url: '' }; });
-            
+            const f = studentsData.filter(function (s) { return s[4] === currentRoom; });
+            f.forEach(function (s) { submissionData[s[0]] = res[s[0]] || { status: 'ยังไม่ส่ง', score: '', url: '', screenshot_url: '' }; });
+
             let html = '';
-            f.forEach(function(s) {
-                let st = submissionData[s[0]].status; 
-                let sc = submissionData[s[0]].score; 
-                let u = submissionData[s[0]].url;
-                let imgUrl = submissionData[s[0]].screenshot_url; // ลิงก์รูปภาพ
+            f.forEach(function (s) {
+                let sub = submissionData[s[0]];
+                let st = sub.status;
+                let sc = sub.score;
+                let u = sub.url;
+                let imgUrl = sub.screenshot_url;
+
+                let pb = u ? '<button class="btn btn-sm btn-info text-white me-1 shadow-sm" onclick="window.open(\'' + u + '\',\'_blank\')" title="ดูลิงก์ต้นฉบับ"><i class="bi bi-link-45deg"></i></button>' : '';
                 
-                let pb = u ? '<button class="btn btn-sm btn-info text-white me-1" onclick="window.open(\'' + u + '\',\'_blank\')" title="ดูลิงก์ต้นฉบับ"><i class="bi bi-link-45deg"></i></button>' : '';
-                
+                // 🌟 ปุ่มพรีวิวรูปภาพ (Manual Preview)
+                let previewBtn = imgUrl ? `<button class="btn btn-sm btn-outline-info me-1 shadow-sm" onclick="previewWorkImage('${imgUrl}')" title="พรีวิวรูปงาน"><i class="bi bi-image"></i></button>` : '';
+
                 // 🌟 ปุ่ม AI ตรวจงาน
-                let aiBtn = imgUrl ? '<button class="btn btn-sm btn-warning text-dark shadow-sm" onclick="triggerAiGrader(\'' + imgUrl + '\', \'' + s[0] + '\', false)" title="ให้ AI ช่วยตรวจ"><i class="bi bi-magic"></i> AI</button>' : '<span class="text-muted small">ไม่มีรูปให้ตรวจ</span>';
-                
+                let aiBtn = imgUrl ? '<button class="btn btn-sm btn-warning text-dark shadow-sm" onclick="triggerAiGrader(\'' + imgUrl + '\', \'' + s[0] + '\', false)" title="ให้ AI ช่วยตรวจ"><i class="bi bi-magic"></i> AI</button>' : '<span class="text-muted small">ไม่มีรูป</span>';
+
                 let displayName = s[1];
                 if (s[2] && s[2].trim() !== "") displayName += ' <small class="text-muted">(' + s[2] + ')</small>';
-                
-                html += '<tr><td>' + s[0] + '</td><td>' + displayName + '</td><td class="text-center" id="td-link-' + s[0] + '">' + pb + aiBtn + '</td><td class="text-center"><input type="number" id="taskscore-' + s[0] + '" class="form-control form-control-sm text-center mx-auto" style="width:70px;" value="' + sc + '" onchange="autoSaveScore(\'' + s[0] + '\',\'' + s[1] + '\')"></td><td class="text-center"><div class="btn-group"><button id="taskbtn-ส่งแล้ว-' + s[0] + '" class="btn ' + (st === 'ส่งแล้ว' ? 'btn-success text-white' : 'btn-outline-success') + ' btn-sm" onclick="setTaskStatus(\'' + s[0] + '\',\'' + s[1] + '\',\'ส่งแล้ว\')">ส่งแล้ว</button><button id="taskbtn-ยังไม่ส่ง-' + s[0] + '" class="btn ' + (st === 'ยังไม่ส่ง' ? 'btn-danger text-white' : 'btn-outline-danger') + ' btn-sm" onclick="setTaskStatus(\'' + s[0] + '\',\'' + s[1] + '\',\'ยังไม่ส่ง\')">ยังไม่ส่ง</button></div></td><td class="text-center"><span id="taskbadge-' + s[0] + '" class="badge ' + getBadgeColor(st) + ' text-white">' + st + '</span></td></tr>';
+
+                html += '<tr><td>' + s[0] + '</td><td>' + displayName + '</td><td class="text-center" id="td-link-' + s[0] + '">' + pb + previewBtn + aiBtn + '</td><td class="text-center"><input type="number" id="taskscore-' + s[0] + '" class="form-control form-control-sm text-center mx-auto" style="width:70px;" value="' + sc + '" onchange="autoSaveScore(\'' + s[0] + '\',\'' + s[1] + '\')"></td><td class="text-center"><div class="btn-group"><button id="taskbtn-ส่งแล้ว-' + s[0] + '" class="btn ' + (st === 'ส่งแล้ว' ? 'btn-success text-white' : 'btn-outline-success') + ' btn-sm" onclick="setTaskStatus(\'' + s[0] + '\',\'' + s[1] + '\',\'ส่งแล้ว\')">ส่งแล้ว</button><button id="taskbtn-ยังไม่ส่ง-' + s[0] + '" class="btn ' + (st === 'ยังไม่ส่ง' ? 'btn-danger text-white' : 'btn-outline-danger') + ' btn-sm" onclick="setTaskStatus(\'' + s[0] + '\',\'' + s[1] + '\',\'ยังไม่ส่ง\')">ยังไม่ส่ง</button></div></td><td class="text-center"><span id="taskbadge-' + s[0] + '" class="badge ' + getBadgeColor(st) + ' text-white">' + st + '</span></td></tr>';
             });
             document.getElementById('taskTableBody').innerHTML = html;
         }
@@ -2213,3 +2219,14 @@
             }
         });
     }
+
+    // 🌟 ฟังก์ชันพรีวิวรูปงานนักเรียน (เพิ่มต่อท้าย)
+    window.previewWorkImage = function(url) {
+        Swal.fire({
+            title: 'พรีวิวผลงานนักเรียน',
+            imageUrl: url,
+            imageAlt: 'ผลงานนักเรียน',
+            confirmButtonText: 'ปิดหน้าต่าง',
+            customClass: { popup: 'rounded-4' }
+        });
+    };
