@@ -772,7 +772,10 @@
     }
 
     function getBadgeColor(st) {
-        return (st === 'มา' || st === 'ส่งแล้ว') ? 'bg-success' : (st === 'ลา' ? 'bg-warning text-dark' : (st === 'ขาด' || st === 'ยังไม่ส่ง' ? 'bg-danger' : 'bg-secondary'));
+        if (st === 'มา' || st === 'ส่งแล้ว') return 'bg-success';
+        if (st === 'ลา' || st === 'รอตรวจ') return 'bg-warning text-dark'; // เพิ่ม 'รอตรวจ' เป็นสีเหลือง
+        if (st === 'ขาด' || st === 'ยังไม่ส่ง') return 'bg-danger';
+        return 'bg-secondary';
     }
 
     function setAtt(id, name, st) {
