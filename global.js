@@ -655,33 +655,32 @@ window.openCommunicationHub = function(studentId) {
 
                 <div id="sectionToTeacher" class="hidden">
                     <label class="small fw-bold text-muted mb-2">เรื่องที่ต้องการปรึกษาคุณครู:</label>
-                    <textarea id="hubMsgToTeacher" class="form-control mb-2" rows="2" placeholder="เช่น ขอปรึกษาเรื่องพฤติกรรม..."></textarea>
+                    <textarea id="hubMsgToTeacher" class="form-control mb-3" rows="2" placeholder="เช่น ขอปรึกษาเรื่องพฤติกรรม..."></textarea>
                     
-                    <div class="p-3 rounded-4 mb-3 border text-center" style="background: #fdf2f2;">
-                        <small class="fw-bold text-danger d-block mb-2"><i class="bi bi-geo-alt-fill"></i> ตำแหน่งบ้านสำหรับครูเยี่ยมบ้าน</small>
-                        <div id="locationStatus" class="small text-muted mb-2">ยังไม่ได้แชร์พิกัดปัจจุบัน</div>
-                        <button class="btn btn-sm btn-outline-danger fw-bold rounded-pill" onclick="getCurrentLocation()">
-                            <i class="bi bi-pin-map"></i> กดเพื่ออัปเดตตำแหน่งบ้านของคุณ
+                    <label class="small fw-bold text-muted mb-1 d-block">ข้อมูลติดต่อกลับของคุณ:</label>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <input type="radio" class="btn-check" name="contactType" id="typePhone" value="phone" checked onchange="updateContactUI()">
+                        <label class="btn btn-outline-primary btn-sm" for="typePhone">เบอร์โทร</label>
+                        <input type="radio" class="btn-check" name="contactType" id="typeLine" value="line" onchange="updateContactUI()">
+                        <label class="btn btn-outline-success btn-sm" for="typeLine">LINE</label>
+                        <input type="radio" class="btn-check" name="contactType" id="typeFB" value="messenger" onchange="updateContactUI()">
+                        <label class="btn btn-outline-info btn-sm text-dark" for="typeFB">Facebook</label>
+                    </div>
+
+                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" placeholder="ข้อมูลติดต่อ">
+                    <div id="contactPreview" class="small fw-bold mb-3 text-center" style="min-height:20px;"></div>
+
+                    <div class="p-2 rounded-4 mb-3 border text-center bg-light">
+                        <div id="locationStatus" class="small text-muted mb-1">ยังไม่ได้ระบุตำแหน่งบ้าน</div>
+                        <button class="btn btn-sm btn-dark w-100 rounded-pill" onclick="openMapPicker()">
+                            <i class="bi bi-geo-alt-fill text-warning"></i> ระบุ/เลื่อนพิกัดบ้านนักเรียน
                         </button>
                         <input type="hidden" id="hubLat">
                         <input type="hidden" id="hubLng">
                     </div>
 
-                    <label class="small fw-bold text-muted mb-1 d-block">ข้อมูลติดต่อกลับ:</label>
-                    <div class="btn-group w-100 mb-2" role="group">
-                        <input type="radio" class="btn-check" name="contactType" id="typePhone" value="phone" checked onchange="updateContactUI()">
-                        <label class="btn btn-outline-primary btn-sm" for="typePhone">เบอร์โทร</label>
-                        <input type="radio" class="btn-check" name="contactType" id="typeLine" value="line" onchange="updateContactUI()">
-                        <label class="btn btn-outline-success btn-sm" for="typeLine">LINE ID</label>
-                        <input type="radio" class="btn-check" name="contactType" id="typeFB" value="messenger" onchange="updateContactUI()">
-                        <label class="btn btn-outline-info btn-sm text-dark" for="typeFB">FB</label>
-                    </div>
-
-                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" placeholder="กรอกข้อมูลติดต่อ">
-                    <div id="contactPreview" class="small fw-bold mb-3 text-center"></div>
-
-                    <button class="btn btn-primary w-100 fw-bold rounded-pill shadow" onclick="processSendToTeacher('${studentId}')">
-                        <i class="bi bi-send-check"></i> ส่งข้อมูลให้คุณครู
+                    <button class="btn btn-primary w-100 fw-bold rounded-pill shadow-lg py-2" onclick="processSendToTeacher('${studentId}')">
+                        <i class="bi bi-send-fill"></i> ยืนยันและส่งข้อมูลทั้งหมด
                     </button>
                 </div>
             </div>
@@ -781,32 +780,39 @@ window.updateContactUI = function() {
 // --- [วางทับฟังก์ชันเดิม] ---
 window.processSendToTeacher = async function(id) {
     const msg = document.getElementById('hubMsgToTeacher').value.trim();
-    const contact = document.getElementById('hubParentContact').value.trim();
+    const rawContact = document.getElementById('hubParentContact').value.trim();
     const type = document.querySelector('input[name="contactType"]:checked').value;
     const lat = document.getElementById('hubLat').value;
     const lng = document.getElementById('hubLng').value;
     
-    if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลให้ครบครับ', 'warning');
+    if(!msg || !rawContact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อความและข้อมูลติดต่อครับ', 'warning');
 
-    Swal.fire({ title: 'กำลังส่งข้อมูล...', didOpen: () => Swal.showLoading() });
+    Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
-    // 1. อัปเดตพิกัดบ้านถาวรลงในตาราง students (ถ้ามีการดึงพิกัดมา)
-    if (lat && lng) {
-        await supabaseClient.from('students').update({ home_lat: lat, home_lng: lng }).eq('id', id);
+    // 1. ล้างลิงก์ FB หรือจัดรูปแบบข้อมูลก่อนส่ง
+    let finalContact = rawContact;
+    if(type === 'line') finalContact = `LINE:${rawContact}`;
+    if(type === 'messenger') finalContact = `FB:${parseFacebookLink(rawContact)}`; // ใช้ตัวล้างลิงก์
+
+    try {
+        // 2. บันทึกพิกัดลงตาราง students (ต้องใช้ await)
+        if (lat && lng) {
+            await supabaseClient.from('students').update({ 
+                home_lat: parseFloat(lat), 
+                home_lng: parseFloat(lng) 
+            }).eq('id', id);
+        }
+
+        // 3. ส่งแจ้งเตือน (ลบอันเก่าก่อนตามที่ฟลุ๊คเคยสั่ง)
+        await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
+        await supabaseClient.from('parent_communications').insert([{ 
+            student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact 
+        }]);
+
+        Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'พิกัดบ้านและข้อมูลส่งถึงครูแล้ว', timer: 2000, showConfirmButton: false });
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
     }
-
-    // 2. จัดรูปแบบช่องทางติดต่อ
-    let finalContact = contact;
-    if(type === 'line') finalContact = `LINE:${contact}`;
-    if(type === 'messenger') finalContact = `FB:${contact}`; // เก็บแบบระบุว่าเป็น FB
-
-    // 3. ส่งแจ้งเตือนหาครู (Delete ของเก่าออกก่อนเพื่อความคลีนตามที่สั่ง)
-    await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
-    await supabaseClient.from('parent_communications').insert([{ 
-        student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact 
-    }]);
-
-    Swal.fire({ icon: 'success', title: 'ส่งสำเร็จ!', text: 'ข้อมูลของคุณและพิกัดบ้านถูกส่งถึงครูแล้วครับ', timer: 2000, showConfirmButton: false });
 };
 
 // ฟังก์ชันดึงพิกัด GPS ปัจจุบัน
@@ -829,4 +835,58 @@ window.getCurrentLocation = function() {
         status.innerText = 'ไม่สามารถเข้าถึงพิกัดได้ (กรุณาเปิด GPS)';
         Swal.fire('เข้าถึงพิกัดไม่ได้', 'กรุณาอนุญาตให้เข้าถึงตำแหน่งที่ตั้ง (GPS) ในเครื่องของคุณด้วยครับ', 'warning');
     }, { enableHighAccuracy: true });
+};
+
+// 🔵 ฟังก์ชันล้างลิงก์ Facebook ให้ใช้ได้ทั้งคอมและมือถือ
+window.parseFacebookLink = function(input) {
+    let value = input.trim();
+    if (!value) return "";
+    try {
+        // ถ้ามาเป็น URL เต็มๆ เช่น https://www.facebook.com/profile.php?id=123 หรือ /username
+        if (value.includes("facebook.com")) {
+            const url = new URL(value.startsWith('http') ? value : 'https://' + value);
+            // กรณีเป็น profile.php?id=xxx
+            if (url.searchParams.has("id")) return url.searchParams.get("id");
+            // กรณีเป็น facebook.com/username
+            let path = url.pathname.replace(/\//g, "");
+            if (path === "profile.php") return ""; // กันเหนียว
+            return path;
+        }
+        return value; // ถ้ามาแค่ชื่อยูสเซอร์อยู่แล้วก็ส่งคืนเลย
+    } catch (e) { return value; }
+};
+
+// 📍 ฟังก์ชันเปิดแผนที่ให้ผู้ปกครองเลื่อนหมุด
+window.openMapPicker = function() {
+    Swal.fire({
+        title: 'ปักหมุดบ้านนักเรียน',
+        html: `
+            <div id="map" style="width: 100%; height: 300px; border-radius: 15px; margin-bottom: 10px;"></div>
+            <p class="small text-muted">กดค้างที่หมุดแล้วเลื่อน หรือจิ้มบนแผนที่ เพื่อความแม่นยำ</p>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'บันทึกตำแหน่งนี้',
+        cancelButtonText: 'ยกเลิก',
+        didOpen: () => {
+            // เริ่มต้นที่พิกัดปัจจุบัน หรือพิกัดเดิมถ้ามี
+            let lat = document.getElementById('hubLat').value || 14.97;
+            let lng = document.getElementById('hubLng').value || 102.10;
+
+            const map = L.map('map').setView([lat, lng], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+            const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+
+            // เมื่อจิ้มแผนที่ให้ย้ายหมุด
+            map.on('click', (e) => { marker.setLatLng(e.latlng); });
+
+            // เมื่อกดตกลง ให้เก็บค่าเข้า Input
+            Swal.getConfirmButton().addEventListener('click', () => {
+                const pos = marker.getLatLng();
+                document.getElementById('hubLat').value = pos.lat;
+                document.getElementById('hubLng').value = pos.lng;
+                document.getElementById('locationStatus').innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle"></i> ปักหมุดแล้ว!</span>`;
+            });
+        }
+    });
 };
