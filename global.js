@@ -625,7 +625,12 @@ window.openCommunicationHubFromHead = function() {
     }
 };
 // 1. ฟังก์ชันเปิดหน้าต่างศูนย์การสื่อสาร
+// 1. ฟังก์ชันเปิดหน้าต่างศูนย์การสื่อสาร (เวอร์ชันอัจฉริยะ Idea 1, 3, 4)
 window.openCommunicationHub = function(studentId) {
+    // ดึงข้อมูลที่เคยกรอกไว้ล่าสุดจากเครื่อง
+    const lastContact = localStorage.getItem('parentLastContact') || '';
+    const lastType = localStorage.getItem('parentLastContactType') || 'phone';
+
     Swal.fire({
         title: '<div class="fw-bold text-danger"><i class="bi bi-chat-heart"></i> ศูนย์การสื่อสาร</div>',
         html: `
@@ -644,16 +649,26 @@ window.openCommunicationHub = function(studentId) {
                         <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('🏆','สุดยอด')">🏆</button>
                     </div>
                     <textarea id="hubMsgToStudent" class="form-control mb-3" rows="2" placeholder="พิมพ์ข้อความให้กำลังใจลูกที่นี่..."></textarea>
-                    <button class="btn btn-danger w-100 fw-bold rounded-pill shadow" onclick="processSendToStudent('${studentId}')">
-                        <i class="bi bi-send-fill"></i> ส่งสติกเกอร์และข้อความ
-                    </button>
+                    <button class="btn btn-danger w-100 fw-bold rounded-pill shadow" onclick="processSendToStudent('${studentId}')">ส่งพลังใจให้ลูก</button>
                 </div>
 
                 <div id="sectionToTeacher" class="hidden">
-                    <label class="small fw-bold text-muted mb-2">ระบุเรื่องที่ต้องการปรึกษาคุณครู:</label>
-                    <textarea id="hubMsgToTeacher" class="form-control mb-3" rows="2" placeholder="เช่น ขอปรึกษาเรื่องพฤติกรรม หรือตามงานที่ค้าง..."></textarea>
-                    <label class="small fw-bold text-muted mb-2">ข้อมูลติดต่อกลับ (เบอร์โทร หรือ Line ID):</label>
-                    <input type="text" id="hubParentContact" class="form-control mb-4" placeholder="เพื่อให้ครูติดต่อกลับท่านได้สะดวก">
+                    <label class="small fw-bold text-muted mb-2">เรื่องที่ต้องการปรึกษาคุณครู:</label>
+                    <textarea id="hubMsgToTeacher" class="form-control mb-3" rows="2" placeholder="เช่น ขอปรึกษาเรื่องพฤติกรรม..."></textarea>
+                    
+                    <label class="small fw-bold text-muted mb-2 d-block">ข้อมูลติดต่อกลับของคุณ:</label>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <input type="radio" class="btn-check" name="contactType" id="typePhone" value="phone" ${lastType === 'phone' ? 'checked' : ''} onchange="updateContactUI()">
+                        <label class="btn btn-outline-primary btn-sm" for="typePhone"><i class="bi bi-telephone"></i> เบอร์โทร</label>
+                        <input type="radio" class="btn-check" name="contactType" id="typeLine" value="line" ${lastType === 'line' ? 'checked' : ''} onchange="updateContactUI()">
+                        <label class="btn btn-outline-success btn-sm" for="typeLine"><i class="bi bi-line"></i> LINE ID</label>
+                    </div>
+
+                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" 
+                           value="${lastContact}" placeholder="กรอกข้อมูลติดต่อ">
+                    
+                    <div id="contactPreview" class="small fw-bold mb-4 text-center" style="min-height: 20px;"></div>
+
                     <button class="btn btn-primary w-100 fw-bold rounded-pill shadow" onclick="processSendToTeacher('${studentId}')">
                         <i class="bi bi-telephone-outbound"></i> ส่งข้อมูลให้ครูติดต่อกลับ
                     </button>
@@ -662,7 +677,13 @@ window.openCommunicationHub = function(studentId) {
         `,
         showConfirmButton: false,
         showCloseButton: true,
-        customClass: { popup: 'rounded-4' }
+        customClass: { popup: 'rounded-4' },
+        didOpen: () => {
+            // ผูก Event สำหรับระบบ Auto Format และ Preview
+            const contactInput = document.getElementById('hubParentContact');
+            contactInput.addEventListener('input', updateContactUI);
+            updateContactUI(); // เรียกครั้งแรกเพื่อโชว์ข้อมูลเดิม (ถ้ามี)
+        }
     });
 };
 
@@ -712,23 +733,68 @@ window.processSendToStudent = async function(id) {
 };
 
 // 5. ฟังก์ชันส่งหาครู (เก็บเข้า DB รอครูเปิดดู)
+// ⚡ ระบบอัจฉริยะ: จัดการ Format เบอร์โทร และ Preview LINE ลิงก์
+window.updateContactUI = function() {
+    const input = document.getElementById('hubParentContact');
+    const preview = document.getElementById('contactPreview');
+    const type = document.querySelector('input[name="contactType"]:checked').value;
+    let value = input.value;
+
+    if (type === 'phone') {
+        input.type = 'tel';
+        input.placeholder = '0xx-xxx-xxxx';
+        // Auto Format: 0812345678 -> 081-234-5678
+        let numbers = value.replace(/\D/g, ''); // เอาเฉพาะตัวเลข
+        if (numbers.length > 10) numbers = numbers.substring(0, 10);
+        
+        let formatted = '';
+        if (numbers.length > 0) formatted += numbers.substring(0, 3);
+        if (numbers.length > 3) formatted += '-' + numbers.substring(3, 6);
+        if (numbers.length > 6) formatted += '-' + numbers.substring(6, 10);
+        
+        input.value = formatted;
+        preview.innerHTML = formatted ? `<span class="text-primary"><i class="bi bi-telephone-fill"></i> ครูจะโทรหาที่เบอร์นี้</span>` : '';
+    } else {
+        input.type = 'text';
+        input.placeholder = 'กรอก LINE ID ของท่าน';
+        // Preview LINE Link
+        let cleanId = value.trim();
+        if (cleanId) {
+            preview.innerHTML = `<span class="text-success"><i class="bi bi-line"></i> ลิงก์ของท่าน: line.me/ti/p/~${cleanId}</span>`;
+        } else {
+            preview.innerHTML = '';
+        }
+    }
+};
+
+// --- [วางทับฟังก์ชันเดิม] ---
 window.processSendToTeacher = async function(id) {
     const msg = document.getElementById('hubMsgToTeacher').value.trim();
     const contact = document.getElementById('hubParentContact').value.trim();
-    if(!msg || !contact) {
-        Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกเรื่องที่ปรึกษาและข้อมูลติดต่อกลับครับ', 'warning');
-        return;
+    const type = document.querySelector('input[name="contactType"]:checked').value;
+    
+    if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกเรื่องที่ปรึกษาและข้อมูลติดต่อกลับครับ', 'warning');
+    
+    // ตรวจสอบความถูกต้องเบื้องต้นสำหรับเบอร์โทร
+    if(type === 'phone' && contact.replace(/\D/g, '').length < 10) {
+        return Swal.fire('เบอร์โทรไม่ครบ', 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลักครับ', 'warning');
     }
 
     Swal.fire({ title: 'กำลังส่งข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
     
+    // บันทึกลงเครื่องเพื่อใช้ครั้งหน้า (Idea 2)
+    localStorage.setItem('parentLastContact', contact);
+    localStorage.setItem('parentLastContactType', type);
+
+    // ส่งข้อมูลเข้า Supabase (เก็บข้อมูลแบบมีระบุประเภทเพื่อให้ครูกดใช้ง่าย)
+    const finalContact = type === 'phone' ? contact : `LINE:${contact}`;
     const { error } = await supabaseClient.from('parent_communications').insert([{ 
-        student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: contact 
+        student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact 
     }]);
 
     if(error) {
         Swal.fire('ผิดพลาด', error.message, 'error');
     } else {
-        Swal.fire({ icon: 'success', title: 'ส่งสำเร็จ!', text: 'คุณครูได้รับการแจ้งเตือนแล้ว และจะติดต่อกลับหาท่านครับ', timer: 3000, showConfirmButton: false });
+        Swal.fire({ icon: 'success', title: 'ส่งสำเร็จ!', text: 'ครูได้รับการแจ้งเตือนแล้ว และจะติดต่อกลับหาท่านครับ', timer: 3000, showConfirmButton: false });
     }
 };
