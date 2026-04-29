@@ -520,14 +520,22 @@ window.sendPushNotification = function(title, message) {
 };
 
 // =====================================
-// 👨‍👩‍👧‍👦 PARENT DASHBOARD LOGIC (เพิ่มใหม่)
+// 👨‍👩‍👧‍👦 PARENT DASHBOARD LOGIC (ดึงข้อมูลมาโชว์ผู้ปกครอง)
 // =====================================
 window.loadParentDashboard = async function(token) {
     const content = document.getElementById('parent-content');
-    if (!supabaseClient) await initSupabaseAsync();
+    
+    // รอจนกว่า supabaseClient จะพร้อม
+    if (!supabaseClient) {
+        let attempts = 0;
+        while (!supabaseClient && attempts < 10) {
+            await new Promise(r => setTimeout(r, 500));
+            attempts++;
+        }
+    }
 
     try {
-        // 1. ดึงข้อมูลนักเรียนจาก Token
+        // 1. ดึงข้อมูลนักเรียนจาก Token ที่ได้รับ
         let { data: student, error } = await supabaseClient
             .from('students')
             .select('*')
@@ -536,62 +544,59 @@ window.loadParentDashboard = async function(token) {
 
         if (error || !student) {
             content.innerHTML = `
-                <div class="alert alert-danger rounded-4 py-4 m-2">
+                <div class="alert alert-danger rounded-4 py-4 m-2 shadow-sm">
                     <i class="bi bi-exclamation-octagon fs-1 d-block mb-3"></i>
                     <h5 class="fw-bold">ไม่พบข้อมูลนักเรียน</h5>
-                    <p class="mb-0">ลิงก์อาจไม่ถูกต้อง หรือถูกยกเลิกโดยคุณครูแล้วครับ</p>
-                    <button class="btn btn-secondary mt-3 rounded-pill" onclick="window.location.href=window.location.pathname">กลับหน้าหลัก</button>
+                    <p class="mb-0">ลิงก์อาจไม่ถูกต้อง หรือครูอาจเปลี่ยนรหัสใหม่แล้วครับ</p>
+                    <button class="btn btn-secondary mt-3 rounded-pill btn-sm" onclick="window.location.href=window.location.pathname">กลับหน้าหลัก</button>
                 </div>`;
             return;
         }
 
-        // 2. แสดงผลหน้า Dashboard ผู้ปกครอง
+        // 2. ถ้าเจอข้อมูล ให้วาดหน้า Dashboard แบบ Read-only
         content.innerHTML = `
             <div class="text-center mb-4 pt-2">
                 <div class="position-relative d-inline-block mb-3">
                     <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${student.avatar}" 
-                         style="width: 110px; height: 110px; border-radius: 50%; border: 5px solid #0d6efd; background:#fff;" class="shadow">
-                    <div class="position-absolute bottom-0 end-0 bg-success text-white rounded-circle p-1 px-2 small shadow border border-white">
-                        Online
+                         style="width: 100px; height: 100px; border-radius: 50%; border: 5px solid #0d6efd; background:#fff;" class="shadow-sm">
+                    <div class="position-absolute bottom-0 end-0 bg-success text-white rounded-circle p-1 px-2 small shadow border border-white" style="font-size:10px;">
+                        ACTIVE
                     </div>
                 </div>
-                <h3 class="fw-bold text-dark mb-1">${student.name}</h3>
-                <p class="text-muted mb-3"><i class="bi bi-geo-alt-fill text-danger"></i> ระดับชั้น/ห้อง: <span class="badge bg-primary">${student.room}</span></p>
-                <hr class="mx-5">
+                <h4 class="fw-bold text-dark mb-0">${student.name}</h4>
+                <p class="text-muted small mb-0">ระดับชั้น/ห้อง: <span class="text-primary fw-bold">${student.room}</span></p>
             </div>
             
-            <div class="row g-3 px-2">
+            <div class="row g-2 px-2 mb-4">
                 <div class="col-6">
-                    <div class="p-3 bg-white rounded-4 border-0 shadow-sm">
-                        <i class="bi bi-award-fill text-primary fs-3 d-block mb-1"></i>
-                        <small class="text-muted d-block fw-bold">คะแนนรวม</small>
-                        <h2 class="fw-bold text-dark mb-0">${student.accumulated_score || 0}</h2>
+                    <div class="p-3 bg-white rounded-4 border shadow-sm">
+                        <small class="text-muted d-block mb-1">คะแนนสะสม</small>
+                        <h3 class="fw-bold text-success mb-0">${student.accumulated_score || 0}</h3>
                     </div>
                 </div>
                 <div class="col-6">
-                    <div class="p-3 bg-white rounded-4 border-0 shadow-sm">
-                        <i class="bi bi-stars text-warning fs-3 d-block mb-1"></i>
-                        <small class="text-muted d-block fw-bold">แต้ม EXP</small>
-                        <h2 class="fw-bold text-dark mb-0">${Math.floor(student.exp || 0).toLocaleString()}</h2>
+                    <div class="p-3 bg-white rounded-4 border shadow-sm">
+                        <small class="text-muted d-block mb-1">แต้ม EXP</small>
+                        <h4 class="fw-bold text-dark mb-0">${Math.floor(student.exp || 0).toLocaleString()}</h4>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-4 mx-2 p-3 bg-primary bg-opacity-10 rounded-4 text-start border border-primary border-opacity-10 shadow-sm">
-                <h6 class="fw-bold text-primary mb-2"><i class="bi bi-shield-check"></i> ระบบติดตามความเคลื่อนไหว</h6>
+            <div class="alert alert-primary bg-opacity-10 border-0 rounded-4 text-start p-3 mx-2">
+                <h6 class="fw-bold small mb-2"><i class="bi bi-info-circle-fill"></i> สถานะการเรียนปัจจุบัน</h6>
                 <div class="small text-dark opacity-75">
-                    <p class="mb-1"><i class="bi bi-check2-circle text-success"></i> ข้อมูลเชื่อมต่อกับระบบโรงเรียนแบบ Real-time</p>
-                    <p class="mb-0"><i class="bi bi-check2-circle text-success"></i> คุณครูสามารถอัปเดตคะแนนและเช็คชื่อได้ทันที</p>
+                    <p class="mb-1"><i class="bi bi-check2 text-success"></i> ข้อมูลอัปเดตตรงจากระบบครู</p>
+                    <p class="mb-0"><i class="bi bi-check2 text-success"></i> คุณครูสามารถเช็คชื่อและงานได้ที่นี่</p>
                 </div>
             </div>
             
-            <div class="d-grid gap-2 mt-4 px-2 pb-3">
-                <button class="btn btn-primary btn-lg rounded-pill fw-bold shadow" onclick="window.location.reload()">
-                    <i class="bi bi-arrow-clockwise"></i> รีเฟรชข้อมูลล่าสุด
+            <div class="px-2 pb-2">
+                <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 shadow" onclick="window.location.reload()">
+                    <i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลล่าสุด
                 </button>
             </div>
         `;
     } catch (e) {
-        content.innerHTML = `<div class="alert alert-danger m-3">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${e.message}</div>`;
+        content.innerHTML = `<div class="alert alert-danger m-3">เกิดข้อผิดพลาด: ${e.message}</div>`;
     }
 };
