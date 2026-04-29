@@ -39,468 +39,469 @@ const createGASProxy = (successHandler, failureHandler) => {
 };
 
 window.google = { script: { run: createGASProxy(null, null) } };
-// =====================================    // =====================================
-    // GLOBAL VARIABLES & UTILS
-    // =====================================
-    
-    const Toast = Swal.mixin({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        timerProgressBar: true,
-        didOpen: (toast) => {
-            toast.addEventListener('mouseenter', Swal.stopTimer)
-            toast.addEventListener('mouseleave', Swal.resumeTimer)
-        }
-    });
 
-    let roomsData = [];
-    let studentsData = [];
-    let attendanceData = {};
-    let tasksData = [];
-    let submissionData = {};
-    let currentRoom = '';
-    let currentTaskId = '';
-    let currentTaskTitle = '';
-    let currentTaskDue = '';
-    let currentTaskMax = 0;
+// =====================================
+// GLOBAL VARIABLES & UTILS
+// =====================================
 
-    let globalPortalStudent = null;
-    let windowPartyMembers = []; // เพิ่มตัวแปรนี้เพื่อเก็บ ID ทุกคนในกลุ่ม (รวมตัวเอง)
-    let autoRefreshInterval = null;
-    let countdownInterval = null;
-
-    let currentSelectedAvatarSeed = '1';
-    let currentSelectedPostItStyle = '#fff9b1';
-    let currentBoardRole = 'student';
-    let boardInterval = null;
-
-    // --- SUPABASE REALTIME & CLIENT VARIABLES ---
-    let supabaseClient = null;
-    let globalRealtimeChannel = null;
-
-    function getLocalTodayStr() {
-        const d = new Date();
-        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+        toast.addEventListener('mouseenter', Swal.stopTimer)
+        toast.addEventListener('mouseleave', Swal.resumeTimer)
     }
+});
 
-    // =====================================
-    // INIT SUPABASE (ASYNC)
-    // =====================================
-    // 🟢 เปลี่ยนจากฟังก์ชันธรรมดา เป็น Promise เพื่อให้ระบบ "รอ" จนกว่าจะเชื่อมต่อเสร็จ
-    function initSupabaseAsync() {
-        return new Promise((resolve) => {
-            if(supabaseClient) {
-                resolve(true);
+let roomsData = [];
+let studentsData = [];
+let attendanceData = {};
+let tasksData = [];
+let submissionData = {};
+let currentRoom = '';
+let currentTaskId = '';
+let currentTaskTitle = '';
+let currentTaskDue = '';
+let currentTaskMax = 0;
+
+let globalPortalStudent = null;
+let windowPartyMembers = []; // เพิ่มตัวแปรนี้เพื่อเก็บ ID ทุกคนในกลุ่ม (รวมตัวเอง)
+let autoRefreshInterval = null;
+let countdownInterval = null;
+
+let currentSelectedAvatarSeed = '1';
+let currentSelectedPostItStyle = '#fff9b1';
+let currentBoardRole = 'student';
+let boardInterval = null;
+
+// --- SUPABASE REALTIME & CLIENT VARIABLES ---
+let supabaseClient = null;
+let globalRealtimeChannel = null;
+
+function getLocalTodayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// =====================================
+// INIT SUPABASE (ASYNC)
+// =====================================
+// 🟢 เปลี่ยนจากฟังก์ชันธรรมดา เป็น Promise เพื่อให้ระบบ "รอ" จนกว่าจะเชื่อมต่อเสร็จ
+function initSupabaseAsync() {
+    return new Promise((resolve) => {
+        if(supabaseClient) {
+            resolve(true);
+            return;
+        }
+        
+        // ขอ URL และ Key จาก Backend (ยอมใช้โควตา GAS แค่ 1 ครั้งตอนโหลดเว็บแรกสุด)
+        google.script.run.withSuccessHandler(function(creds) {
+            if(!creds || !creds.url || !creds.key) {
+                console.warn("Supabase credentials missing.");
+                resolve(false);
                 return;
             }
             
-            // ขอ URL และ Key จาก Backend (ยอมใช้โควตา GAS แค่ 1 ครั้งตอนโหลดเว็บแรกสุด)
-            google.script.run.withSuccessHandler(function(creds) {
-                if(!creds || !creds.url || !creds.key) {
-                    console.warn("Supabase credentials missing.");
-                    resolve(false);
-                    return;
+            // สร้าง Supabase Client สำหรับให้หน้าเว็บดึงข้อมูลโดยตรง!
+            supabaseClient = supabase.createClient(creds.url, creds.key);
+            
+            // สร้าง Channel ดักฟังระบบ Realtime
+            globalRealtimeChannel = supabaseClient.channel('custom-all-channel')
+                .on(
+                'postgres_changes',
+                { event: '*', schema: 'public' },
+                (payload) => {
+                    console.log('Realtime Change received!', payload);
+                    handleRealtimeEvent(payload);
                 }
+                )
+                .subscribe((status) => {
+                if(status === 'SUBSCRIBED') {
+                    console.log('Connected to Supabase Realtime');
+                }
+                });
                 
-                // สร้าง Supabase Client สำหรับให้หน้าเว็บดึงข้อมูลโดยตรง!
-                supabaseClient = supabase.createClient(creds.url, creds.key);
-                
-                // สร้าง Channel ดักฟังระบบ Realtime
-                globalRealtimeChannel = supabaseClient.channel('custom-all-channel')
-                  .on(
-                    'postgres_changes',
-                    { event: '*', schema: 'public' },
-                    (payload) => {
-                      console.log('Realtime Change received!', payload);
-                      handleRealtimeEvent(payload);
-                    }
-                  )
-                  .subscribe((status) => {
-                    if(status === 'SUBSCRIBED') {
-                       console.log('Connected to Supabase Realtime');
-                    }
-                  });
-                  
-                resolve(true); // แจ้งว่าเชื่อมต่อสำเร็จแล้ว
-            }).getPublicSupabaseCreds();
-        });
-    }
+            resolve(true); // แจ้งว่าเชื่อมต่อสำเร็จแล้ว
+        }).getPublicSupabaseCreds();
+    });
+}
 
-    // ฟังก์ชันจัดการเมื่อมีข้อมูลเปลี่ยนแปลง (Realtime Payload)
-    function handleRealtimeEvent(payload) {
-        const table = payload.table;
-    
-        // 1. ถ้าครูล็อกอิน และอยู่ในหน้าห้องเรียน
-        if (localStorage.getItem('teacherLoggedIn') === 'true' && currentRoom !== "") {
-            // 🔔 เพิ่มบรรทัดนี้: ถ้ามีการสื่อสารจากผู้ปกครองเข้ามา ให้รีโหลดรายชื่อเพื่อโชว์ไอคอนทันที
-            if (table === 'parent_communications') {
-                loadStudents(); 
-            }
-    
-            if (table === 'attendance') {
-                let checkDate = document.getElementById('attDate').value;
-                if(checkDate) loadAttendanceForDate(); 
-            }
-            
-            if (table === 'tasks' || table === 'submissions' || table === 'group_tasks' || table === 'groups' || table === 'group_submissions') {
-                 loadAssignments(); 
-                 if(document.getElementById('taskModal').classList.contains('show') && currentTaskId) openTaskSubmissions(currentTaskId, currentTaskTitle, currentTaskDue, currentTaskMax, false);
-                 if(document.getElementById('groupTaskModal').classList.contains('show') && currentTaskId) openTaskSubmissions(currentTaskId, currentTaskTitle, currentTaskDue, currentTaskMax, true);
-            }
-            
-            if (table === 'leaves') { checkPendingLeaves(); }
-            if (table === 'students') { loadStudents(); }
+// ฟังก์ชันจัดการเมื่อมีข้อมูลเปลี่ยนแปลง (Realtime Payload)
+function handleRealtimeEvent(payload) {
+    const table = payload.table;
+
+    // 1. ถ้าครูล็อกอิน และอยู่ในหน้าห้องเรียน
+    if (localStorage.getItem('teacherLoggedIn') === 'true' && currentRoom !== "") {
+        // 🔔 เพิ่มบรรทัดนี้: ถ้ามีการสื่อสารจากผู้ปกครองเข้ามา ให้รีโหลดรายชื่อเพื่อโชว์ไอคอนทันที
+        if (table === 'parent_communications') {
+            loadStudents(); 
         }
-    
-        // 2. ถ้านักเรียนล็อกอิน
-        if (globalPortalStudent && globalPortalStudent.id) {
-            // 🔔 เพิ่มบรรทัดนี้: ถ้าผู้ปกครองส่งข้อความหาลูก ให้รีโหลดแดชบอร์ดเด็กทันที
-            if (table === 'parent_communications') {
-                loadFullDashboard(globalPortalStudent.id, true);
-            }
-    
-            if ( (table === 'students' && payload.new && payload.new.id === globalPortalStudent.id) ||
-                 (table === 'attendance' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
-                 (table === 'submissions' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
-                 (table === 'tasks') || (table === 'group_tasks') || (table === 'announcements') ) {
-                 
-                 clearTimeout(autoRefreshInterval);
-                 autoRefreshInterval = setTimeout(() => { loadFullDashboard(globalPortalStudent.id, true); }, 2000);
-            }
+
+        if (table === 'attendance') {
+            let checkDate = document.getElementById('attDate').value;
+            if(checkDate) loadAttendanceForDate(); 
         }
-    }
-
-
-    // =====================================
-    // สร้างอวตาร 200 ตัว
-    // =====================================
-    let avatarSeeds = [];
-    for(let i = 1; i <= 200; i++) {
-        avatarSeeds.push("StudentModelProMax_" + i + "_Avatar");
-    }
-
-    // =====================================
-    // สร้างโพสอิท 200 ลาย (ระบบ 10 เลเวล สวยงาม ว้าว และปลอดภัย 100%)
-    // =====================================
-    let postItStyles = [];
-    const pColors = ['#fff9b1', '#ffcce5', '#b2f0e6', '#cce5ff', '#e6ccff', '#d9f2d9', '#ffebd9', '#fff0b3', '#e0e0eb', '#ffb3b3', '#fdfd96', '#ffb7b2', '#ffdac1', '#e2f0cb', '#b5ead7', '#c7ceea', '#f1cbff', '#e8b3fa', '#c3aed6', '#aee1e1'];
-    
-    // ชุด Emoji ลายน้ำ แบ่งตามหมวด
-    const emojiAnimals = ['🐱','🐶','🐰','🦊','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐥','🦆','🦉','🦄','🐝','🦋','🐌','🐞'];
-    const emojiFoods = ['🍎','🍉','🍇','🍓','🍒','🍑','🍍','🥝','🍅','🥑','🍔','🍟','🍕','🌭','🍿','🍩','🍦','🍰','🍫','🍬'];
-    const emojiSports = ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁'];
-    const emojiSky = ['🌈','☀️','🌤️','⛅','🌥️','☁️','🌦️','🌧️','⛈️','🌩️','🌨️','❄️','☃️','⛄','🌬️','💨','🌪️','🌫️','☂️','☔'];
-    const emojiHearts = ['❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍','💖','💗','💓','💞','💕','💘','💝','💟','💌','😘','🥰'];
-
-    for(let i = 0; i < 200; i++) {
-        let c1 = pColors[i % 20];
-        let c2 = pColors[(i + 5) % 20];
-        let c3 = pColors[(i + 10) % 20];
-        let tier = Math.floor(i / 20); // แบ่งเป็น 10 หมวดหมู่ (หมวดละ 20 ลาย)
         
-        if (tier === 0) {
-            postItStyles.push(c1); // เลเวล 1-20: สีพื้นพาสเทลน่ารักๆ
-        } else if (tier === 1) {
-            postItStyles.push(`linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`); // เลเวล 21-40: ไล่สี 2 โทน
-        } else if (tier === 2) {
-            postItStyles.push(`EMOJI:${emojiAnimals[i % 20]}:${c1}`); // เลเวล 41-60: ลายน้ำน้องสัตว์
-        } else if (tier === 3) {
-            postItStyles.push(`radial-gradient(rgba(255,255,255,0.6) 15%, transparent 16%) 0 0 / 20px 20px, ${c2}`); // เลเวล 61-80: ลายจุด Polka Dot
-        } else if (tier === 4) {
-            postItStyles.push(`EMOJI:${emojiFoods[i % 20]}:${c2}`); // เลเวล 81-100: ลายน้ำของกิน
-        } else if (tier === 5) {
-            postItStyles.push(`repeating-linear-gradient(45deg, rgba(255,255,255,0.4), rgba(255,255,255,0.4) 10px, transparent 10px, transparent 20px), ${c1}`); // เลเวล 101-120: ลายทาง
-        } else if (tier === 6) {
-            postItStyles.push(`EMOJI:${emojiSports[i % 20]}:${c1}`); // เลเวล 121-140: ลายน้ำกีฬา
-        } else if (tier === 7) {
-            postItStyles.push(`linear-gradient(rgba(255,255,255,0.5) 2px, transparent 2px) 0 0 / 20px 20px, linear-gradient(90deg, rgba(255,255,255,0.5) 2px, transparent 2px) 0 0 / 20px 20px, ${c2}`); // เลเวล 141-160: ลายตาราง Grid
-        } else if (tier === 8) {
-            postItStyles.push(`EMOJI:${emojiSky[i % 20]}:${c3}`); // เลเวล 161-180: ลายน้ำท้องฟ้า/สภาพอากาศ
-        } else {
-            postItStyles.push(`EMOJI:${emojiHearts[i % 20]}:linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`); // เลเวล 181-200: ลายหัวใจสุดพรีเมียมบนพื้นหลังไล่สี
+        if (table === 'tasks' || table === 'submissions' || table === 'group_tasks' || table === 'groups' || table === 'group_submissions') {
+                loadAssignments(); 
+                if(document.getElementById('taskModal').classList.contains('show') && currentTaskId) openTaskSubmissions(currentTaskId, currentTaskTitle, currentTaskDue, currentTaskMax, false);
+                if(document.getElementById('groupTaskModal').classList.contains('show') && currentTaskId) openTaskSubmissions(currentTaskId, currentTaskTitle, currentTaskDue, currentTaskMax, true);
+        }
+        
+        if (table === 'leaves') { checkPendingLeaves(); }
+        if (table === 'students') { loadStudents(); }
+    }
+
+    // 2. ถ้านักเรียนล็อกอิน
+    if (globalPortalStudent && globalPortalStudent.id) {
+        // 🔔 เพิ่มบรรทัดนี้: ถ้าผู้ปกครองส่งข้อความหาลูก ให้รีโหลดแดชบอร์ดเด็กทันที
+        if (table === 'parent_communications') {
+            loadFullDashboard(globalPortalStudent.id, true);
+        }
+
+        if ( (table === 'students' && payload.new && payload.new.id === globalPortalStudent.id) ||
+                (table === 'attendance' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
+                (table === 'submissions' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
+                (table === 'tasks') || (table === 'group_tasks') || (table === 'announcements') ) {
+                
+                clearTimeout(autoRefreshInterval);
+                autoRefreshInterval = setTimeout(() => { loadFullDashboard(globalPortalStudent.id, true); }, 2000);
         }
     }
+}
+
+
+// =====================================
+// สร้างอวตาร 200 ตัว
+// =====================================
+let avatarSeeds = [];
+for(let i = 1; i <= 200; i++) {
+    avatarSeeds.push("StudentModelProMax_" + i + "_Avatar");
+}
+
+// =====================================
+// สร้างโพสอิท 200 ลาย (ระบบ 10 เลเวล สวยงาม ว้าว และปลอดภัย 100%)
+// =====================================
+let postItStyles = [];
+const pColors = ['#fff9b1', '#ffcce5', '#b2f0e6', '#cce5ff', '#e6ccff', '#d9f2d9', '#ffebd9', '#fff0b3', '#e0e0eb', '#ffb3b3', '#fdfd96', '#ffb7b2', '#ffdac1', '#e2f0cb', '#b5ead7', '#c7ceea', '#f1cbff', '#e8b3fa', '#c3aed6', '#aee1e1'];
+
+// ชุด Emoji ลายน้ำ แบ่งตามหมวด
+const emojiAnimals = ['🐱','🐶','🐰','🦊','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐥','🦆','🦉','🦄','🐝','🦋','🐌','🐞'];
+const emojiFoods = ['🍎','🍉','🍇','🍓','🍒','🍑','🍍','🥝','🍅','🥑','🍔','🍟','🍕','🌭','🍿','🍩','🍦','🍰','🍫','🍬'];
+const emojiSports = ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁'];
+const emojiSky = ['🌈','☀️','🌤️','⛅','🌥️','☁️','🌦️','🌧️','⛈️','🌩️','🌨️','❄️','☃️','⛄','🌬️','💨','🌪️','🌫️','☂️','☔'];
+const emojiHearts = ['❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍','💖','💗','💓','💞','💕','💘','💝','💟','💌','😘','🥰'];
+
+for(let i = 0; i < 200; i++) {
+    let c1 = pColors[i % 20];
+    let c2 = pColors[(i + 5) % 20];
+    let c3 = pColors[(i + 10) % 20];
+    let tier = Math.floor(i / 20); // แบ่งเป็น 10 หมวดหมู่ (หมวดละ 20 ลาย)
+    
+    if (tier === 0) {
+        postItStyles.push(c1); // เลเวล 1-20: สีพื้นพาสเทลน่ารักๆ
+    } else if (tier === 1) {
+        postItStyles.push(`linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`); // เลเวล 21-40: ไล่สี 2 โทน
+    } else if (tier === 2) {
+        postItStyles.push(`EMOJI:${emojiAnimals[i % 20]}:${c1}`); // เลเวล 41-60: ลายน้ำน้องสัตว์
+    } else if (tier === 3) {
+        postItStyles.push(`radial-gradient(rgba(255,255,255,0.6) 15%, transparent 16%) 0 0 / 20px 20px, ${c2}`); // เลเวล 61-80: ลายจุด Polka Dot
+    } else if (tier === 4) {
+        postItStyles.push(`EMOJI:${emojiFoods[i % 20]}:${c2}`); // เลเวล 81-100: ลายน้ำของกิน
+    } else if (tier === 5) {
+        postItStyles.push(`repeating-linear-gradient(45deg, rgba(255,255,255,0.4), rgba(255,255,255,0.4) 10px, transparent 10px, transparent 20px), ${c1}`); // เลเวล 101-120: ลายทาง
+    } else if (tier === 6) {
+        postItStyles.push(`EMOJI:${emojiSports[i % 20]}:${c1}`); // เลเวล 121-140: ลายน้ำกีฬา
+    } else if (tier === 7) {
+        postItStyles.push(`linear-gradient(rgba(255,255,255,0.5) 2px, transparent 2px) 0 0 / 20px 20px, linear-gradient(90deg, rgba(255,255,255,0.5) 2px, transparent 2px) 0 0 / 20px 20px, ${c2}`); // เลเวล 141-160: ลายตาราง Grid
+    } else if (tier === 8) {
+        postItStyles.push(`EMOJI:${emojiSky[i % 20]}:${c3}`); // เลเวล 161-180: ลายน้ำท้องฟ้า/สภาพอากาศ
+    } else {
+        postItStyles.push(`EMOJI:${emojiHearts[i % 20]}:linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`); // เลเวล 181-200: ลายหัวใจสุดพรีเมียมบนพื้นหลังไล่สี
+    }
+}
 
 // 1. หมวดเครื่องประดับ & อุปกรณ์ (Accessories) - 30 ชิ้น (ไม่มีแขนขาคนถือ)
-    const itemsData = [
-        { id: 'i1', name: 'แว่นตากรอบใส', price: 500, icon: '👓', passive: '+1 EXP/ชม.' },
-        { id: 'i2', name: 'หน้ากากอนามัย', price: 1000, icon: '😷', passive: '+1 EXP/ชม.' },
-        { id: 'i3', name: 'หูฟังไร้สาย', price: 2000, icon: '🎧', passive: '+2 EXP/ชม.' },
-        { id: 'i4', name: 'หมวกไหมพรมหูแมว', price: 3500, icon: '🧶', passive: '+2 EXP/ชม.' },
-        { id: 'i5', name: 'แว่นกันแดดสีชา', price: 5500, icon: '🕶️', passive: '+3 EXP/ชม.' },
-        { id: 'i6', name: 'นาฬิกาสมาร์ทวอทช์', price: 8000, icon: '⌚', passive: '+3 EXP/ชม.' },
-        { id: 'i7', name: 'สร้อยคอพลอยฟ้า', price: 11000, icon: '💎', passive: '+4 EXP/ชม.' },
-        { id: 'i8', name: 'กระเป๋าเป้เดินทาง', price: 15000, icon: '🎒', passive: '+4 EXP/ชม.' },
-        { id: 'i9', name: 'คทาเวทย์ฝึกหัด', price: 20000, icon: '🪄', passive: '+5 EXP/ชม.' },
-        { id: 'i10', name: 'ดาบเหล็กกล้า', price: 26000, icon: '⚔️', passive: '+5 EXP/ชม.' },
-        { id: 'i11', name: 'โล่ป้องกันทองแดง', price: 33000, icon: '🛡️', passive: '+6 EXP/ชม.' },
-        { id: 'i12', name: 'มงกุฎดอกไม้สด', price: 41000, icon: '🌸', passive: '+6 EXP/ชม.' },
-        { id: 'i13', name: 'ธนูไม้โอ๊ค', price: 50000, icon: '🏹', passive: '+7 EXP/ชม.' },
-        { id: 'i14', name: 'หน้ากากแฟนซี', price: 60000, icon: '🎭', passive: '+7 EXP/ชม.' },
-        { id: 'i15', name: 'เข็มขัดนิรภัยทองคำ', price: 72000, icon: '🎗️', passive: '+8 EXP/ชม.' },
-        { id: 'i16', name: 'ค้อนศึกยักษ์', price: 85000, icon: '🔨', passive: '+8 EXP/ชม.' },
-        { id: 'i17', name: 'ขวานพยุหะ', price: 100000, icon: '🪓', passive: '+9 EXP/ชม.' },
-        { id: 'i18', name: 'ลูกแก้ววิญญาณ', price: 118000, icon: '🔮', passive: '+9 EXP/ชม.' },
-        { id: 'i19', name: 'ปีกผีเสื้อเวทย์', price: 138000, icon: '🦋', passive: '+10 EXP/ชม.' },
-        { id: 'i20', name: 'มงกุฎทองคำแท้', price: 160000, icon: '👑', passive: '+10 EXP/ชม.' },
-        { id: 'i21', name: 'ร่มมนตรา', price: 185000, icon: '☂️', passive: '+12 EXP/ชม.' },
-        { id: 'i22', name: 'คทาสามง่ามน้ำแข็ง', price: 215000, icon: '🔱', passive: '+12 EXP/ชม.' },
-        { id: 'i23', name: 'กล่องดนตรีปริศนา', price: 245000, icon: '📻', passive: '+14 EXP/ชม.' },
-        { id: 'i24', name: 'พัดโบราณลงอาคม', price: 275000, icon: '🪭', passive: '+14 EXP/ชม.' },
-        { id: 'i25', name: 'กระดิ่งเรียกโชค', price: 310000, icon: '🔔', passive: '+16 EXP/ชม.' },
-        { id: 'i26', name: 'ปีกเทวทูตขาว', price: 345000, icon: '🕊️', passive: '+16 EXP/ชม.' },
-        { id: 'i27', name: 'มงกุฎรัตติกาล', price: 385000, icon: '🖤', passive: '+18 EXP/ชม.' },
-        { id: 'i28', name: 'ดาบแสงเลเซอร์', price: 425000, icon: '🔦', passive: '+18 EXP/ชม.' },
-        { id: 'i29', name: 'วงแหวนศักดิ์สิทธิ์', price: 470000, icon: '✨', passive: '+20 EXP/ชม.' },
-        { id: 'i30', name: 'อัญมณีไร้ขอบเขต', price: 550000, icon: '💎', passive: '+20 EXP/ชม.' }
-    ];
+const itemsData = [
+    { id: 'i1', name: 'แว่นตากรอบใส', price: 500, icon: '👓', passive: '+1 EXP/ชม.' },
+    { id: 'i2', name: 'หน้ากากอนามัย', price: 1000, icon: '😷', passive: '+1 EXP/ชม.' },
+    { id: 'i3', name: 'หูฟังไร้สาย', price: 2000, icon: '🎧', passive: '+2 EXP/ชม.' },
+    { id: 'i4', name: 'หมวกไหมพรมหูแมว', price: 3500, icon: '🧶', passive: '+2 EXP/ชม.' },
+    { id: 'i5', name: 'แว่นกันแดดสีชา', price: 5500, icon: '🕶️', passive: '+3 EXP/ชม.' },
+    { id: 'i6', name: 'นาฬิกาสมาร์ทวอทช์', price: 8000, icon: '⌚', passive: '+3 EXP/ชม.' },
+    { id: 'i7', name: 'สร้อยคอพลอยฟ้า', price: 11000, icon: '💎', passive: '+4 EXP/ชม.' },
+    { id: 'i8', name: 'กระเป๋าเป้เดินทาง', price: 15000, icon: '🎒', passive: '+4 EXP/ชม.' },
+    { id: 'i9', name: 'คทาเวทย์ฝึกหัด', price: 20000, icon: '🪄', passive: '+5 EXP/ชม.' },
+    { id: 'i10', name: 'ดาบเหล็กกล้า', price: 26000, icon: '⚔️', passive: '+5 EXP/ชม.' },
+    { id: 'i11', name: 'โล่ป้องกันทองแดง', price: 33000, icon: '🛡️', passive: '+6 EXP/ชม.' },
+    { id: 'i12', name: 'มงกุฎดอกไม้สด', price: 41000, icon: '🌸', passive: '+6 EXP/ชม.' },
+    { id: 'i13', name: 'ธนูไม้โอ๊ค', price: 50000, icon: '🏹', passive: '+7 EXP/ชม.' },
+    { id: 'i14', name: 'หน้ากากแฟนซี', price: 60000, icon: '🎭', passive: '+7 EXP/ชม.' },
+    { id: 'i15', name: 'เข็มขัดนิรภัยทองคำ', price: 72000, icon: '🎗️', passive: '+8 EXP/ชม.' },
+    { id: 'i16', name: 'ค้อนศึกยักษ์', price: 85000, icon: '🔨', passive: '+8 EXP/ชม.' },
+    { id: 'i17', name: 'ขวานพยุหะ', price: 100000, icon: '🪓', passive: '+9 EXP/ชม.' },
+    { id: 'i18', name: 'ลูกแก้ววิญญาณ', price: 118000, icon: '🔮', passive: '+9 EXP/ชม.' },
+    { id: 'i19', name: 'ปีกผีเสื้อเวทย์', price: 138000, icon: '🦋', passive: '+10 EXP/ชม.' },
+    { id: 'i20', name: 'มงกุฎทองคำแท้', price: 160000, icon: '👑', passive: '+10 EXP/ชม.' },
+    { id: 'i21', name: 'ร่มมนตรา', price: 185000, icon: '☂️', passive: '+12 EXP/ชม.' },
+    { id: 'i22', name: 'คทาสามง่ามน้ำแข็ง', price: 215000, icon: '🔱', passive: '+12 EXP/ชม.' },
+    { id: 'i23', name: 'กล่องดนตรีปริศนา', price: 245000, icon: '📻', passive: '+14 EXP/ชม.' },
+    { id: 'i24', name: 'พัดโบราณลงอาคม', price: 275000, icon: '🪭', passive: '+14 EXP/ชม.' },
+    { id: 'i25', name: 'กระดิ่งเรียกโชค', price: 310000, icon: '🔔', passive: '+16 EXP/ชม.' },
+    { id: 'i26', name: 'ปีกเทวทูตขาว', price: 345000, icon: '🕊️', passive: '+16 EXP/ชม.' },
+    { id: 'i27', name: 'มงกุฎรัตติกาล', price: 385000, icon: '🖤', passive: '+18 EXP/ชม.' },
+    { id: 'i28', name: 'ดาบแสงเลเซอร์', price: 425000, icon: '🔦', passive: '+18 EXP/ชม.' },
+    { id: 'i29', name: 'วงแหวนศักดิ์สิทธิ์', price: 470000, icon: '✨', passive: '+20 EXP/ชม.' },
+    { id: 'i30', name: 'อัญมณีไร้ขอบเขต', price: 550000, icon: '💎', passive: '+20 EXP/ชม.' }
+];
 
 // 2. หมวดชุดชาย (Men Apparel) - 30 ชิ้น (เฉพาะตัวเสื้อผ้า)
-    const maleClothesData = [
-        { id: 'm1', name: 'เสื้อยืดขาวหม่น', price: 1500, icon: '👕', passive: '+2 EXP/ชม.' },
-        { id: 'm2', name: 'เสื้อยืดลายทาง', price: 3000, icon: '👕', passive: '+3 EXP/ชม.' },
-        { id: 'm3', name: 'เสื้อเชิ้ตลายสก็อต', price: 6000, icon: '👔', passive: '+4 EXP/ชม.' },
-        { id: 'm4', name: 'เสื้อโปโลน้ำเงิน', price: 10000, icon: '👕', passive: '+5 EXP/ชม.' },
-        { id: 'm5', name: 'เสื้อเชิ้ตขาวเนี๊ยบ', price: 15000, icon: '👔', passive: '+6 EXP/ชม.' },
-        { id: 'm6', name: 'กางเกงยีนส์ฟอก', price: 22000, icon: '👖', passive: '+7 EXP/ชม.' },
-        { id: 'm7', name: 'เสื้อกั๊กตกปลา', price: 30000, icon: '🦺', passive: '+8 EXP/ชม.' },
-        { id: 'm8', name: 'เสื้อหนาวสีเข้ม', price: 40000, icon: '🧥', passive: '+9 EXP/ชม.' },
-        { id: 'm9', name: 'เสื้อแจ็คเก็ตหนัง', price: 52000, icon: '🧥', passive: '+10 EXP/ชม.' },
-        { id: 'm10', name: 'ชุดวอร์มกีฬา', price: 65000, icon: '👟', passive: '+11 EXP/ชม.' },
-        { id: 'm11', name: 'ชุดสูททักซิโด้', price: 80000, icon: '🕴️', passive: '+12 EXP/ชม.' },
-        { id: 'm12', name: 'เสื้อกาวน์สีขาว', price: 98000, icon: '🥼', passive: '+13 EXP/ชม.' },
-        { id: 'm13', name: 'ชุดเอี๊ยมยีนส์', price: 120000, icon: '👖', passive: '+14 EXP/ชม.' },
-        { id: 'm14', name: 'เสื้อคลุมอาบน้ำ', price: 145000, icon: '👘', passive: '+15 EXP/ชม.' },
-        { id: 'm15', name: 'กางเกงขาสั้นบีช', price: 175000, icon: '🩳', passive: '+16 EXP/ชม.' },
-        { id: 'm16', name: 'ชุดยูโดขาว', price: 210000, icon: '🥋', passive: '+17 EXP/ชม.' },
-        { id: 'm17', name: 'ชุดกิโมโนชาย', price: 250000, icon: '👘', passive: '+18 EXP/ชม.' },
-        { id: 'm18', name: 'เสื้อคลุมลอร์ด', price: 295000, icon: '🧣', passive: '+19 EXP/ชม.' },
-        { id: 'm19', name: 'เสื้อเกราะหนังสัตว์', price: 345000, icon: '🪵', passive: '+20 EXP/ชม.' },
-        { id: 'm20', name: 'ชุดนักรบพเนจร', price: 400000, icon: '🗡️', passive: '+21 EXP/ชม.' },
-        { id: 'm21', name: 'เสื้อคลุมนักเวทย์มืด', price: 450000, icon: '🪄', passive: '+22 EXP/ชม.' },
-        { id: 'm22', name: 'เกราะเหล็กอัศวิน', price: 500000, icon: '🛡️', passive: '+23 EXP/ชม.' },
-        { id: 'm23', name: 'ชุดออกผจญภัย', price: 550000, icon: '🎒', passive: '+24 EXP/ชม.' },
-        { id: 'm24', name: 'เกราะมังกรแดง', price: 600000, icon: '🔥', passive: '+25 EXP/ชม.' },
-        { id: 'm25', name: 'ชุดเกราะจักรกล', price: 650000, icon: '🤖', passive: '+26 EXP/ชม.' },
-        { id: 'm26', name: 'เสื้อคลุมเทพเจ้า', price: 680000, icon: '✨', passive: '+27 EXP/ชม.' },
-        { id: 'm27', name: 'เกราะศักดิ์สิทธิ์ทองคำ', price: 700000, icon: '🔱', passive: '+28 EXP/ชม.' },
-        { id: 'm28', name: 'ชุดจักรพรรดิสูงสุด', price: 720000, icon: '👑', passive: '+29 EXP/ชม.' },
-        { id: 'm29', name: 'เกราะทลายมิติ', price: 740000, icon: '🌀', passive: '+30 EXP/ชม.' },
-        { id: 'm30', name: 'อาภรณ์มหาเทพนิรันดร์', price: 750000, icon: '🌌', passive: '+30 EXP/ชม.' }
-    ];
+const maleClothesData = [
+    { id: 'm1', name: 'เสื้อยืดขาวหม่น', price: 1500, icon: '👕', passive: '+2 EXP/ชม.' },
+    { id: 'm2', name: 'เสื้อยืดลายทาง', price: 3000, icon: '👕', passive: '+3 EXP/ชม.' },
+    { id: 'm3', name: 'เสื้อเชิ้ตลายสก็อต', price: 6000, icon: '👔', passive: '+4 EXP/ชม.' },
+    { id: 'm4', name: 'เสื้อโปโลน้ำเงิน', price: 10000, icon: '👕', passive: '+5 EXP/ชม.' },
+    { id: 'm5', name: 'เสื้อเชิ้ตขาวเนี๊ยบ', price: 15000, icon: '👔', passive: '+6 EXP/ชม.' },
+    { id: 'm6', name: 'กางเกงยีนส์ฟอก', price: 22000, icon: '👖', passive: '+7 EXP/ชม.' },
+    { id: 'm7', name: 'เสื้อกั๊กตกปลา', price: 30000, icon: '🦺', passive: '+8 EXP/ชม.' },
+    { id: 'm8', name: 'เสื้อหนาวสีเข้ม', price: 40000, icon: '🧥', passive: '+9 EXP/ชม.' },
+    { id: 'm9', name: 'เสื้อแจ็คเก็ตหนัง', price: 52000, icon: '🧥', passive: '+10 EXP/ชม.' },
+    { id: 'm10', name: 'ชุดวอร์มกีฬา', price: 65000, icon: '👟', passive: '+11 EXP/ชม.' },
+    { id: 'm11', name: 'ชุดสูททักซิโด้', price: 80000, icon: '🕴️', passive: '+12 EXP/ชม.' },
+    { id: 'm12', name: 'เสื้อกาวน์สีขาว', price: 98000, icon: '🥼', passive: '+13 EXP/ชม.' },
+    { id: 'm13', name: 'ชุดเอี๊ยมยีนส์', price: 120000, icon: '👖', passive: '+14 EXP/ชม.' },
+    { id: 'm14', name: 'เสื้อคลุมอาบน้ำ', price: 145000, icon: '👘', passive: '+15 EXP/ชม.' },
+    { id: 'm15', name: 'กางเกงขาสั้นบีช', price: 175000, icon: '🩳', passive: '+16 EXP/ชม.' },
+    { id: 'm16', name: 'ชุดยูโดขาว', price: 210000, icon: '🥋', passive: '+17 EXP/ชม.' },
+    { id: 'm17', name: 'ชุดกิโมโนชาย', price: 250000, icon: '👘', passive: '+18 EXP/ชม.' },
+    { id: 'm18', name: 'เสื้อคลุมลอร์ด', price: 295000, icon: '🧣', passive: '+19 EXP/ชม.' },
+    { id: 'm19', name: 'เสื้อเกราะหนังสัตว์', price: 345000, icon: '🪵', passive: '+20 EXP/ชม.' },
+    { id: 'm20', name: 'ชุดนักรบพเนจร', price: 400000, icon: '🗡️', passive: '+21 EXP/ชม.' },
+    { id: 'm21', name: 'เสื้อคลุมนักเวทย์มืด', price: 450000, icon: '🪄', passive: '+22 EXP/ชม.' },
+    { id: 'm22', name: 'เกราะเหล็กอัศวิน', price: 500000, icon: '🛡️', passive: '+23 EXP/ชม.' },
+    { id: 'm23', name: 'ชุดออกผจญภัย', price: 550000, icon: '🎒', passive: '+24 EXP/ชม.' },
+    { id: 'm24', name: 'เกราะมังกรแดง', price: 600000, icon: '🔥', passive: '+25 EXP/ชม.' },
+    { id: 'm25', name: 'ชุดเกราะจักรกล', price: 650000, icon: '🤖', passive: '+26 EXP/ชม.' },
+    { id: 'm26', name: 'เสื้อคลุมเทพเจ้า', price: 680000, icon: '✨', passive: '+27 EXP/ชม.' },
+    { id: 'm27', name: 'เกราะศักดิ์สิทธิ์ทองคำ', price: 700000, icon: '🔱', passive: '+28 EXP/ชม.' },
+    { id: 'm28', name: 'ชุดจักรพรรดิสูงสุด', price: 720000, icon: '👑', passive: '+29 EXP/ชม.' },
+    { id: 'm29', name: 'เกราะทลายมิติ', price: 740000, icon: '🌀', passive: '+30 EXP/ชม.' },
+    { id: 'm30', name: 'อาภรณ์มหาเทพนิรันดร์', price: 750000, icon: '🌌', passive: '+30 EXP/ชม.' }
+];
 
 // 3. หมวดชุดหญิง (Women Apparel) - 30 ชิ้น (เฉพาะตัวเสื้อผ้า)
-    const femaleClothesData = [
-        { id: 'w1', name: 'เสื้อสายเดี่ยวขาว', price: 1500, icon: '👚', passive: '+2 EXP/ชม.' },
-        { id: 'w2', name: 'กระโปรงพลีทสั้น', price: 3000, icon: '👗', passive: '+3 EXP/ชม.' },
-        { id: 'w3', name: 'เดรสหน้าร้อนดอกไม้', price: 6000, icon: '👗', passive: '+4 EXP/ชม.' },
-        { id: 'w4', name: 'เสื้อยืดคอปาด', price: 10000, icon: '👚', passive: '+5 EXP/ชม.' },
-        { id: 'w5', name: 'ชุดกระโปรงเอี๊ยม', price: 15000, icon: '👗', passive: '+6 EXP/ชม.' },
-        { id: 'w6', name: 'ชุดนักเรียนญี่ปุ่น', price: 22000, icon: '🎀', passive: '+7 EXP/ชม.' },
-        { id: 'w7', name: 'ชุดออกกำลังกายรัดรูป', price: 30000, icon: '👟', passive: '+8 EXP/ชม.' },
-        { id: 'w8', name: 'เสื้อคลุมผ้าพันคอ', price: 40000, icon: '🧣', passive: '+9 EXP/ชม.' },
-        { id: 'w9', name: 'ชุดว่ายน้ำสีสดใส', price: 52000, icon: '🩱', passive: '+10 EXP/ชม.' },
-        { id: 'w10', name: 'ชุดราตรีเรียบหรู', price: 65000, icon: '👗', passive: '+11 EXP/ชม.' },
-        { id: 'w11', name: 'กิโมโนลายซากุระ', price: 80000, icon: '👘', passive: '+12 EXP/ชม.' },
-        { id: 'w12', name: 'ชุดกี่เพ้าสีแดงสด', price: 98000, icon: '🧧', passive: '+13 EXP/ชม.' },
-        { id: 'w13', name: 'ชุดเมดลูกไม้ขาว', price: 120000, icon: '🧹', passive: '+14 EXP/ชม.' },
-        { id: 'w14', name: 'เสื้อคลุมกันหนาวหนา', price: 145000, icon: '🧥', passive: '+15 EXP/ชม.' },
-        { id: 'w15', name: 'ชุดระบำบัลเล่ต์', price: 175000, icon: '🩰', passive: '+16 EXP/ชม.' },
-        { id: 'w16', name: 'ชุดราตรีประดับพลอย', price: 210000, icon: '💃', passive: '+17 EXP/ชม.' },
-        { id: 'w17', name: 'เสื้อคลุมแม่มดน้อย', price: 250000, icon: '🧙‍♀️', passive: '+18 EXP/ชม.' },
-        { id: 'w18', name: 'ชุดเกราะหนังนักรบสาว', price: 295000, icon: '🏹', passive: '+19 EXP/ชม.' },
-        { id: 'w19', name: 'ชุดนินจาสาวเงา', price: 345000, icon: '🥷', passive: '+20 EXP/ชม.' },
-        { id: 'w20', name: 'ชุดเดรสหางเงือก', price: 400000, icon: '🧜‍♀️', passive: '+21 EXP/ชม.' },
-        { id: 'w21', name: 'ชุดนางฟ้าผ้าพริ้ว', price: 450000, icon: '🧚‍♀️', passive: '+22 EXP/ชม.' },
-        { id: 'w22', name: 'เกราะอัศวินหญิงเหล็ก', price: 500000, icon: '🛡️', passive: '+23 EXP/ชม.' },
-        { id: 'w23', name: 'ชุดราชินีแห่งป่า', price: 550000, icon: '🍃', passive: '+24 EXP/ชม.' },
-        { id: 'w24', name: 'เกราะเพชรประดับทอง', price: 600000, icon: '💎', passive: '+25 EXP/ชม.' },
-        { id: 'w25', name: 'อาภรณ์สตรีศักดิ์สิทธิ์', price: 650000, icon: '✨', passive: '+26 EXP/ชม.' },
-        { id: 'w26', name: 'เดรสราชินีหิมะ', price: 680000, icon: '❄️', passive: '+27 EXP/ชม.' },
-        { id: 'w27', name: 'ชุดเกราะเทพธิดา', price: 700000, icon: '👼', passive: '+28 EXP/ชม.' },
-        { id: 'w28', name: 'อาภรณ์จันทราลี้ลับ', price: 720000, icon: '🌙', passive: '+29 EXP/ชม.' },
-        { id: 'w29', name: 'เกราะมหาเทวีพิโรธ', price: 740000, icon: '🔥', passive: '+30 EXP/ชม.' },
-        { id: 'w30', name: 'ชุดเทพีผู้สร้างมิติ', price: 750000, icon: '🌌', passive: '+30 EXP/ชม.' }
-    ];
+const femaleClothesData = [
+    { id: 'w1', name: 'เสื้อสายเดี่ยวขาว', price: 1500, icon: '👚', passive: '+2 EXP/ชม.' },
+    { id: 'w2', name: 'กระโปรงพลีทสั้น', price: 3000, icon: '👗', passive: '+3 EXP/ชม.' },
+    { id: 'w3', name: 'เดรสหน้าร้อนดอกไม้', price: 6000, icon: '👗', passive: '+4 EXP/ชม.' },
+    { id: 'w4', name: 'เสื้อยืดคอปาด', price: 10000, icon: '👚', passive: '+5 EXP/ชม.' },
+    { id: 'w5', name: 'ชุดกระโปรงเอี๊ยม', price: 15000, icon: '👗', passive: '+6 EXP/ชม.' },
+    { id: 'w6', name: 'ชุดนักเรียนญี่ปุ่น', price: 22000, icon: '🎀', passive: '+7 EXP/ชม.' },
+    { id: 'w7', name: 'ชุดออกกำลังกายรัดรูป', price: 30000, icon: '👟', passive: '+8 EXP/ชม.' },
+    { id: 'w8', name: 'เสื้อคลุมผ้าพันคอ', price: 40000, icon: '🧣', passive: '+9 EXP/ชม.' },
+    { id: 'w9', name: 'ชุดว่ายน้ำสีสดใส', price: 52000, icon: '🩱', passive: '+10 EXP/ชม.' },
+    { id: 'w10', name: 'ชุดราตรีเรียบหรู', price: 65000, icon: '👗', passive: '+11 EXP/ชม.' },
+    { id: 'w11', name: 'กิโมโนลายซากุระ', price: 80000, icon: '👘', passive: '+12 EXP/ชม.' },
+    { id: 'w12', name: 'ชุดกี่เพ้าสีแดงสด', price: 98000, icon: '🧧', passive: '+13 EXP/ชม.' },
+    { id: 'w13', name: 'ชุดเมดลูกไม้ขาว', price: 120000, icon: '🧹', passive: '+14 EXP/ชม.' },
+    { id: 'w14', name: 'เสื้อคลุมกันหนาวหนา', price: 145000, icon: '🧥', passive: '+15 EXP/ชม.' },
+    { id: 'w15', name: 'ชุดระบำบัลเล่ต์', price: 175000, icon: '🩰', passive: '+16 EXP/ชม.' },
+    { id: 'w16', name: 'ชุดราตรีประดับพลอย', price: 210000, icon: '💃', passive: '+17 EXP/ชม.' },
+    { id: 'w17', name: 'เสื้อคลุมแม่มดน้อย', price: 250000, icon: '🧙‍♀️', passive: '+18 EXP/ชม.' },
+    { id: 'w18', name: 'ชุดเกราะหนังนักรบสาว', price: 295000, icon: '🏹', passive: '+19 EXP/ชม.' },
+    { id: 'w19', name: 'ชุดนินจาสาวเงา', price: 345000, icon: '🥷', passive: '+20 EXP/ชม.' },
+    { id: 'w20', name: 'ชุดเดรสหางเงือก', price: 400000, icon: '🧜‍♀️', passive: '+21 EXP/ชม.' },
+    { id: 'w21', name: 'ชุดนางฟ้าผ้าพริ้ว', price: 450000, icon: '🧚‍♀️', passive: '+22 EXP/ชม.' },
+    { id: 'w22', name: 'เกราะอัศวินหญิงเหล็ก', price: 500000, icon: '🛡️', passive: '+23 EXP/ชม.' },
+    { id: 'w23', name: 'ชุดราชินีแห่งป่า', price: 550000, icon: '🍃', passive: '+24 EXP/ชม.' },
+    { id: 'w24', name: 'เกราะเพชรประดับทอง', price: 600000, icon: '💎', passive: '+25 EXP/ชม.' },
+    { id: 'w25', name: 'อาภรณ์สตรีศักดิ์สิทธิ์', price: 650000, icon: '✨', passive: '+26 EXP/ชม.' },
+    { id: 'w26', name: 'เดรสราชินีหิมะ', price: 680000, icon: '❄️', passive: '+27 EXP/ชม.' },
+    { id: 'w27', name: 'ชุดเกราะเทพธิดา', price: 700000, icon: '👼', passive: '+28 EXP/ชม.' },
+    { id: 'w28', name: 'อาภรณ์จันทราลี้ลับ', price: 720000, icon: '🌙', passive: '+29 EXP/ชม.' },
+    { id: 'w29', name: 'เกราะมหาเทวีพิโรธ', price: 740000, icon: '🔥', passive: '+30 EXP/ชม.' },
+    { id: 'w30', name: 'ชุดเทพีผู้สร้างมิติ', price: 750000, icon: '🌌', passive: '+30 EXP/ชม.' }
+];
 
 // 5. หมวดฉากหลังเวทมนตร์ (Backgrounds) - 15 ชิ้น
-    const bgData = [
-        { id: 'bg1', name: 'ทุ่งหญ้าสงบสุข', price: 5000, passive: '+5 EXP/ชม.', css: 'linear-gradient(to top, #d299c2 0%, #fef9d7 100%)' },
-        { id: 'bg2', name: 'ริมหาดสีคราม', price: 12000, passive: '+7 EXP/ชม.', css: 'linear-gradient(to top, #4facfe 0%, #00f2fe 100%)' },
-        { id: 'bg3', name: 'ป่าไผ่ซามูไร', price: 25000, passive: '+9 EXP/ชม.', css: 'linear-gradient(to top, #13547a 0%, #80d0c7 100%)' },
-        { id: 'bg4', name: 'หมู่บ้านลอยน้ำ', price: 45000, passive: '+11 EXP/ชม.', css: 'linear-gradient(to right, #43e97b 0%, #38f9d7 100%)' },
-        { id: 'bg5', name: 'สวนลาเวนเดอร์มินิมอล', price: 75000, passive: '+13 EXP/ชม.', css: 'linear-gradient(to top, #f8049c 0%, #fdd100 100%)' },
-        { id: 'bg6', name: 'อาณาจักรทราย', price: 110000, passive: '+15 EXP/ชม.', css: 'linear-gradient(to right, #f6d365 0%, #fda085 100%)' },
-        { id: 'bg7', name: 'ขั้วโลกแสงเหนือ', price: 155000, passive: '+18 EXP/ชม.', css: 'linear-gradient(to right, #243949 0%, #517fa4 100%)' },
-        { id: 'bg8', name: 'ถ้ำรัตนชาติ', price: 210000, passive: '+21 EXP/ชม.', css: 'linear-gradient(to right, #6a11cb 0%, #2575fc 100%)' },
-        { id: 'bg9', name: 'มหานครลอยฟ้า', price: 280000, passive: '+25 EXP/ชม.', css: 'linear-gradient(to top, #96fbc4 0%, #f9f586 100%)' },
-        { id: 'bg10', name: 'วังมังกรใต้ทะเล', price: 370000, passive: '+30 EXP/ชม.', css: 'linear-gradient(to right, #00c6fb 0%, #005bc5 100%)' },
-        { id: 'bg11', name: 'วิหารแห่งกาลเวลา', price: 480000, passive: '+35 EXP/ชม.', css: 'linear-gradient(to top, #09203f 0%, #537895 100%)' },
-        { id: 'bg12', name: 'ห้วงจักรวาลสีรุ้ง', price: 620000, passive: '+40 EXP/ชม.', css: 'linear-gradient(to top, #ff0844 0%, #ffb199 100%)' },
-        { id: 'bg13', name: 'วิหารเทพโอลิมปัส', price: 800000, passive: '+45 EXP/ชม.', css: 'linear-gradient(120deg, #f093fb 0%, #f55555 100%)' },
-        { id: 'bg14', name: 'บัลลังก์เทพนิรันดร์', price: 1100000, passive: '+50 EXP/ชม.', css: 'linear-gradient(to top, #fccf31 0%, #f55555 100%)' },
-        { id: 'bg15', name: 'พหุจักรวาล (Infinity)', price: 1500000, passive: '+50 EXP/ชม.', css: 'radial-gradient(circle, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)' }
-    ];
+const bgData = [
+    { id: 'bg1', name: 'ทุ่งหญ้าสงบสุข', price: 5000, passive: '+5 EXP/ชม.', css: 'linear-gradient(to top, #d299c2 0%, #fef9d7 100%)' },
+    { id: 'bg2', name: 'ริมหาดสีคราม', price: 12000, passive: '+7 EXP/ชม.', css: 'linear-gradient(to top, #4facfe 0%, #00f2fe 100%)' },
+    { id: 'bg3', name: 'ป่าไผ่ซามูไร', price: 25000, passive: '+9 EXP/ชม.', css: 'linear-gradient(to top, #13547a 0%, #80d0c7 100%)' },
+    { id: 'bg4', name: 'หมู่บ้านลอยน้ำ', price: 45000, passive: '+11 EXP/ชม.', css: 'linear-gradient(to right, #43e97b 0%, #38f9d7 100%)' },
+    { id: 'bg5', name: 'สวนลาเวนเดอร์มินิมอล', price: 75000, passive: '+13 EXP/ชม.', css: 'linear-gradient(to top, #f8049c 0%, #fdd100 100%)' },
+    { id: 'bg6', name: 'อาณาจักรทราย', price: 110000, passive: '+15 EXP/ชม.', css: 'linear-gradient(to right, #f6d365 0%, #fda085 100%)' },
+    { id: 'bg7', name: 'ขั้วโลกแสงเหนือ', price: 155000, passive: '+18 EXP/ชม.', css: 'linear-gradient(to right, #243949 0%, #517fa4 100%)' },
+    { id: 'bg8', name: 'ถ้ำรัตนชาติ', price: 210000, passive: '+21 EXP/ชม.', css: 'linear-gradient(to right, #6a11cb 0%, #2575fc 100%)' },
+    { id: 'bg9', name: 'มหานครลอยฟ้า', price: 280000, passive: '+25 EXP/ชม.', css: 'linear-gradient(to top, #96fbc4 0%, #f9f586 100%)' },
+    { id: 'bg10', name: 'วังมังกรใต้ทะเล', price: 370000, passive: '+30 EXP/ชม.', css: 'linear-gradient(to right, #00c6fb 0%, #005bc5 100%)' },
+    { id: 'bg11', name: 'วิหารแห่งกาลเวลา', price: 480000, passive: '+35 EXP/ชม.', css: 'linear-gradient(to top, #09203f 0%, #537895 100%)' },
+    { id: 'bg12', name: 'ห้วงจักรวาลสีรุ้ง', price: 620000, passive: '+40 EXP/ชม.', css: 'linear-gradient(to top, #ff0844 0%, #ffb199 100%)' },
+    { id: 'bg13', name: 'วิหารเทพโอลิมปัส', price: 800000, passive: '+45 EXP/ชม.', css: 'linear-gradient(120deg, #f093fb 0%, #f55555 100%)' },
+    { id: 'bg14', name: 'บัลลังก์เทพนิรันดร์', price: 1100000, passive: '+50 EXP/ชม.', css: 'linear-gradient(to top, #fccf31 0%, #f55555 100%)' },
+    { id: 'bg15', name: 'พหุจักรวาล (Infinity)', price: 1500000, passive: '+50 EXP/ชม.', css: 'radial-gradient(circle, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)' }
+];
 
 // 4. หมวดอาหาร (Consume) - 30 ชิ้น
-    const foodData = [
-        { id: 'f1', name: 'ลูกอมเปรี้ยวจี๊ด', price: 100, icon: '🍬', multiplier: 1.2, durationMin: 720, msg: 'รับบัฟ EXP *1.2 นาน 12 ชั่วโมง 🍬' },
-        { id: 'f2', name: 'ช็อกโกแลตบาร์', price: 150, icon: '🍫', multiplier: 1.2, durationMin: 720, msg: 'รับบัฟ EXP *1.2 นาน 12 ชั่วโมง 🍫' },
-        { id: 'f3', name: 'เพรทเซลโรยเกลือ', price: 250, icon: '🥨', multiplier: 1.3, durationMin: 720, msg: 'รับบัฟ EXP *1.3 นาน 12 ชั่วโมง 🥨' },
-        { id: 'f4', name: 'คัพเค้กวนิลา', price: 350, icon: '🧁', multiplier: 1.3, durationMin: 720, msg: 'รับบัฟ EXP *1.3 นาน 12 ชั่วโมง 🧁' },
-        { id: 'f5', name: 'ครัวซองต์เนยโฮมเมด', price: 500, icon: '🥐', multiplier: 1.4, durationMin: 720, msg: 'รับบัฟ EXP *1.4 นาน 12 ชั่วโมง 🥐' },
-        { id: 'f6', name: 'แพนเค้กราดไซรับ', price: 700, icon: '🥞', multiplier: 1.4, durationMin: 720, msg: 'รับบัฟ EXP *1.4 นาน 12 ชั่วโมง 🥞' },
-        { id: 'f7', name: 'ชีสเค้กหน้าไหม้', price: 900, icon: '🍰', multiplier: 1.5, durationMin: 720, msg: 'รับบัฟ EXP *1.5 นาน 12 ชั่วโมง 🍰' },
-        { id: 'f8', name: 'น่องไก่พริกไทยดำ', price: 1200, icon: '🍗', multiplier: 1.5, durationMin: 720, msg: 'รับบัฟ EXP *1.5 นาน 12 ชั่วโมง 🍗' },
-        { id: 'f9', name: 'แฮมเบอร์เกอร์ชิ้นโต', price: 1600, icon: '🍔', multiplier: 1.7, durationMin: 720, msg: 'รับบัฟ EXP *1.7 นาน 12 ชั่วโมง 🍔' },
-        { id: 'f10', name: 'เฟรนช์ฟรายส์จัมโบ้', price: 2000, icon: '🍟', multiplier: 1.7, durationMin: 720, msg: 'รับบัฟ EXP *1.7 นาน 12 ชั่วโมง 🍟' },
-        { id: 'f11', name: 'พิซซ่าหน้าเปปเปอร์โรนี', price: 2500, icon: '🍕', multiplier: 2.0, durationMin: 720, msg: 'รับบัฟ EXP *2.0 นาน 12 ชั่วโมง 🍕' },
-        { id: 'f12', name: 'ฮอทด็อกซอสมัสตาร์ด', price: 3000, icon: '🌭', multiplier: 2.0, durationMin: 720, msg: 'รับบัฟ EXP *2.0 นาน 12 ชั่วโมง 🌭' },
-        { id: 'f13', name: 'ทาโก้กุ้งสไปซี่', price: 3800, icon: '🌮', multiplier: 2.2, durationMin: 720, msg: 'รับบัฟ EXP *2.2 นาน 12 ชั่วโมง 🌮' },
-        { id: 'f14', name: 'ข้าวปั้นแซลมอน', price: 4600, icon: '🍙', multiplier: 2.2, durationMin: 720, msg: 'รับบัฟ EXP *2.2 นาน 12 ชั่วโมง 🍙' },
-        { id: 'f15', name: 'เซตซูชิพรีเมียม', price: 5500, icon: '🍣', multiplier: 2.5, durationMin: 720, msg: 'รับบัฟ EXP *2.5 นาน 12 ชั่วโมง 🍣' },
-        { id: 'f16', name: 'ราเมนซุปเข้มข้น', price: 6500, icon: '🍜', multiplier: 2.5, durationMin: 720, msg: 'รับบัฟ EXP *2.5 นาน 12 ชั่วโมง 🍜' },
-        { id: 'f17', name: 'สเต็กเนื้อวากิว', price: 7800, icon: '🥩', multiplier: 2.8, durationMin: 720, msg: 'รับบัฟ EXP *2.8 นาน 12 ชั่วโมง 🥩' },
-        { id: 'f18', name: 'กุ้งมังกรอบชีส', price: 9000, icon: '🦞', multiplier: 2.8, durationMin: 720, msg: 'รับบัฟ EXP *2.8 นาน 12 ชั่วโมง 🦞' },
-        { id: 'f19', name: 'ชาบูหม้อไฟเดือด', price: 10500, icon: '🥘', multiplier: 3.0, durationMin: 720, msg: 'รับบัฟ EXP *3.0 นาน 12 ชั่วโมง 🥘' },
-        { id: 'f20', name: 'เบนโตะมื้อพิเศษ', price: 12500, icon: '🍱', multiplier: 3.0, durationMin: 720, msg: 'รับบัฟ EXP *3.0 นาน 12 ชั่วโมง 🍱' },
-        { id: 'f21', name: 'เค้กฉลองชัยชนะ', price: 15000, icon: '🎂', multiplier: 3.5, durationMin: 720, msg: 'รับบัฟ EXP *3.5 นาน 12 ชั่วโมง 🎂' },
-        { id: 'f22', name: 'น้ำผึ้งจากยอดเขา', price: 18000, icon: '🍯', multiplier: 3.5, durationMin: 720, msg: 'รับบัฟ EXP *3.5 นาน 12 ชั่วโมง 🍯' },
-        { id: 'f23', name: 'แอปเปิ้ลทองคำ', price: 21500, icon: '🍎', multiplier: 4.0, durationMin: 720, msg: 'รับบัฟ EXP *4.0 นาน 12 ชั่วโมง 🍎' },
-        { id: 'f24', name: 'ไวน์องุ่นศักดิ์สิทธิ์', price: 25000, icon: '🍷', multiplier: 4.0, durationMin: 720, msg: 'รับบัฟ EXP *4.0 นาน 12 ชั่วโมง 🍷' },
-        { id: 'f25', name: 'สลัดผักสวนสวรรค์', price: 29000, icon: '🥗', multiplier: 4.5, durationMin: 720, msg: 'รับบัฟ EXP *4.5 นาน 12 ชั่วโมง 🥗' },
-        { id: 'f26', name: 'ลูกชิ้นเทพมังกร', price: 34000, icon: '🍢', multiplier: 4.5, durationMin: 720, msg: 'รับบัฟ EXP *4.5 นาน 12 ชั่วโมง 🍢' },
-        { id: 'f27', name: 'สตูว์เนื้อสัตว์อสูร', price: 40000, icon: '🍲', multiplier: 5.0, durationMin: 720, msg: 'รับบัฟ EXP *5.0 นาน 12 ชั่วโมง 🍲' },
-        { id: 'f28', name: 'ยาอมฤตชุบตัว', price: 46000, icon: '🧪', multiplier: 5.0, durationMin: 720, msg: 'รับบัฟ EXP *5.0 นาน 12 ชั่วโมง 🧪' },
-        { id: 'f29', name: 'ผลไม้ปีศาจลึกลับ', price: 53000, icon: '🍇', multiplier: 5.0, durationMin: 720, msg: 'รับบัฟ EXP *5.0 นาน 12 ชั่วโมง 🍇' },
-        { id: 'f30', name: 'อาหารทิพย์มหาเทพ', price: 60000, icon: '🍛', multiplier: 5.0, durationMin: 720, msg: 'รับบัฟ EXP *5.0 นาน 12 ชั่วโมง 🍛' }
-    ];
+const foodData = [
+    { id: 'f1', name: 'ลูกอมเปรี้ยวจี๊ด', price: 100, icon: '🍬', multiplier: 1.2, durationMin: 720, msg: 'รับบัฟ EXP *1.2 นาน 12 ชั่วโมง 🍬' },
+    { id: 'f2', name: 'ช็อกโกแลตบาร์', price: 150, icon: '🍫', multiplier: 1.2, durationMin: 720, msg: 'รับบัฟ EXP *1.2 นาน 12 ชั่วโมง 🍫' },
+    { id: 'f3', name: 'เพรทเซลโรยเกลือ', price: 250, icon: '🥨', multiplier: 1.3, durationMin: 720, msg: 'รับบัฟ EXP *1.3 นาน 12 ชั่วโมง 🥨' },
+    { id: 'f4', name: 'คัพเค้กวนิลา', price: 350, icon: '🧁', multiplier: 1.3, durationMin: 720, msg: 'รับบัฟ EXP *1.3 นาน 12 ชั่วโมง 🧁' },
+    { id: 'f5', name: 'ครัวซองต์เนยโฮมเมด', price: 500, icon: '🥐', multiplier: 1.4, durationMin: 720, msg: 'รับบัฟ EXP *1.4 นาน 12 ชั่วโมง 🥐' },
+    { id: 'f6', name: 'แพนเค้กราดไซรับ', price: 700, icon: '🥞', multiplier: 1.4, durationMin: 720, msg: 'รับบัฟ EXP *1.4 นาน 12 ชั่วโมง 🥞' },
+    { id: 'f7', name: 'ชีสเค้กหน้าไหม้', price: 900, icon: '🍰', multiplier: 1.5, durationMin: 720, msg: 'รับบัฟ EXP *1.5 นาน 12 ชั่วโมง 🍰' },
+    { id: 'f8', name: 'น่องไก่พริกไทยดำ', price: 1200, icon: '🍗', multiplier: 1.5, durationMin: 720, msg: 'รับบัฟ EXP *1.5 นาน 12 ชั่วโมง 🍗' },
+    { id: 'f9', name: 'แฮมเบอร์เกอร์ชิ้นโต', price: 1600, icon: '🍔', multiplier: 1.7, durationMin: 720, msg: 'รับบัฟ EXP *1.7 นาน 12 ชั่วโมง 🍔' },
+    { id: 'f10', name: 'เฟรนช์ฟรายส์จัมโบ้', price: 2000, icon: '🍟', multiplier: 1.7, durationMin: 720, msg: 'รับบัฟ EXP *1.7 นาน 12 ชั่วโมง 🍟' },
+    { id: 'f11', name: 'พิซซ่าหน้าเปปเปอร์โรนี', price: 2500, icon: '🍕', multiplier: 2.0, durationMin: 720, msg: 'รับบัฟ EXP *2.0 นาน 12 ชั่วโมง 🍕' },
+    { id: 'f12', name: 'ฮอทด็อกซอสมัสตาร์ด', price: 3000, icon: '🌭', multiplier: 2.0, durationMin: 720, msg: 'รับบัฟ EXP *2.0 นาน 12 ชั่วโมง 🌭' },
+    { id: 'f13', name: 'ทาโก้กุ้งสไปซี่', price: 3800, icon: '🌮', multiplier: 2.2, durationMin: 720, msg: 'รับบัฟ EXP *2.2 นาน 12 ชั่วโมง 🌮' },
+    { id: 'f14', name: 'ข้าวปั้นแซลมอน', price: 4600, icon: '🍙', multiplier: 2.2, durationMin: 720, msg: 'รับบัฟ EXP *2.2 นาน 12 ชั่วโมง 🍙' },
+    { id: 'f15', name: 'เซตซูชิพรีเมียม', price: 5500, icon: '🍣', multiplier: 2.5, durationMin: 720, msg: 'รับบัฟ EXP *2.5 นาน 12 ชั่วโมง 🍣' },
+    { id: 'f16', name: 'ราเมนซุปเข้มข้น', price: 6500, icon: '🍜', multiplier: 2.5, durationMin: 720, msg: 'รับบัฟ EXP *2.5 นาน 12 ชั่วโมง 🍜' },
+    { id: 'f17', name: 'สเต็กเนื้อวากิว', price: 7800, icon: '🥩', multiplier: 2.8, durationMin: 720, msg: 'รับบัฟ EXP *2.8 นาน 12 ชั่วโมง 🥩' },
+    { id: 'f18', name: 'กุ้งมังกรอบชีส', price: 9000, icon: '🦞', multiplier: 2.8, durationMin: 720, msg: 'รับบัฟ EXP *2.8 นาน 12 ชั่วโมง 🦞' },
+    { id: 'f19', name: 'ชาบูหม้อไฟเดือด', price: 10500, icon: '🥘', multiplier: 3.0, durationMin: 720, msg: 'รับบัฟ EXP *3.0 นาน 12 ชั่วโมง 🥘' },
+    { id: 'f20', name: 'เบนโตะมื้อพิเศษ', price: 12500, icon: '🍱', multiplier: 3.0, durationMin: 720, msg: 'รับบัฟ EXP *3.0 นาน 12 ชั่วโมง 🍱' },
+    { id: 'f21', name: 'เค้กฉลองชัยชนะ', price: 15000, icon: '🎂', multiplier: 3.5, durationMin: 720, msg: 'รับบัฟ EXP *3.5 นาน 12 ชั่วโมง 🎂' },
+    { id: 'f22', name: 'น้ำผึ้งจากยอดเขา', price: 18000, icon: '🍯', multiplier: 3.5, durationMin: 720, msg: 'รับบัฟ EXP *3.5 นาน 12 ชั่วโมง 🍯' },
+    { id: 'f23', name: 'แอปเปิ้ลทองคำ', price: 21500, icon: '🍎', multiplier: 4.0, durationMin: 720, msg: 'รับบัฟ EXP *4.0 นาน 12 ชั่วโมง 🍎' },
+    { id: 'f24', name: 'ไวน์องุ่นศักดิ์สิทธิ์', price: 25000, icon: '🍷', multiplier: 4.0, durationMin: 720, msg: 'รับบัฟ EXP *4.0 นาน 12 ชั่วโมง 🍷' },
+    { id: 'f25', name: 'สลัดผักสวนสวรรค์', price: 29000, icon: '🥗', multiplier: 4.5, durationMin: 720, msg: 'รับบัฟ EXP *4.5 นาน 12 ชั่วโมง 🥗' },
+    { id: 'f26', name: 'ลูกชิ้นเทพมังกร', price: 34000, icon: '🍢', multiplier: 4.5, durationMin: 720, msg: 'รับบัฟ EXP *4.5 นาน 12 ชั่วโมง 🍢' },
+    { id: 'f27', name: 'สตูว์เนื้อสัตว์อสูร', price: 40000, icon: '🍲', multiplier: 5.0, durationMin: 720, msg: 'รับบัฟ EXP *5.0 นาน 12 ชั่วโมง 🍲' },
+    { id: 'f28', name: 'ยาอมฤตชุบตัว', price: 46000, icon: '🧪', multiplier: 5.0, durationMin: 720, msg: 'รับบัฟ EXP *5.0 นาน 12 ชั่วโมง 🧪' },
+    { id: 'f29', name: 'ผลไม้ปีศาจลึกลับ', price: 53000, icon: '🍇', multiplier: 5.0, durationMin: 720, msg: 'รับบัฟ EXP *5.0 นาน 12 ชั่วโมง 🍇' },
+    { id: 'f30', name: 'อาหารทิพย์มหาเทพ', price: 60000, icon: '🍛', multiplier: 5.0, durationMin: 720, msg: 'รับบัฟ EXP *5.0 นาน 12 ชั่วโมง 🍛' }
+];
 
-    const powerupData = [
-        // --- โซนไอเท็มตัวช่วยเล่นเกม (quiz_helper) ---
-        { id: 'p1', name: 'ดาบตัดช้อยส์ (50/50)', price: 300, icon: '🗡️', msg: 'ใช้ตอนตอบ: ตัดตัวเลือกที่ผิดออก 2 ข้อ', type: 'quiz_helper' },
-        { id: 'p2', name: 'นาฬิกาหยุดเวลา', price: 500, icon: '❄️', msg: 'ใช้ตอนตอบ: แช่แข็งเวลา รับโบนัสความเร็วสูงสุดเสมอ', type: 'quiz_helper' },
-        { id: 'p3', name: 'โล่ประกาศิต', price: 400, icon: '🛡️', msg: 'ใช้ตอนตอบ: ถ้าตอบผิดจะยังได้รับ 75 EXP ปลอบใจ', type: 'quiz_helper' },
-        { id: 'p4', name: 'คูณสอง (Double EXP) 🚀', price: 1500, icon: '🚀', msg: 'ใช้ตอนตอบ: ถ้าตอบถูกรับ EXP x2 ในข้อนั้นทันที!', type: 'quiz_helper' },
-        { id: 'p5', name: 'เพชรทวีคูณ (Triple Score) 💎', price: 4000, icon: '💎', msg: 'ใช้ตอนตอบ: ถ้าตอบถูกรับ EXP x3 ในข้อนั้นทันที!', type: 'quiz_helper' },
-        { id: 'p6', name: 'บัตรผ่านทาง (Pass Key) 🎫', price: 2000, icon: '🎫', msg: 'กดใช้: ผ่านข้อนั้นทันที ได้ 150 EXP โดยไม่ต้องตอบ', type: 'quiz_helper' },
-        { id: 'p7', name: 'นักล่าแต้มต่อเนื่อง 🔥', price: 800, icon: '🔥', msg: 'ติดตัว: ป้องกัน Combo หลุดเมื่อตอบผิด (ช่วยรักษาลำดับ)', type: 'quiz_helper' },
+const powerupData = [
+    // --- โซนไอเท็มตัวช่วยเล่นเกม (quiz_helper) ---
+    { id: 'p1', name: 'ดาบตัดช้อยส์ (50/50)', price: 300, icon: '🗡️', msg: 'ใช้ตอนตอบ: ตัดตัวเลือกที่ผิดออก 2 ข้อ', type: 'quiz_helper' },
+    { id: 'p2', name: 'นาฬิกาหยุดเวลา', price: 500, icon: '❄️', msg: 'ใช้ตอนตอบ: แช่แข็งเวลา รับโบนัสความเร็วสูงสุดเสมอ', type: 'quiz_helper' },
+    { id: 'p3', name: 'โล่ประกาศิต', price: 400, icon: '🛡️', msg: 'ใช้ตอนตอบ: ถ้าตอบผิดจะยังได้รับ 75 EXP ปลอบใจ', type: 'quiz_helper' },
+    { id: 'p4', name: 'คูณสอง (Double EXP) 🚀', price: 1500, icon: '🚀', msg: 'ใช้ตอนตอบ: ถ้าตอบถูกรับ EXP x2 ในข้อนั้นทันที!', type: 'quiz_helper' },
+    { id: 'p5', name: 'เพชรทวีคูณ (Triple Score) 💎', price: 4000, icon: '💎', msg: 'ใช้ตอนตอบ: ถ้าตอบถูกรับ EXP x3 ในข้อนั้นทันที!', type: 'quiz_helper' },
+    { id: 'p6', name: 'บัตรผ่านทาง (Pass Key) 🎫', price: 2000, icon: '🎫', msg: 'กดใช้: ผ่านข้อนั้นทันที ได้ 150 EXP โดยไม่ต้องตอบ', type: 'quiz_helper' },
+    { id: 'p7', name: 'นักล่าแต้มต่อเนื่อง 🔥', price: 800, icon: '🔥', msg: 'ติดตัว: ป้องกัน Combo หลุดเมื่อตอบผิด (ช่วยรักษาลำดับ)', type: 'quiz_helper' },
 
-        // --- โซนแลกคะแนนเก็บ (score_exchange) ---
-        { 
-            id: 's1', 
-            name: 'แลกคะแนน +1', 
-            icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">①</span>', 
-            price: 10000, 
-            type: 'score_exchange', 
-            amount: 1, 
-            msg: 'ใช้ 10,000 EXP แลก 1 แต้ม (ความพยายามอยู่ที่ไหน คะแนนอยู่ที่นั่น!)' 
-        },
-        { 
-            id: 's5', 
-            name: 'แลกคะแนน +5', 
-            icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑤</span>', 
-            price: 45000, 
-            type: 'score_exchange', 
-            amount: 5, 
-            msg: 'แพ็กเกจขยัน! ประหยัดทันที 5,000 EXP' 
-        },
-        { 
-            id: 's10', 
-            name: 'แลกคะแนน +10', 
-            icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑩</span>', 
-            price: 85000, 
-            type: 'score_exchange', 
-            amount: 10, 
-            msg: 'แพ็กเกจสุดคุ้ม! ประหยัดมหาศาล 15,000 EXP' 
-        },
-        { 
-            id: 's20', 
-            name: 'แลกคะแนน +20', 
-            icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑳</span>', 
-            price: 150000, 
-            type: 'score_exchange', 
-            amount: 20, 
-            msg: 'แพ็กเกจจอมเทพ! ประหยัดสุดขีด 50,000 EXP (สำหรับสุดยอดนักฟาร์ม)' 
-        }
-    ];
+    // --- โซนแลกคะแนนเก็บ (score_exchange) ---
+    { 
+        id: 's1', 
+        name: 'แลกคะแนน +1', 
+        icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">①</span>', 
+        price: 10000, 
+        type: 'score_exchange', 
+        amount: 1, 
+        msg: 'ใช้ 10,000 EXP แลก 1 แต้ม (ความพยายามอยู่ที่ไหน คะแนนอยู่ที่นั่น!)' 
+    },
+    { 
+        id: 's5', 
+        name: 'แลกคะแนน +5', 
+        icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑤</span>', 
+        price: 45000, 
+        type: 'score_exchange', 
+        amount: 5, 
+        msg: 'แพ็กเกจขยัน! ประหยัดทันที 5,000 EXP' 
+    },
+    { 
+        id: 's10', 
+        name: 'แลกคะแนน +10', 
+        icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑩</span>', 
+        price: 85000, 
+        type: 'score_exchange', 
+        amount: 10, 
+        msg: 'แพ็กเกจสุดคุ้ม! ประหยัดมหาศาล 15,000 EXP' 
+    },
+    { 
+        id: 's20', 
+        name: 'แลกคะแนน +20', 
+        icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑳</span>', 
+        price: 150000, 
+        type: 'score_exchange', 
+        amount: 20, 
+        msg: 'แพ็กเกจจอมเทพ! ประหยัดสุดขีด 50,000 EXP (สำหรับสุดยอดนักฟาร์ม)' 
+    }
+];
 
-    function makeDraggable(elmnt) {
-        var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-        elmnt.onmousedown = dragMouseDown;
-        elmnt.ontouchstart = dragMouseDown;
+function makeDraggable(elmnt) {
+    var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    elmnt.onmousedown = dragMouseDown;
+    elmnt.ontouchstart = dragMouseDown;
 
-        function dragMouseDown(e) {
-            if (e.target.tagName.toLowerCase() === 'button' || e.target.closest('.pet-menu') || e.target.closest('button')) return;
-            e = e || window.event;
-            if (e.type === 'touchstart') { pos3 = e.touches[0].clientX; pos4 = e.touches[0].clientY; } 
-            else { e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY; }
-            document.onmouseup = closeDragElement;
-            document.onmousemove = elementDrag;
-            document.ontouchend = closeDragElement;
-            document.ontouchmove = elementDrag;
-        }
-
-        function elementDrag(e) {
-            e = e || window.event; let clientX, clientY;
-            if (e.type === 'touchmove') { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; } 
-            else { e.preventDefault(); clientX = e.clientX; clientY = e.clientY; }
-            pos1 = pos3 - clientX; pos2 = pos4 - clientY; pos3 = clientX; pos4 = clientY;
-            elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
-            elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
-            elmnt.style.bottom = "auto"; elmnt.style.right = "auto";
-        }
-
-        function closeDragElement() {
-            document.onmouseup = null; document.onmousemove = null; document.ontouchend = null; document.ontouchmove = null;
-        }
+    function dragMouseDown(e) {
+        if (e.target.tagName.toLowerCase() === 'button' || e.target.closest('.pet-menu') || e.target.closest('button')) return;
+        e = e || window.event;
+        if (e.type === 'touchstart') { pos3 = e.touches[0].clientX; pos4 = e.touches[0].clientY; } 
+        else { e.preventDefault(); pos3 = e.clientX; pos4 = e.clientY; }
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
+        document.ontouchend = closeDragElement;
+        document.ontouchmove = elementDrag;
     }
 
-    function togglePetMenu() {
-        const menu = document.getElementById('petMenu');
-        menu.classList.toggle('show');
-        setTimeout(() => { if (menu.classList.contains('show')) menu.classList.remove('show'); }, 4000);
+    function elementDrag(e) {
+        e = e || window.event; let clientX, clientY;
+        if (e.type === 'touchmove') { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; } 
+        else { e.preventDefault(); clientX = e.clientX; clientY = e.clientY; }
+        pos1 = pos3 - clientX; pos2 = pos4 - clientY; pos3 = clientX; pos4 = clientY;
+        elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+        elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+        elmnt.style.bottom = "auto"; elmnt.style.right = "auto";
     }
 
-    // 🟢 อัปเกรด: ระบบ Routing ด่วนพิเศษสำหรับผู้ปกครอง
-    document.addEventListener('DOMContentLoaded', async function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const page = urlParams.get('page');
-        const token = urlParams.get('token');
+    function closeDragElement() {
+        document.onmouseup = null; document.onmousemove = null; document.ontouchend = null; document.ontouchmove = null;
+    }
+}
 
-        // ⚡ จุดแก้: ถ้าเป็นหน้าผู้ปกครอง ให้สั่งซ่อนทุกอย่างทันทีแบบ "เงียบกริบ"
-        if (page === 'parent' && token) {
-            if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
-            document.getElementById('btnLock').classList.add('hidden');
-            document.getElementById('student-search-view').classList.add('hidden');
-            document.getElementById('parent-view').classList.remove('hidden');
-        }
+function togglePetMenu() {
+    const menu = document.getElementById('petMenu');
+    menu.classList.toggle('show');
+    setTimeout(() => { if (menu.classList.contains('show')) menu.classList.remove('show'); }, 4000);
+}
 
-        // เชื่อมต่อฐานข้อมูล (Supabase)
-        await initSupabaseAsync();
+// 🟢 อัปเกรด: ระบบ Routing ด่วนพิเศษสำหรับผู้ปกครอง
+document.addEventListener('DOMContentLoaded', async function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const page = urlParams.get('page');
+    const token = urlParams.get('token');
 
-        // 👨‍👩‍👧‍👦 กรณีหน้าผู้ปกครอง: สั่งโหลดข้อมูลและจบการทำงานส่วนนี้ทันที
-        if (page === 'parent' && token) {
-            loadParentDashboard(token);
-            return; 
-        }
+    // ⚡ จุดแก้: ถ้าเป็นหน้าผู้ปกครอง ให้สั่งซ่อนทุกอย่างทันทีแบบ "เงียบกริบ"
+    if (page === 'parent' && token) {
+        if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
+        document.getElementById('btnLock').classList.add('hidden');
+        document.getElementById('student-search-view').classList.add('hidden');
+        document.getElementById('parent-view').classList.remove('hidden');
+    }
 
-        // 2. เช็คสถานะการเข้าสู่ระบบปกติ (สำหรับครูและนักเรียน)
-        if (localStorage.getItem('teacherLoggedIn') === 'true') {
-            document.getElementById('btnLock').classList.add('hidden');
-            document.getElementById('btnTeacherConfig').classList.remove('hidden'); 
-            document.getElementById('btnLogout').classList.remove('hidden');
-            document.getElementById('student-search-view').classList.add('hidden');
-            document.getElementById('teacher-view').classList.remove('hidden');
-            document.getElementById('view-rooms').classList.remove('hidden');
-            loadAllData();
-        }
-        else if (localStorage.getItem('studentId')) {
-            loadFullDashboard(localStorage.getItem('studentId'), true);
-        }
-    });
+    // เชื่อมต่อฐานข้อมูล (Supabase)
+    await initSupabaseAsync();
+
+    // 👨‍👩‍👧‍👦 กรณีหน้าผู้ปกครอง: สั่งโหลดข้อมูลและจบการทำงานส่วนนี้ทันที
+    if (page === 'parent' && token) {
+        loadParentDashboard(token);
+        return; 
+    }
+
+    // 2. เช็คสถานะการเข้าสู่ระบบปกติ (สำหรับครูและนักเรียน)
+    if (localStorage.getItem('teacherLoggedIn') === 'true') {
+        document.getElementById('btnLock').classList.add('hidden');
+        document.getElementById('btnTeacherConfig').classList.remove('hidden'); 
+        document.getElementById('btnLogout').classList.remove('hidden');
+        document.getElementById('student-search-view').classList.add('hidden');
+        document.getElementById('teacher-view').classList.remove('hidden');
+        document.getElementById('view-rooms').classList.remove('hidden');
+        loadAllData();
+    }
+    else if (localStorage.getItem('studentId')) {
+        loadFullDashboard(localStorage.getItem('studentId'), true);
+    }
+});
 
 window.sendPushNotification = function(title, message) {
     // ใช้ Proxy ตัวเดิมที่มึงทำไว้ แต่แก้เรื่อง CORS ให้แล้ว
@@ -545,7 +546,13 @@ window.loadParentDashboard = async function(token) {
         if(chatHead) {
             chatHead.classList.remove('hidden');
             chatHead.dataset.studentId = student.id; // เก็บ ID ไว้ที่ตัวปุ่ม
-            localStorage.setItem('parentStudentId', student.id); // 🌟 เพิ่มบรรทัดนี้!
+            localStorage.setItem('parentStudentId', student.id); // 🌟 กันข้อมูลหาย
+            
+            // เก็บพิกัดเดิมไว้ใช้ตอนเปิดแผนที่
+            if(student.home_lat && student.home_lng) {
+                window.tempHomeLat = student.home_lat;
+                window.tempHomeLng = student.home_lng;
+            }
         }
 
         const [attRes, tasksRes, subRes] = await Promise.all([
@@ -614,35 +621,34 @@ window.loadParentDashboard = async function(token) {
 };
 
 // =========================================================
-// 👨‍👩‍👧‍👦 SYSTEM: PARENT COMMUNICATION HUB (MODAL VERSION)
+// 👨‍👩‍👧‍👦 SYSTEM: PARENT COMMUNICATION HUB (3-TAB & AUTO SAVE)
 // =========================================================
 
-// 🔘 ฟังก์ชันเชื่อมต่อ: เมื่อกดที่ปุ่มวงกลม (Chat Head)
+// 🔘 1. ตัวเชื่อมปุ่ม Chat Head
 window.openCommunicationHubFromHead = function() {
-    const studentId = document.getElementById('parentChatHead').dataset.studentId;
-    if(studentId) {
-        window.openCommunicationHub(studentId);
-    } else {
-        console.error("Student ID not found in Chat Head");
-    }
+    const studentId = document.getElementById('parentChatHead').dataset.studentId || localStorage.getItem('parentStudentId');
+    if(studentId) { window.openCommunicationHub(studentId); } 
+    else { console.error("Student ID not found"); }
 };
-// 1. ฟังก์ชันเปิดหน้าต่างศูนย์การสื่อสาร
+
+// 🏠 2. ฟังก์ชันหน้าต่างหลัก (แยก 3 แท็บ)
 window.openCommunicationHub = function(studentId) {
-    // 🌟 นี่คือจุดที่ 4: เช็คว่าปักหมุดหรือยัง ถ้าปักแล้วให้โชว์แถบสีเขียว
-    let locationStatusHtml = (window.tempHomeLat) 
-        ? `<div class="badge bg-success px-3 py-2 rounded-pill w-100 mb-3 shadow-sm border-0"><i class="bi bi-check-circle-fill"></i> เตรียมพิกัดบ้านเรียบร้อย พร้อมส่ง!</div>`
-        : `<div id="locationStatus" class="small text-muted mb-2 text-center">ยังไม่ได้ระบุตำแหน่งบ้าน</div>`;
+    let hasLocation = window.tempHomeLat !== null;
+    let locationStatusHtml = hasLocation 
+        ? `<div class="badge bg-success px-3 py-2 rounded-pill w-100 mb-3 shadow-sm border-0"><i class="bi bi-check-circle-fill"></i> ส่งพิกัดบ้านล่าสุดเรียบร้อยแล้ว</div>`
+        : `<div id="lastLocationStatus" class="small text-muted mb-2 text-center">ยังไม่ได้ระบุตำแหน่งบ้าน</div>`;
 
     Swal.fire({
         title: '<div class="fw-bold text-danger"><i class="bi bi-chat-heart"></i> ศูนย์การสื่อสาร</div>',
         html: `
             <div class="text-start mt-3">
-                <div class="d-flex gap-2 mb-4">
-                    <button class="btn btn-sm btn-outline-danger flex-grow-1 active" id="btnTabStudent" onclick="switchCommTab('student')">ส่งใจให้ลูก</button>
-                    <button class="btn btn-sm btn-outline-primary flex-grow-1" id="btnTabTeacher" onclick="switchCommTab('teacher')">ปรึกษาคุณครู</button>
+                <div class="d-flex gap-1 mb-4 bg-light p-1 rounded-pill border shadow-sm">
+                    <button class="btn btn-sm flex-grow-1 rounded-pill active" id="btnTabStudent" onclick="switchCommTab('student')">❤️ ส่งใจ</button>
+                    <button class="btn btn-sm flex-grow-1 rounded-pill btn-outline-dark" id="btnTabLocation" onclick="switchCommTab('location')">📍 พิกัดบ้าน</button>
+                    <button class="btn btn-sm flex-grow-1 rounded-pill btn-outline-primary" id="btnTabTeacher" onclick="switchCommTab('teacher')">👨‍🏫 ปรึกษาครู</button>
                 </div>
 
-                <div id="sectionToStudent">
+                <div id="sectionStudent">
                     <label class="small fw-bold text-muted mb-2">เลือกสติกเกอร์ส่งพลังใจ:</label>
                     <div class="d-flex gap-2 mb-3 overflow-auto pb-2">
                         <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('🌟','เก่งมาก!')">🌟</button>
@@ -650,13 +656,25 @@ window.openCommunicationHub = function(studentId) {
                         <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('✌️','สู้ๆ นะ')">✌️</button>
                         <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('🏆','สุดยอด')">🏆</button>
                     </div>
-                    <textarea id="hubMsgToStudent" class="form-control mb-3" rows="2" placeholder="พิมพ์ข้อความให้กำลังใจลูกที่นี่..."></textarea>
+                    <textarea id="hubMsgToStudent" class="form-control mb-3" rows="2" placeholder="พิมพ์ข้อความให้กำลังใจลูก..."></textarea>
                     <button class="btn btn-danger w-100 fw-bold rounded-pill shadow" onclick="processSendToStudent('${studentId}')">ส่งพลังใจให้ลูก</button>
                 </div>
 
-                <div id="sectionToTeacher" class="hidden">
+                <div id="sectionLocation" class="hidden text-center py-3">
+                    <div class="mb-4">
+                        <i class="bi bi-geo-alt-fill text-danger" style="font-size: 3.5rem;"></i>
+                        <h6 class="fw-bold mt-2">ระบุตำแหน่งบ้านนักเรียน</h6>
+                        <p class="small text-muted">กดปุ่มสีดำเพื่อเปิดแผนที่และส่งพิกัดให้ครู</p>
+                    </div>
+                    ${locationStatusHtml}
+                    <button class="btn btn-dark w-100 rounded-pill py-3 shadow-lg fw-bold" onclick="openMapPicker('${studentId}')">
+                        <i class="bi bi-pin-map-fill text-warning"></i> เปิดแผนที่ปักหมุดบ้าน
+                    </button>
+                </div>
+
+                <div id="sectionTeacher" class="hidden">
                     <label class="small fw-bold text-muted mb-2">เรื่องที่ต้องการปรึกษาคุณครู:</label>
-                    <textarea id="hubMsgToTeacher" class="form-control mb-3" rows="2" placeholder="เช่น ขอปรึกษาเรื่องพฤติกรรม..."></textarea>
+                    <textarea id="hubMsgToTeacher" class="form-control mb-3" rows="2" placeholder="พิมพ์ข้อความที่ต้องการแจ้งคุณครู..."></textarea>
                     
                     <label class="small fw-bold text-muted mb-1 d-block">ข้อมูลติดต่อกลับของคุณ:</label>
                     <div class="btn-group w-100 mb-2" role="group">
@@ -667,18 +685,11 @@ window.openCommunicationHub = function(studentId) {
                         <input type="radio" class="btn-check" name="contactType" id="typeFB" value="messenger" onchange="updateContactUI()">
                         <label class="btn btn-outline-info btn-sm text-dark" for="typeFB">Facebook</label>
                     </div>
-                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" placeholder="ข้อมูลติดต่อ">
-                    <div id="contactPreview" class="small fw-bold mb-3 text-center" style="min-height:20px;"></div>
-
-                    <div class="p-2 rounded-4 mb-3 border text-center bg-light">
-                        ${locationStatusHtml}
-                        <button class="btn btn-sm btn-dark w-100 rounded-pill shadow-sm" onclick="openMapPicker()">
-                            <i class="bi bi-geo-alt-fill text-warning"></i> ระบุ/เลื่อนพิกัดบ้านนักเรียน
-                        </button>
-                    </div>
+                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" placeholder="ข้อมูลติดต่อกลับ">
+                    <div id="contactPreview" class="small fw-bold mb-4 text-center" style="min-height:20px;"></div>
 
                     <button class="btn btn-primary w-100 fw-bold rounded-pill shadow-lg py-2" onclick="processSendToTeacher('${studentId}')">
-                        <i class="bi bi-send-fill"></i> ยืนยันและส่งข้อมูลทั้งหมด
+                        <i class="bi bi-send-fill"></i> ยืนยันและส่งข้อความหาครู
                     </button>
                 </div>
             </div>
@@ -687,60 +698,143 @@ window.openCommunicationHub = function(studentId) {
         showCloseButton: true,
         customClass: { popup: 'rounded-4' },
         didOpen: () => {
-            const contactInput = document.getElementById('hubParentContact');
-            contactInput.addEventListener('input', updateContactUI);
-            updateContactUI();
+            const input = document.getElementById('hubParentContact');
+            if(input) { 
+                input.addEventListener('input', updateContactUI); 
+                updateContactUI(); 
+            }
         }
     });
 };
 
-// 2. ฟังก์ชันสลับ Tab ภายในหน้าต่าง Popup
+// 🌟 3. ฟังก์ชันสลับแท็บ
 window.switchCommTab = (tab) => {
-    const sBtn = document.getElementById('btnTabStudent');
-    const tBtn = document.getElementById('btnTabTeacher');
-    const sSec = document.getElementById('sectionToStudent');
-    const tSec = document.getElementById('sectionToTeacher');
-
-    if(tab === 'student') {
-        sBtn.classList.add('active'); tBtn.classList.remove('active');
-        sSec.classList.remove('hidden'); tSec.classList.add('hidden');
-    } else {
-        tBtn.classList.add('active'); sBtn.classList.remove('active');
-        tSec.classList.remove('hidden'); sSec.classList.add('hidden');
-    }
+    const tabs = ['Student', 'Location', 'Teacher'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`btnTab${t}`);
+        const sec = document.getElementById(`section${t}`);
+        if (btn && sec) {
+            btn.classList.toggle('active', t.toLowerCase() === tab);
+            
+            // สลับสีปุ่มให้สวยงามตามแท็บ
+            btn.classList.toggle('btn-outline-danger', t === 'Student' && t.toLowerCase() !== tab);
+            btn.classList.toggle('btn-danger', t === 'Student' && t.toLowerCase() === tab);
+            btn.classList.toggle('btn-outline-dark', t === 'Location' && t.toLowerCase() !== tab);
+            btn.classList.toggle('btn-dark', t === 'Location' && t.toLowerCase() === tab);
+            btn.classList.toggle('btn-outline-primary', t === 'Teacher' && t.toLowerCase() !== tab);
+            btn.classList.toggle('btn-primary', t === 'Teacher' && t.toLowerCase() === tab);
+            
+            sec.classList.toggle('hidden', t.toLowerCase() !== tab);
+        }
+    });
 };
 
-// 3. ฟังก์ชันเลือกสติกเกอร์
+// 📍 4. ฟังก์ชันเปิดแผนที่ (ปักปุ๊บ บันทึกและส่งทันที!)
+window.openMapPicker = function(studentId) {
+    let defaultLat = window.tempHomeLat || 13.7563;
+    let defaultLng = window.tempHomeLng || 100.5018;
+
+    Swal.fire({
+        title: '<h5 class="fw-bold m-0 text-primary">ปักหมุดบ้านนักเรียน</h5>',
+        html: `
+            <div style="position: relative;">
+                <button type="button" class="btn btn-primary fw-bold shadow" 
+                        style="position: absolute; top: 15px; right: 15px; z-index: 1000; border-radius: 20px; font-size: 0.8rem;" 
+                        onclick="locateUserOnMap()">
+                    <i class="bi bi-crosshair"></i> ตำแหน่งปัจจุบัน
+                </button>
+                <div id="map-wrapper"><div id="map-canvas"></div></div>
+            </div>
+            <p class="small text-muted mt-2 fw-bold text-center">ปักหมุดแล้วกด "ยืนยันและส่ง" เพื่อบันทึกพิกัดให้ครูทันที</p>
+        `,
+        customClass: { popup: 'map-popup-square rounded-4' },
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยันและส่งพิกัดให้ครู',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#198754',
+        allowOutsideClick: false,
+        didOpen: () => {
+            setTimeout(() => {
+                if (window.myLeafletMap) window.myLeafletMap.remove();
+                window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 16);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.myLeafletMap);
+                window.myMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(window.myLeafletMap);
+                window.myLeafletMap.invalidateSize();
+                window.myLeafletMap.on('click', (e) => { window.myMarker.setLatLng(e.latlng); });
+            }, 500);
+        },
+        preConfirm: () => {
+            if (window.myMarker) {
+                const pos = window.myMarker.getLatLng();
+                return { lat: pos.lat, lng: pos.lng };
+            }
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'กำลังบันทึกและส่งข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+            try {
+                // 🚀 บันทึกลงตาราง students ทันที!
+                await supabaseClient.from('students').update({ 
+                    home_lat: result.value.lat, 
+                    home_lng: result.value.lng 
+                }).eq('id', studentId);
+
+                // 🚀 ส่ง Log แจ้งเตือนครู
+                await supabaseClient.from('parent_communications').insert([{ 
+                    student_id: studentId, target: 'teacher', type: 'consult', message: '📍 อัปเดตพิกัดบ้านนักเรียนเรียบร้อย' 
+                }]);
+
+                window.tempHomeLat = result.value.lat;
+                window.tempHomeLng = result.value.lng;
+
+                await Swal.fire({ icon: 'success', title: 'ส่งพิกัดเรียบร้อย!', timer: 1500, showConfirmButton: false });
+                
+                openCommunicationHub(studentId); // กลับหน้า Hub
+                setTimeout(() => switchCommTab('location'), 100); // สลับไปแท็บพิกัดทันที
+                
+            } catch (e) {
+                Swal.fire('Error', 'ส่งข้อมูลไม่สำเร็จ: ' + e.message, 'error');
+            }
+        }
+    });
+};
+
+// 🛰️ ฟังก์ชันดึง GPS
+window.locateUserOnMap = function() {
+    if (!navigator.geolocation) return Swal.fire('Error', 'เบราว์เซอร์ไม่รองรับ GPS', 'error');
+    Swal.showLoading(); 
+    navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        if (window.myLeafletMap && window.myMarker) {
+            window.myLeafletMap.setView([lat, lng], 17);
+            window.myMarker.setLatLng([lat, lng]);
+            window.myLeafletMap.invalidateSize();
+        }
+        Swal.hideLoading();
+    }, (err) => {
+        Swal.hideLoading();
+        Swal.fire('GPS ล้มเหลว', 'กรุณาเปิด GPS และอนุญาตให้แอปเข้าถึงตำแหน่งครับ', 'warning');
+    }, { enableHighAccuracy: true, timeout: 8000 });
+};
+
+// ❤️ ฟังก์ชันส่งพลังใจหาลูก
+window.processSendToStudent = async function(id) {
+    const msg = document.getElementById('hubMsgToStudent').value.trim();
+    if(!msg) return Swal.showValidationMessage('กรุณาพิมพ์ข้อความด้วยครับ');
+    Swal.fire({ title: 'กำลังส่งพลังใจ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    
+    await supabaseClient.from('parent_communications').insert([{ student_id: id, target: 'student', type: 'praise', message: msg }]);
+    const displayMsg = `<div style="border: 2px solid #ff9a9e; background: #fff5f5; padding: 15px; border-radius: 20px; text-align: center;"><h5 style="color: #ff0844; font-weight: bold;"><i class="bi bi-heart-fill"></i> ข้อความจากผู้ปกครอง</h5><p style="margin-bottom: 0; font-size: 1.1rem; color: #333; font-weight: 500;">${msg}</p></div>`;
+    google.script.run.withSuccessHandler(() => { Swal.fire({ icon: 'success', title: 'ส่งเรียบร้อย!', timer: 2000, showConfirmButton: false }); }).sendDMToStudent(id, displayMsg);
+};
+
 window.selectCommSticker = (icon, text) => {
     const input = document.getElementById('hubMsgToStudent');
     if(input) input.value = icon + " " + text;
 };
 
-// 4. ฟังก์ชันส่งหาลูก (เข้า DM เด็ก)
-window.processSendToStudent = async function(id) {
-    const msg = document.getElementById('hubMsgToStudent').value.trim();
-    if(!msg) return Swal.showValidationMessage('กรุณาพิมพ์ข้อความด้วยครับ');
-    
-    Swal.fire({ title: 'กำลังส่งพลังใจ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-    
-    // บันทึกลงฐานข้อมูลสื่อสาร
-    await supabaseClient.from('parent_communications').insert([{ student_id: id, target: 'student', type: 'praise', message: msg }]);
-    
-    // สร้างรูปแบบข้อความสำหรับเด้งหน้าจอเด็ก
-    const displayMsg = `
-        <div style="border: 2px solid #ff9a9e; background: #fff5f5; padding: 15px; border-radius: 20px; text-align: center;">
-            <h5 style="color: #ff0844; font-weight: bold;"><i class="bi bi-heart-fill"></i> ข้อความจากผู้ปกครอง</h5>
-            <p style="margin-bottom: 0; font-size: 1.1rem; color: #333; font-weight: 500;">${msg}</p>
-        </div>`;
-    
-    // ยิงเข้า Google Script Proxy เพื่อส่ง DM
-    google.script.run.withSuccessHandler(() => {
-        Swal.fire({ icon: 'success', title: 'ส่งเรียบร้อย!', text: 'ลูกจะเห็นข้อความนี้ทันทีที่เข้าสู่ระบบครับ', timer: 2000, showConfirmButton: false });
-    }).sendDMToStudent(id, displayMsg);
-};
-
-// 5. ฟังก์ชันส่งหาครู (เก็บเข้า DB รอครูเปิดดู)
-// ⚡ ระบบอัจฉริยะ: จัดการ Format เบอร์โทร และ Preview LINE ลิงก์
+// 👨‍🏫 ฟังก์ชันส่งข้อความหาครู
 window.updateContactUI = function() {
     const input = document.getElementById('hubParentContact');
     const preview = document.getElementById('contactPreview');
@@ -754,8 +848,7 @@ window.updateContactUI = function() {
         input.type = 'tel';
         input.placeholder = '0xx-xxx-xxxx';
         let numbers = value.replace(/\D/g, '').substring(0, 10);
-        let formatted = '';
-        if (numbers.length > 0) formatted += numbers.substring(0, 3);
+        let formatted = numbers.length > 0 ? numbers.substring(0, 3) : '';
         if (numbers.length > 3) formatted += '-' + numbers.substring(3, 6);
         if (numbers.length > 6) formatted += '-' + numbers.substring(6, 10);
         input.value = formatted;
@@ -767,177 +860,43 @@ window.updateContactUI = function() {
         preview.innerHTML = value ? `<span class="text-success"><i class="bi bi-line"></i> ลิงก์ LINE: line.me/ti/p/~${value}</span>` : '';
     } 
     else if (type === 'messenger') {
-        // 🔵 แยก Logic Facebook ออกมาให้ชัดเจน (แก้ปัญหารูปที่ 1)
         input.type = 'text';
-        input.placeholder = 'ชื่อโปรไฟล์ หรือ ลิงก์เฟสบุ๊คของคุณ';
+        input.placeholder = 'ชื่อโปรไฟล์ หรือ ลิงก์เฟสบุ๊ค';
         let cleanFB = parseFacebookLink(value);
         preview.innerHTML = cleanFB ? `<span class="text-info"><i class="bi bi-messenger"></i> ลิงก์ Messenger: m.me/${cleanFB}</span>` : '';
     }
 };
 
-// --- [วางทับฟังก์ชันเดิม] ---
 window.processSendToTeacher = async function(id) {
     const msg = document.getElementById('hubMsgToTeacher').value.trim();
     const contact = document.getElementById('hubParentContact').value.trim();
     const type = document.querySelector('input[name="contactType"]:checked').value;
     
     if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อความและข้อมูลติดต่อครับ', 'warning');
-
-    Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-
-    try {
-        // 1. ดึงพิกัดจากตัวแปร Global (ที่เพิ่งปักมา) บันทึกลง Supabase
-        if (window.tempHomeLat && window.tempHomeLng) {
-            await supabaseClient.from('students').update({ 
-                home_lat: window.tempHomeLat, 
-                home_lng: window.tempHomeLng 
-            }).eq('id', id);
-        }
-
-        // 2. จัดรูปแบบข้อความติดต่อ
-        let finalContact = contact;
-        if(type === 'line') finalContact = `LINE:${contact}`;
-        if(type === 'messenger') finalContact = `FB:${parseFacebookLink(contact)}`;
-
-        // 3. ส่งข้อมูลเข้าตาราง parent_communications
-        await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
-        await supabaseClient.from('parent_communications').insert([{ 
-            student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact 
-        }]);
-
-        // ล้างค่าพิกัดชั่วคราวทิ้งหลังส่งเสร็จ
-        window.tempHomeLat = null; window.tempHomeLng = null;
-
-        Swal.fire({ icon: 'success', title: 'ส่งสำเร็จ!', text: 'พิกัดบ้านและข้อความส่งถึงครูแล้ว', timer: 2500, showConfirmButton: false });
-        
-    } catch (e) {
-        Swal.fire('Error', 'บันทึกไม่ได้: ' + e.message, 'error');
-    }
-};
-// ฟังก์ชันดึงพิกัด GPS ปัจจุบัน
-window.getCurrentLocation = function() {
-    const status = document.getElementById('locationStatus');
-    if (!navigator.geolocation) {
-        return Swal.fire('ไม่รองรับ', 'เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่งครับ', 'error');
-    }
-
-    status.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังดึงพิกัด...';
+    Swal.fire({ title: 'กำลังส่งข้อความ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
     
-    navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        document.getElementById('hubLat').value = lat;
-        document.getElementById('hubLng').value = lng;
-        status.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle"></i> ได้พิกัดแล้ว! (${lat.toFixed(4)}, ${lng.toFixed(4)})</span><br><small>ระบบจะบันทึกเมื่อกดปุ่ม "ส่งข้อมูล" ด้านล่าง</small>`;
-        Toast.fire({ icon: 'success', title: 'ดึงพิกัดสำเร็จ!' });
-    }, (err) => {
-        status.innerText = 'ไม่สามารถเข้าถึงพิกัดได้ (กรุณาเปิด GPS)';
-        Swal.fire('เข้าถึงพิกัดไม่ได้', 'กรุณาอนุญาตให้เข้าถึงตำแหน่งที่ตั้ง (GPS) ในเครื่องของคุณด้วยครับ', 'warning');
-    }, { enableHighAccuracy: true });
+    try {
+        let finalContact = (type === 'messenger') ? `FB:${window.parseFacebookLink(contact)}` : (type === 'line' ? `LINE:${contact}` : contact);
+        
+        await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
+        await supabaseClient.from('parent_communications').insert([{ student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact }]);
+        
+        Swal.fire({ icon: 'success', title: 'ส่งข้อความสำเร็จ!', text: 'ครูจะติดต่อกลับหาท่านเร็วๆ นี้ครับ', timer: 2000, showConfirmButton: false });
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
 };
 
-// 🔵 ฟังก์ชันล้างลิงก์ Facebook ให้ใช้ได้ทั้งคอมและมือถือ
 window.parseFacebookLink = function(input) {
     let value = input.trim();
     if (!value) return "";
     try {
-        // ถ้ามาเป็น URL เต็มๆ เช่น https://www.facebook.com/profile.php?id=123 หรือ /username
         if (value.includes("facebook.com")) {
             const url = new URL(value.startsWith('http') ? value : 'https://' + value);
-            // กรณีเป็น profile.php?id=xxx
             if (url.searchParams.has("id")) return url.searchParams.get("id");
-            // กรณีเป็น facebook.com/username
             let path = url.pathname.replace(/\//g, "");
-            if (path === "profile.php") return ""; // กันเหนียว
-            return path;
+            return path === "profile.php" ? "" : path;
         }
-        return value; // ถ้ามาแค่ชื่อยูสเซอร์อยู่แล้วก็ส่งคืนเลย
+        return value;
     } catch (e) { return value; }
-};
-
-// 🌟 ตัวแปร Global สำหรับพักค่าพิกัดบ้าน (กันข้อมูลหาย)
-window.tempHomeLat = null;
-window.tempHomeLng = null;
-
-window.openMapPicker = function() {
-    // ใช้พิกัดเดิมที่มี ถ้าไม่มีใช้กรุงเทพฯ
-    let defaultLat = window.tempHomeLat || 13.7563;
-    let defaultLng = window.tempHomeLng || 100.5018;
-
-    Swal.fire({
-        title: '<h5 class="fw-bold m-0 text-primary">ปักหมุดบ้านนักเรียน</h5>',
-        html: `
-            <div style="position: relative;">
-                <button type="button" class="btn btn-primary fw-bold shadow" 
-                        style="position: absolute; top: 15px; right: 15px; z-index: 1000; border-radius: 20px; font-size: 0.8rem;" 
-                        onclick="locateUserOnMap()">
-                    <i class="bi bi-crosshair"></i> ตำแหน่งปัจจุบัน
-                </button>
-                
-                <div id="map-wrapper">
-                    <div id="map-canvas"></div>
-                </div>
-            </div>
-            <div class="small text-muted mt-2 fw-bold">จิ้มบนแผนที่เพื่อเลื่อนหมุดให้ตรงกับบ้านครับ</div>
-        `,
-        customClass: { popup: 'map-popup-square rounded-4' }, // ใช้ Class จตุรัสที่เราสร้าง
-        showCancelButton: true,
-        confirmButtonText: 'บันทึกตำแหน่งนี้',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#198754',
-        allowOutsideClick: false,
-        didOpen: () => {
-            setTimeout(() => {
-                if (window.myLeafletMap) { window.myLeafletMap.remove(); }
-                window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 16);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.myLeafletMap);
-                window.myMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(window.myLeafletMap);
-                
-                window.myLeafletMap.invalidateSize();
-                window.myLeafletMap.on('click', (e) => { window.myMarker.setLatLng(e.latlng); });
-            }, 500);
-        },
-        preConfirm: () => {
-            if (window.myMarker) {
-                const pos = window.myMarker.getLatLng();
-                return { lat: pos.lat, lng: pos.lng };
-            }
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // 🌟 บันทึกเข้าตัวแปร Global ทันที
-            window.tempHomeLat = result.value.lat;
-            window.tempHomeLng = result.value.lng;
-            
-            // เปิดหน้าต่างเดิมกลับมา (Communication Hub) เพื่อให้ส่งข้อมูลต่อได้
-            // ฟลุ๊คไม่ต้องทำอะไร กูเรียกใช้ฟังก์ชันเดิมของมึงให้กลับมาเปิด
-            Toast.fire({ icon: 'success', title: 'ปักหมุดสำเร็จ! ข้อมูลถูกเตรียมไว้แล้ว' });
-            
-            // เรียกหน้าต่างส่งข้อความกลับมาเปิดใหม่ (เพื่อกดส่งเข้า DB)
-            const studentId = localStorage.getItem('parentStudentId'); // หรือไอดีที่ใช้ในหน้าผู้ปกครอง
-            if (studentId) openCommunicationHub(studentId); 
-        }
-    });
-};
-
-// 🛰️ ฟังก์ชันดึง GPS (ปรับให้เสถียรขึ้น)
-window.locateUserOnMap = function() {
-    if (!navigator.geolocation) return Swal.fire('Error', 'เบราว์เซอร์ไม่รองรับ GPS', 'error');
-
-    Swal.showLoading(); // แสดง Loading ขณะดึงพิกัด
-    
-    navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        
-        if (window.myLeafletMap && window.myMarker) {
-            window.myLeafletMap.setView([lat, lng], 17);
-            window.myMarker.setLatLng([lat, lng]);
-            window.myLeafletMap.invalidateSize();
-        }
-        Swal.hideLoading(); // ซ่อน Loading เมื่อได้พิกัด
-    }, (err) => {
-        Swal.hideLoading();
-        Swal.fire('GPS ล้มเหลว', 'กรุณาเปิด GPS และอนุญาตให้แอปเข้าถึงตำแหน่งครับ', 'warning');
-    }, { enableHighAccuracy: true, timeout: 8000 });
 };
