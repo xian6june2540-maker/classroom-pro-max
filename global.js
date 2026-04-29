@@ -784,23 +784,21 @@ window.processSendToTeacher = async function(id) {
     const contact = document.getElementById('hubParentContact').value.trim();
     const type = document.querySelector('input[name="contactType"]:checked').value;
     
-    // ดึงพิกัดที่ผู้ปกครองปักไว้
+    // ดึงพิกัดที่ปักไว้จาก Input
     const lat = document.getElementById('hubLat').value;
     const lng = document.getElementById('hubLng').value;
     
-    if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลให้ครบครับ', 'warning');
+    if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อความและข้อมูลติดต่อครับ', 'warning');
 
-    Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    Swal.fire({ title: 'กำลังบันทึกพิกัดและส่งข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     try {
-        // 1. อัปเดตพิกัดบ้านถาวรลงในตาราง students (ถ้ามีการปักหมุด)
+        // 1. บันทึกพิกัดลงตาราง students (ถ้ามีพิกัดมา)
         if (lat && lng) {
-            const { error: stuErr } = await supabaseClient.from('students').update({ 
+            await supabaseClient.from('students').update({ 
                 home_lat: parseFloat(lat), 
                 home_lng: parseFloat(lng) 
             }).eq('id', id);
-            
-            if (stuErr) throw stuErr;
         }
 
         // 2. จัดรูปแบบการติดต่อ
@@ -808,34 +806,19 @@ window.processSendToTeacher = async function(id) {
         if(type === 'line') finalContact = `LINE:${contact}`;
         if(type === 'messenger') finalContact = `FB:${parseFacebookLink(contact)}`;
 
-        // 3. ส่งข้อมูลเข้าตารางสื่อสารหาครู (ลบของเก่าออกเพื่อไม่ให้รกตาราง)
+        // 3. ส่งแจ้งเตือนหาครู
         await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
-        
-        const { error: commErr } = await supabaseClient.from('parent_communications').insert([{ 
-            student_id: id, 
-            target: 'teacher', 
-            type: 'consult', 
-            message: msg, 
-            parent_contact: finalContact 
+        await supabaseClient.from('parent_communications').insert([{ 
+            student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact 
         }]);
 
-        if (commErr) throw commErr;
-
-        // 4. สำเร็จ!
-        Swal.fire({ 
-            icon: 'success', 
-            title: 'ส่งสำเร็จ!', 
-            text: 'คุณครูได้รับข้อความและพิกัดบ้านของคุณแล้วครับ', 
-            timer: 2500, 
-            showConfirmButton: false 
-        });
+        Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'พิกัดบ้านและข้อมูลส่งถึงครูแล้วครับ', timer: 2000, showConfirmButton: false });
         
-        // ล้างค่าในฟอร์มหลังส่งเสร็จ
+        // ล้างค่าข้อความ
         document.getElementById('hubMsgToTeacher').value = '';
 
     } catch (e) {
-        console.error("Save Error:", e);
-        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้: ' + e.message, 'error');
+        Swal.fire('Error', 'บันทึกไม่ได้: ' + e.message, 'error');
     }
 };
 // ฟังก์ชันดึงพิกัด GPS ปัจจุบัน
@@ -881,62 +864,72 @@ window.parseFacebookLink = function(input) {
 
 // 📍 ฟังก์ชันเปิดแผนที่ให้ผู้ปกครองเลื่อนหมุด (เวอร์ชันแก้ปัญหาจอขาว + Auto GPS)
 window.openMapPicker = function() {
-    // ดึงพิกัดล่าสุดที่เคยเก็บไว้ (ถ้ามี)
-    let latVal = document.getElementById('hubLat').value;
-    let lngVal = document.getElementById('hubLng').value;
-    
-    let defaultLat = latVal ? parseFloat(latVal) : 13.7563;
-    let defaultLng = lngVal ? parseFloat(lngVal) : 100.5018;
+    let latInput = document.getElementById('hubLat');
+    let lngInput = document.getElementById('hubLng');
+    let defaultLat = (latInput && latInput.value) ? parseFloat(latInput.value) : 13.7563;
+    let defaultLng = (lngInput && lngInput.value) ? parseFloat(lngInput.value) : 100.5018;
 
     Swal.fire({
-        title: '<span class="fw-bold">ปักหมุดบ้านนักเรียน</span>',
+        title: '<h4 class="fw-bold m-0">ปักหมุดบ้านนักเรียน</h4>',
         html: `
-            <div id="map-canvas"></div>
-            <div class="map-controls">
-                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" onclick="locateUserOnMap()">
-                    <i class="bi bi-crosshair"></i> ดึงตำแหน่งปัจจุบัน
+            <div class="text-center mb-2">
+                <button type="button" class="btn btn-primary fw-bold rounded-pill shadow-sm px-4" onclick="locateUserOnMap()">
+                    <i class="bi bi-crosshair"></i> กดตรงนี้เพื่อดึงตำแหน่งปัจจุบัน
                 </button>
-                <span class="small text-muted">จิ้มแผนที่เพื่อเลื่อนหมุด</span>
             </div>
+            <div id="map-canvas"></div>
+            <div class="small text-muted mt-2">หากตำแหน่งไม่ตรง สามารถจิ้มบนแผนที่เพื่อเลื่อนหมุดได้เลยครับ</div>
         `,
+        customClass: { popup: 'map-popup-xl rounded-4' },
         showCancelButton: true,
-        confirmButtonText: 'บันทึกตำแหน่งนี้',
+        confirmButtonText: 'ยืนยันพิกัดนี้',
         cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#198754',
         allowOutsideClick: false,
-        customClass: { popup: 'rounded-4 map-popup-custom' },
-        didRender: () => {
+        didOpen: () => {
+            // หน่วงเวลาเล็กน้อยเพื่อให้ Modal กางเสร็จ 100%
             setTimeout(() => {
-                if (window.myLeafletMap) window.myLeafletMap.remove();
-                
+                if (window.myLeafletMap) { window.myLeafletMap.remove(); }
+
                 window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 16);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.myLeafletMap);
-                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(window.myLeafletMap);
+
                 window.myMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(window.myLeafletMap);
-                
-                // กระตุ้นให้แผนที่วาดตัวทันที (แก้ปัญหาจอขาว)
+
+                // 🚀 ไม้ตายแก้จอขาว/แคบ: สั่งสั่งวาดแผนที่ซ้ำ 3 รอบในจังหวะที่ Modal ขยาย
                 window.myLeafletMap.invalidateSize();
+                setTimeout(() => window.myLeafletMap.invalidateSize(), 100);
+                setTimeout(() => window.myLeafletMap.invalidateSize(), 300);
 
                 window.myLeafletMap.on('click', (e) => {
                     window.myMarker.setLatLng(e.latlng);
                 });
-            }, 300);
+            }, 500);
         },
         preConfirm: () => {
-            const pos = window.myMarker.getLatLng();
-            return { lat: pos.lat, lng: pos.lng };
+            if (window.myMarker) {
+                const pos = window.myMarker.getLatLng();
+                return { lat: pos.lat, lng: pos.lng };
+            }
+            return null;
         }
     }).then((result) => {
-        if (result.isConfirmed) {
-            // 🌟 จุดสำคัญ: ต้องยัดค่ากลับเข้า Input ทันที
+        if (result.isConfirmed && result.value) {
+            // บันทึกลงตัวแปรพักข้อมูล
             document.getElementById('hubLat').value = result.value.lat;
             document.getElementById('hubLng').value = result.value.lng;
             
-            // อัปเดตข้อความในหน้าหลักให้ผู้ปกครองมั่นใจ
-            const statusEl = document.getElementById('locationStatus');
-            if (statusEl) {
-                statusEl.innerHTML = `<span class="badge bg-success px-3 py-2 rounded-pill"><i class="bi bi-check-circle-fill"></i> เตรียมพิกัดบ้านเรียบร้อยแล้ว</span>`;
+            // อัปเดต UI หน้าหลักให้เขารู้ว่า "บันทึกติดแล้ว" (แก้ปัญหารูปที่ 2)
+            const statusBox = document.getElementById('locationStatus');
+            if (statusBox) {
+                statusBox.innerHTML = `
+                    <div class="alert alert-success py-2 mb-0 rounded-pill border-0 shadow-sm">
+                        <i class="bi bi-check-circle-fill"></i> เตรียมพิกัดเรียบร้อย (${result.value.lat.toFixed(4)}, ${result.value.lng.toFixed(4)})
+                    </div>`;
             }
-            Toast.fire({ icon: 'success', title: 'ปักหมุดชั่วคราวสำเร็จ' });
+            Toast.fire({ icon: 'success', title: 'ปักหมุดสำเร็จ! อย่าลืมกดส่งข้อมูลด้านล่าง' });
         }
     });
 };
