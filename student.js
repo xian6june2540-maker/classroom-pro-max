@@ -444,13 +444,15 @@
                 { data: tasks },
                 { data: subs },
                 { data: gTasks },
-                { data: anns }
+                { data: anns },
+                { data: parentMsgs } // 🔔 เพิ่มตรงนี้เพื่อดึงข้อความจากผู้ปกครอง
             ] = await Promise.all([
                 supabaseClient.from('attendance').select('*').eq('student_id', studentId),
                 supabaseClient.from('tasks').select('*').eq('room', roomName),
                 supabaseClient.from('submissions').select('*').eq('student_id', studentId),
                 supabaseClient.from('group_tasks').select('*').eq('room', roomName),
-                supabaseClient.from('announcements').select('*').eq('room', roomName).order('id', {ascending: false}).limit(1)
+                supabaseClient.from('announcements').select('*').eq('room', roomName).order('id', {ascending: false}).limit(1),
+                supabaseClient.from('parent_communications').select('*').eq('student_id', studentId).eq('target', 'student') // 🔔 ดึงเฉพาะที่ส่งให้ลูก
             ]);
 
             let taskIds = (gTasks||[]).map(t=>t.task_id);
@@ -602,6 +604,25 @@
 
             let dmContainer = document.getElementById('dmContainer');
             let dmHtml = '';
+
+            // 1. โชว์ข้อความจากผู้ปกครองก่อน (ถ้ามี)
+            if (parentMsgs && parentMsgs.length > 0) {
+                parentMsgs.forEach(msg => {
+                    dmHtml += `
+                        <div class="dm-alert-card" style="background: linear-gradient(135deg, #fff5f5 0%, #ffe3e3 100%); border-left: 5px solid #ff4b2b !important;">
+                            <div class="dm-icon"><i class="bi bi-chat-heart-fill text-danger"></i></div>
+                            <h5 class="fw-bold text-danger mb-2">ข้อความจากผู้ปกครอง</h5>
+                            <p class="fs-5 text-dark mb-3 fw-bold">${msg.message}</p>
+                            <div class="text-end">
+                                <button class="btn btn-danger btn-sm rounded-pill fw-bold px-3" onclick="acknowledgeParentMsg(${msg.id})">
+                                    รับทราบ <i class="bi bi-check-circle-fill"></i>
+                                </button>
+                            </div>
+                        </div>`;
+                });
+            }
+
+            // 2. โชว์ข้อความจากคุณครู (DM เดิม)
             if (dmMessages.length > 0) {
                 for (let d = 0; d < dmMessages.length; d++) {
                     dmHtml += '<div class="dm-alert-card"><div class="dm-icon"><i class="bi bi-envelope-heart-fill"></i></div><h5 class="fw-bold text-danger mb-2">ข้อความจากครู</h5><p class="fs-6 text-dark mb-3" style="white-space: pre-wrap;">' + dmMessages[d] + '</p><div class="text-end"><button class="btn btn-danger btn-sm rounded-pill fw-bold px-3" onclick="acknowledgeDM(' + d + ')"><i class="bi bi-check-circle-fill"></i> รับทราบ</button></div></div>';
@@ -2912,3 +2933,24 @@ async function renderPartySelection() {
 
     } catch(e) { console.error(e); }
 }
+
+// --- [เพิ่มใหม่: ฟังก์ชันให้นักเรียนกดรับทราบข้อความผู้ปกครอง และลบออกจากฐานข้อมูล] ---
+window.acknowledgeParentMsg = async function(msgId) {
+    Swal.fire({ title: 'กำลังรับทราบข้อความ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    
+    // 🔔 ล้างข้อมูลออกจากตาราง parent_communications ทันที
+    const { error } = await supabaseClient
+        .from('parent_communications')
+        .delete()
+        .eq('id', msgId);
+    
+    if (error) {
+        Swal.fire('ผิดพลาด', error.message, 'error');
+    } else {
+        Swal.close();
+        // รีโหลดหน้า Dashboard แบบเงียบๆ เพื่อให้การ์ดข้อความหายไป
+        if (globalPortalStudent && globalPortalStudent.id) {
+            loadFullDashboard(globalPortalStudent.id, true);
+        }
+    }
+};
