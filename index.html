@@ -545,6 +545,7 @@
 -- ========================================================
 DROP TABLE IF EXISTS live_quiz_responses CASCADE;
 DROP TABLE IF EXISTS live_quiz_sessions CASCADE;
+DROP TABLE IF EXISTS parent_communications CASCADE; -- <--- [เพิ่มการล้างตารางใหม่]
 DROP TABLE IF EXISTS boss_logs CASCADE;
 DROP TABLE IF EXISTS boss_quizzes CASCADE;
 DROP TABLE IF EXISTS group_submissions CASCADE;
@@ -574,7 +575,6 @@ CREATE TABLE students (
     name TEXT NOT NULL,
     nickname TEXT DEFAULT '',
     gender TEXT DEFAULT '',
-    -- เพิ่ม ON UPDATE CASCADE เพื่อให้เปลี่ยนชื่อห้องตามตาราง rooms
     room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
     accumulated_score NUMERIC DEFAULT 0,
     pin TEXT DEFAULT '',
@@ -601,7 +601,7 @@ CREATE TABLE students (
     last_passive_update BIGINT DEFAULT (extract(epoch from now()) * 1000),
     buff_multiplier NUMERIC DEFAULT 1.0,
     buff_end_at BIGINT DEFAULT 0,
-    parent_token TEXT DEFAULT NULL -- <--- [เพิ่มส่วนนี้เข้าไปแล้วครับ]
+    parent_token TEXT DEFAULT NULL
 );
 
 -- 3. ตารางเช็คชื่อ
@@ -738,6 +738,18 @@ CREATE TABLE live_quiz_responses (
     UNIQUE(session_id, q_index, student_id)
 );
 
+-- 15. ตารางสื่อสารระหว่างผู้ปกครอง ลูก และครู (🌟 เพิ่มใหม่)
+CREATE TABLE parent_communications (
+    id SERIAL PRIMARY KEY,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    target TEXT, -- 'student' หรือ 'teacher'
+    type TEXT,   -- 'praise' หรือ 'consult'
+    message TEXT,
+    parent_contact TEXT, -- ข้อมูลติดต่อกลับของผู้ปกครอง
+    is_resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
 -- สร้าง INDEX เพิ่มความเร็ว
 CREATE INDEX idx_students_room ON students(room);
 CREATE INDEX idx_attendance_student ON attendance(student_id);
@@ -745,6 +757,7 @@ CREATE INDEX idx_submissions_student ON submissions(student_id);
 CREATE INDEX idx_groups_members ON groups USING gin (members);
 CREATE INDEX idx_live_quiz_responses_session_q ON live_quiz_responses(session_id, q_index);
 CREATE INDEX idx_boss_logs_boss_id ON boss_logs(boss_id);
+CREATE INDEX idx_parent_comm_student ON parent_communications(student_id); -- <--- [เพิ่ม Index ใหม่]
 
 -- ========================================================
 -- ส่วนที่ 2: ระบบ VIEWS (ปรับปรุงให้รองรับการเปลี่ยนชื่อห้อง)
@@ -794,6 +807,7 @@ EXECUTE FUNCTION manage_room_student_views();
 ALTER TABLE students REPLICA IDENTITY FULL;
 ALTER TABLE live_quiz_responses REPLICA IDENTITY FULL;
 ALTER TABLE boss_quizzes REPLICA IDENTITY FULL;
+ALTER TABLE parent_communications REPLICA IDENTITY FULL; -- <--- [เพิ่มตารางใหม่เข้าระบบ Real-time]
 
 DROP PUBLICATION IF EXISTS supabase_realtime;
 CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
@@ -815,6 +829,7 @@ ALTER TABLE boss_quizzes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE boss_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE live_quiz_sessions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE live_quiz_responses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE parent_communications DISABLE ROW LEVEL SECURITY; -- <--- [ปิด RLS ตารางใหม่]
 </textarea>
           </div>
         </div>
