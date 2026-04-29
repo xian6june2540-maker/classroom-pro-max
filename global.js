@@ -747,33 +747,34 @@ window.processSendToStudent = async function(id) {
 window.updateContactUI = function() {
     const input = document.getElementById('hubParentContact');
     const preview = document.getElementById('contactPreview');
-    const type = document.querySelector('input[name="contactType"]:checked').value;
+    const checkedRadio = document.querySelector('input[name="contactType"]:checked');
+    if(!checkedRadio) return;
+    
+    const type = checkedRadio.value;
     let value = input.value;
 
     if (type === 'phone') {
         input.type = 'tel';
         input.placeholder = '0xx-xxx-xxxx';
-        // Auto Format: 0812345678 -> 081-234-5678
-        let numbers = value.replace(/\D/g, ''); // เอาเฉพาะตัวเลข
-        if (numbers.length > 10) numbers = numbers.substring(0, 10);
-        
+        let numbers = value.replace(/\D/g, '').substring(0, 10);
         let formatted = '';
         if (numbers.length > 0) formatted += numbers.substring(0, 3);
         if (numbers.length > 3) formatted += '-' + numbers.substring(3, 6);
         if (numbers.length > 6) formatted += '-' + numbers.substring(6, 10);
-        
         input.value = formatted;
         preview.innerHTML = formatted ? `<span class="text-primary"><i class="bi bi-telephone-fill"></i> ครูจะโทรหาที่เบอร์นี้</span>` : '';
-    } else {
+    } 
+    else if (type === 'line') {
         input.type = 'text';
         input.placeholder = 'กรอก LINE ID ของท่าน';
-        // Preview LINE Link
-        let cleanId = value.trim();
-        if (cleanId) {
-            preview.innerHTML = `<span class="text-success"><i class="bi bi-line"></i> ลิงก์ของท่าน: line.me/ti/p/~${cleanId}</span>`;
-        } else {
-            preview.innerHTML = '';
-        }
+        preview.innerHTML = value ? `<span class="text-success"><i class="bi bi-line"></i> ลิงก์ LINE: line.me/ti/p/~${value}</span>` : '';
+    } 
+    else if (type === 'messenger') {
+        // 🔵 แยก Logic Facebook ออกมาให้ชัดเจน (แก้ปัญหารูปที่ 1)
+        input.type = 'text';
+        input.placeholder = 'ชื่อโปรไฟล์ หรือ ลิงก์เฟสบุ๊คของคุณ';
+        let cleanFB = parseFacebookLink(value);
+        preview.innerHTML = cleanFB ? `<span class="text-info"><i class="bi bi-messenger"></i> ลิงก์ Messenger: m.me/${cleanFB}</span>` : '';
     }
 };
 
@@ -861,32 +862,42 @@ window.openMapPicker = function() {
     Swal.fire({
         title: 'ปักหมุดบ้านนักเรียน',
         html: `
-            <div id="map" style="width: 100%; height: 300px; border-radius: 15px; margin-bottom: 10px;"></div>
-            <p class="small text-muted">กดค้างที่หมุดแล้วเลื่อน หรือจิ้มบนแผนที่ เพื่อความแม่นยำ</p>
+            <div id="map" style="width: 100%; height: 350px; border-radius: 15px; border: 2px solid #eee;"></div>
+            <p class="small text-muted mt-2">จิ้มบนแผนที่ หรือลากหมุดไปยังตำแหน่งบ้านให้ตรงที่สุด</p>
         `,
         showCancelButton: true,
         confirmButtonText: 'บันทึกตำแหน่งนี้',
         cancelButtonText: 'ยกเลิก',
         didOpen: () => {
-            // เริ่มต้นที่พิกัดปัจจุบัน หรือพิกัดเดิมถ้ามี
-            let lat = document.getElementById('hubLat').value || 14.97;
-            let lng = document.getElementById('hubLng').value || 102.10;
+            // 🌟 แก้ปัญหาจอขาว: รอให้ Popup กางออกเสร็จก่อน (100ms)
+            setTimeout(() => {
+                let lat = parseFloat(document.getElementById('hubLat').value) || 14.97;
+                let lng = parseFloat(document.getElementById('hubLng').value) || 102.10;
 
-            const map = L.map('map').setView([lat, lng], 16);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                const map = L.map('map').setView([lat, lng], 16);
+                
+                // ใช้กระเบื้องแผนที่จาก OpenStreetMap
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
 
-            const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+                const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
 
-            // เมื่อจิ้มแผนที่ให้ย้ายหมุด
-            map.on('click', (e) => { marker.setLatLng(e.latlng); });
+                // บังคับให้แผนที่คำนวณพื้นที่ใหม่ (กันจอขาว)
+                map.invalidateSize();
 
-            // เมื่อกดตกลง ให้เก็บค่าเข้า Input
-            Swal.getConfirmButton().addEventListener('click', () => {
-                const pos = marker.getLatLng();
-                document.getElementById('hubLat').value = pos.lat;
-                document.getElementById('hubLng').value = pos.lng;
-                document.getElementById('locationStatus').innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle"></i> ปักหมุดแล้ว!</span>`;
-            });
+                map.on('click', (e) => { 
+                    marker.setLatLng(e.latlng); 
+                });
+
+                // เก็บพิกัดเมื่อกดบันทึก
+                Swal.getConfirmButton().addEventListener('click', () => {
+                    const pos = marker.getLatLng();
+                    document.getElementById('hubLat').value = pos.lat;
+                    document.getElementById('hubLng').value = pos.lng;
+                    document.getElementById('locationStatus').innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> ปักหมุดบ้านเรียบร้อยแล้ว</span>`;
+                });
+            }, 300); // 300ms คือเวลาที่ชัวร์ที่สุดสำหรับการกาง Modal
         }
     });
 };
