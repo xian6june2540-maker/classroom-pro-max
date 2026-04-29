@@ -539,6 +539,13 @@ window.loadParentDashboard = async function(token) {
             return;
         }
 
+        // 🟢 โชว์ปุ่ม Chat Head ที่มุมจอ และเก็บ ID เด็กไว้ส่งข้อมูล
+        const chatHead = document.getElementById('parentChatHead');
+        if(chatHead) {
+            chatHead.classList.remove('hidden');
+            chatHead.dataset.studentId = student.id; // เก็บ ID ไว้ที่ตัวปุ่ม
+        }
+
         const [attRes, tasksRes, subRes] = await Promise.all([
             supabaseClient.from('attendance').select('*').eq('student_id', student.id).order('check_date', { ascending: false }).limit(20),
             supabaseClient.from('tasks').select('*').eq('room', student.room).order('due_date', { ascending: false }).limit(20),
@@ -555,18 +562,6 @@ window.loadParentDashboard = async function(token) {
                 <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${student.avatar}" style="width: 90px; height: 90px; border-radius: 50%; border: 4px solid #0d6efd;" class="shadow-sm mb-2 bg-white">
                 <h4 class="fw-bold text-dark mb-0">${student.name}</h4>
                 <p class="text-muted small">ระดับชั้น/ห้อง: ${student.room}</p>
-            </div>
-
-            <div class="px-2 mb-4">
-                <button class="btn btn-danger w-100 rounded-4 py-3 shadow-sm border-0 d-flex align-items-center justify-content-center gap-2" 
-                        onclick="openCommunicationHub('${student.id}')" style="background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);">
-                    <i class="bi bi-chat-heart-fill fs-4"></i>
-                    <div class="text-start">
-                        <div class="fw-bold">ศูนย์การสื่อสาร</div>
-                        <div style="font-size: 0.7rem; opacity: 0.9;">ส่งกำลังใจให้ลูก หรือ ปรึกษาคุณครู</div>
-                    </div>
-                    <i class="bi bi-chevron-right ms-auto"></i>
-                </button>
             </div>
 
             <div class="row g-2 mb-3">
@@ -620,6 +615,15 @@ window.loadParentDashboard = async function(token) {
 // 👨‍👩‍👧‍👦 SYSTEM: PARENT COMMUNICATION HUB (MODAL VERSION)
 // =========================================================
 
+// 🔘 ฟังก์ชันเชื่อมต่อ: เมื่อกดที่ปุ่มวงกลม (Chat Head)
+window.openCommunicationHubFromHead = function() {
+    const studentId = document.getElementById('parentChatHead').dataset.studentId;
+    if(studentId) {
+        window.openCommunicationHub(studentId);
+    } else {
+        console.error("Student ID not found in Chat Head");
+    }
+};
 // 1. ฟังก์ชันเปิดหน้าต่างศูนย์การสื่อสาร
 window.openCommunicationHub = function(studentId) {
     Swal.fire({
