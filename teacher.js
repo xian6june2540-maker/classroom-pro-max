@@ -2238,19 +2238,59 @@
     };
 
     window.copyParentLink = async function(id, token) {
+        // 1. หาชื่อนักเรียนจากข้อมูลที่มีอยู่แล้วใน studentsData
+        const student = studentsData.find(s => s[0] === id);
+        const studentName = student ? student[1] : "นักเรียน";
+    
         let finalToken = token;
-        if (!finalToken || finalToken === "") {
-            // ถ้ายังไม่มีรหัส ให้สร้างใหม่ผ่าน Server
-            Swal.fire({ title: 'กำลังสร้างรหัสลับ...', didOpen: () => Swal.showLoading() });
+        
+        // 2. ถ้ายังไม่มีรหัสลับ ให้สร้างใหม่
+        if (!finalToken || finalToken === "" || finalToken === "null") {
+            Swal.fire({ title: 'กำลังสร้างรหัสลับ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
             finalToken = await new Promise(resolve => {
                 google.script.run.withSuccessHandler(resolve).generateParentToken(id);
             });
             Swal.close();
         }
         
-        // สร้าง URL (ฟลุ๊คต้องเอา URL ของ Web App ตัวเองมาใส่แทนที่ GAS_WEB_APP_URL นะ)
+        // 3. สร้าง URL ลิงก์ผู้ปกครอง
         const url = GAS_WEB_APP_URL + "?page=parent&token=" + finalToken;
         
-        navigator.clipboard.writeText(url);
-        Swal.fire('สำเร็จ!', 'คัดลอกลิงก์สำหรับผู้ปกครองแล้ว<br>ส่งให้ผู้ปกครองใน LINE ได้เลยครับ', 'success');
+        // 4. แสดงหน้าต่างยืนยัน (Popup) ตามที่ฟลุ๊คต้องการ
+        Swal.fire({
+            title: '<span class="text-primary">ลิงก์ติดตามสำหรับผู้ปกครอง</span>',
+            html: `
+                <div class="text-start mb-3 p-3 bg-light rounded-3 border">
+                    <p class="mb-1 small fw-bold text-muted">นักเรียน:</p>
+                    <h5 class="mb-0 text-dark">${studentName} (รหัส: ${id})</h5>
+                </div>
+                <div class="input-group mb-3">
+                    <input type="text" id="parentLinkInput" class="form-control" value="${url}" readonly>
+                    <button class="btn btn-primary" onclick="copyToClipboardFromPopup()">
+                        <i class="bi bi-copy"></i> คัดลอก
+                    </button>
+                </div>
+                <p class="small text-danger"><i class="bi bi-exclamation-triangle"></i> ส่งลิงก์นี้ให้ผู้ปกครองผ่านทาง LINE ส่วนตัวเท่านั้น</p>
+            `,
+            showConfirmButton: false,
+            showCloseButton: true,
+            customClass: { popup: 'rounded-4' }
+        });
+    };
+    
+    // ฟังก์ชันช่วยคัดลอกในหน้า Popup
+    window.copyToClipboardFromPopup = function() {
+        const copyText = document.getElementById("parentLinkInput");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(copyText.value);
+        
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: 'คัดลอกลิงก์เรียบร้อย!',
+            showConfirmButton: false,
+            timer: 1500
+        });
     };
