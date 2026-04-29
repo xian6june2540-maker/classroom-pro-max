@@ -545,6 +545,7 @@ window.loadParentDashboard = async function(token) {
         if(chatHead) {
             chatHead.classList.remove('hidden');
             chatHead.dataset.studentId = student.id; // เก็บ ID ไว้ที่ตัวปุ่ม
+            localStorage.setItem('parentStudentId', student.id); // 🌟 เพิ่มบรรทัดนี้!
         }
 
         const [attRes, tasksRes, subRes] = await Promise.all([
@@ -626,11 +627,11 @@ window.openCommunicationHubFromHead = function() {
     }
 };
 // 1. ฟังก์ชันเปิดหน้าต่างศูนย์การสื่อสาร
-// 1. ฟังก์ชันเปิดหน้าต่างศูนย์การสื่อสาร (เวอร์ชันอัจฉริยะ Idea 1, 3, 4)
 window.openCommunicationHub = function(studentId) {
-    // ดึงข้อมูลที่เคยกรอกไว้ล่าสุดจากเครื่อง
-    const lastContact = localStorage.getItem('parentLastContact') || '';
-    const lastType = localStorage.getItem('parentLastContactType') || 'phone';
+    // 🌟 นี่คือจุดที่ 4: เช็คว่าปักหมุดหรือยัง ถ้าปักแล้วให้โชว์แถบสีเขียว
+    let locationStatusHtml = (window.tempHomeLat) 
+        ? `<div class="badge bg-success px-3 py-2 rounded-pill w-100 mb-3 shadow-sm border-0"><i class="bi bi-check-circle-fill"></i> เตรียมพิกัดบ้านเรียบร้อย พร้อมส่ง!</div>`
+        : `<div id="locationStatus" class="small text-muted mb-2 text-center">ยังไม่ได้ระบุตำแหน่งบ้าน</div>`;
 
     Swal.fire({
         title: '<div class="fw-bold text-danger"><i class="bi bi-chat-heart"></i> ศูนย์การสื่อสาร</div>',
@@ -666,17 +667,14 @@ window.openCommunicationHub = function(studentId) {
                         <input type="radio" class="btn-check" name="contactType" id="typeFB" value="messenger" onchange="updateContactUI()">
                         <label class="btn btn-outline-info btn-sm text-dark" for="typeFB">Facebook</label>
                     </div>
-
                     <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" placeholder="ข้อมูลติดต่อ">
                     <div id="contactPreview" class="small fw-bold mb-3 text-center" style="min-height:20px;"></div>
 
                     <div class="p-2 rounded-4 mb-3 border text-center bg-light">
-                        <div id="locationStatus" class="small text-muted mb-1">ยังไม่ได้ระบุตำแหน่งบ้าน</div>
-                        <button class="btn btn-sm btn-dark w-100 rounded-pill" onclick="openMapPicker()">
+                        ${locationStatusHtml}
+                        <button class="btn btn-sm btn-dark w-100 rounded-pill shadow-sm" onclick="openMapPicker()">
                             <i class="bi bi-geo-alt-fill text-warning"></i> ระบุ/เลื่อนพิกัดบ้านนักเรียน
                         </button>
-                        <input type="hidden" id="hubLat">
-                        <input type="hidden" id="hubLng">
                     </div>
 
                     <button class="btn btn-primary w-100 fw-bold rounded-pill shadow-lg py-2" onclick="processSendToTeacher('${studentId}')">
@@ -689,10 +687,9 @@ window.openCommunicationHub = function(studentId) {
         showCloseButton: true,
         customClass: { popup: 'rounded-4' },
         didOpen: () => {
-            // ผูก Event สำหรับระบบ Auto Format และ Preview
             const contactInput = document.getElementById('hubParentContact');
             contactInput.addEventListener('input', updateContactUI);
-            updateContactUI(); // เรียกครั้งแรกเพื่อโชว์ข้อมูลเดิม (ถ้ามี)
+            updateContactUI();
         }
     });
 };
@@ -784,39 +781,35 @@ window.processSendToTeacher = async function(id) {
     const contact = document.getElementById('hubParentContact').value.trim();
     const type = document.querySelector('input[name="contactType"]:checked').value;
     
-    // ดึงพิกัดที่ปักไว้จาก Input
-    const lat = document.getElementById('hubLat').value;
-    const lng = document.getElementById('hubLng').value;
-    
     if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อความและข้อมูลติดต่อครับ', 'warning');
 
-    Swal.fire({ title: 'กำลังบันทึกพิกัดและส่งข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     try {
-        // 1. บันทึกพิกัดลงตาราง students (ถ้ามีพิกัดมา)
-        if (lat && lng) {
+        // 1. ดึงพิกัดจากตัวแปร Global (ที่เพิ่งปักมา) บันทึกลง Supabase
+        if (window.tempHomeLat && window.tempHomeLng) {
             await supabaseClient.from('students').update({ 
-                home_lat: parseFloat(lat), 
-                home_lng: parseFloat(lng) 
+                home_lat: window.tempHomeLat, 
+                home_lng: window.tempHomeLng 
             }).eq('id', id);
         }
 
-        // 2. จัดรูปแบบการติดต่อ
+        // 2. จัดรูปแบบข้อความติดต่อ
         let finalContact = contact;
         if(type === 'line') finalContact = `LINE:${contact}`;
         if(type === 'messenger') finalContact = `FB:${parseFacebookLink(contact)}`;
 
-        // 3. ส่งแจ้งเตือนหาครู
+        // 3. ส่งข้อมูลเข้าตาราง parent_communications
         await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
         await supabaseClient.from('parent_communications').insert([{ 
             student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact 
         }]);
 
-        Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'พิกัดบ้านและข้อมูลส่งถึงครูแล้วครับ', timer: 2000, showConfirmButton: false });
-        
-        // ล้างค่าข้อความ
-        document.getElementById('hubMsgToTeacher').value = '';
+        // ล้างค่าพิกัดชั่วคราวทิ้งหลังส่งเสร็จ
+        window.tempHomeLat = null; window.tempHomeLng = null;
 
+        Swal.fire({ icon: 'success', title: 'ส่งสำเร็จ!', text: 'พิกัดบ้านและข้อความส่งถึงครูแล้ว', timer: 2500, showConfirmButton: false });
+        
     } catch (e) {
         Swal.fire('Error', 'บันทึกไม่ได้: ' + e.message, 'error');
     }
@@ -862,50 +855,46 @@ window.parseFacebookLink = function(input) {
     } catch (e) { return value; }
 };
 
-// 📍 ฟังก์ชันเปิดแผนที่ให้ผู้ปกครองเลื่อนหมุด (เวอร์ชันแก้ปัญหาจอขาว + Auto GPS)
+// 🌟 ตัวแปร Global สำหรับพักค่าพิกัดบ้าน (กันข้อมูลหาย)
+window.tempHomeLat = null;
+window.tempHomeLng = null;
+
 window.openMapPicker = function() {
-    let latInput = document.getElementById('hubLat');
-    let lngInput = document.getElementById('hubLng');
-    let defaultLat = (latInput && latInput.value) ? parseFloat(latInput.value) : 13.7563;
-    let defaultLng = (lngInput && lngInput.value) ? parseFloat(lngInput.value) : 100.5018;
+    // ใช้พิกัดเดิมที่มี ถ้าไม่มีใช้กรุงเทพฯ
+    let defaultLat = window.tempHomeLat || 13.7563;
+    let defaultLng = window.tempHomeLng || 100.5018;
 
     Swal.fire({
-        title: '<h4 class="fw-bold m-0">ปักหมุดบ้านนักเรียน</h4>',
+        title: '<h5 class="fw-bold m-0 text-primary">ปักหมุดบ้านนักเรียน</h5>',
         html: `
-            <div class="text-center mb-2">
-                <button type="button" class="btn btn-primary fw-bold rounded-pill shadow-sm px-4" onclick="locateUserOnMap()">
-                    <i class="bi bi-crosshair"></i> กดตรงนี้เพื่อดึงตำแหน่งปัจจุบัน
+            <div style="position: relative;">
+                <button type="button" class="btn btn-primary fw-bold shadow" 
+                        style="position: absolute; top: 15px; right: 15px; z-index: 1000; border-radius: 20px; font-size: 0.8rem;" 
+                        onclick="locateUserOnMap()">
+                    <i class="bi bi-crosshair"></i> ตำแหน่งปัจจุบัน
                 </button>
+                
+                <div id="map-wrapper">
+                    <div id="map-canvas"></div>
+                </div>
             </div>
-            <div id="map-canvas"></div>
-            <div class="small text-muted mt-2">หากตำแหน่งไม่ตรง สามารถจิ้มบนแผนที่เพื่อเลื่อนหมุดได้เลยครับ</div>
+            <div class="small text-muted mt-2 fw-bold">จิ้มบนแผนที่เพื่อเลื่อนหมุดให้ตรงกับบ้านครับ</div>
         `,
-        customClass: { popup: 'map-popup-xl rounded-4' },
+        customClass: { popup: 'map-popup-square rounded-4' }, // ใช้ Class จตุรัสที่เราสร้าง
         showCancelButton: true,
-        confirmButtonText: 'ยืนยันพิกัดนี้',
+        confirmButtonText: 'บันทึกตำแหน่งนี้',
         cancelButtonText: 'ยกเลิก',
         confirmButtonColor: '#198754',
         allowOutsideClick: false,
         didOpen: () => {
-            // หน่วงเวลาเล็กน้อยเพื่อให้ Modal กางเสร็จ 100%
             setTimeout(() => {
                 if (window.myLeafletMap) { window.myLeafletMap.remove(); }
-
                 window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 16);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap'
-                }).addTo(window.myLeafletMap);
-
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.myLeafletMap);
                 window.myMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(window.myLeafletMap);
-
-                // 🚀 ไม้ตายแก้จอขาว/แคบ: สั่งสั่งวาดแผนที่ซ้ำ 3 รอบในจังหวะที่ Modal ขยาย
+                
                 window.myLeafletMap.invalidateSize();
-                setTimeout(() => window.myLeafletMap.invalidateSize(), 100);
-                setTimeout(() => window.myLeafletMap.invalidateSize(), 300);
-
-                window.myLeafletMap.on('click', (e) => {
-                    window.myMarker.setLatLng(e.latlng);
-                });
+                window.myLeafletMap.on('click', (e) => { window.myMarker.setLatLng(e.latlng); });
             }, 500);
         },
         preConfirm: () => {
@@ -913,23 +902,20 @@ window.openMapPicker = function() {
                 const pos = window.myMarker.getLatLng();
                 return { lat: pos.lat, lng: pos.lng };
             }
-            return null;
         }
     }).then((result) => {
-        if (result.isConfirmed && result.value) {
-            // บันทึกลงตัวแปรพักข้อมูล
-            document.getElementById('hubLat').value = result.value.lat;
-            document.getElementById('hubLng').value = result.value.lng;
+        if (result.isConfirmed) {
+            // 🌟 บันทึกเข้าตัวแปร Global ทันที
+            window.tempHomeLat = result.value.lat;
+            window.tempHomeLng = result.value.lng;
             
-            // อัปเดต UI หน้าหลักให้เขารู้ว่า "บันทึกติดแล้ว" (แก้ปัญหารูปที่ 2)
-            const statusBox = document.getElementById('locationStatus');
-            if (statusBox) {
-                statusBox.innerHTML = `
-                    <div class="alert alert-success py-2 mb-0 rounded-pill border-0 shadow-sm">
-                        <i class="bi bi-check-circle-fill"></i> เตรียมพิกัดเรียบร้อย (${result.value.lat.toFixed(4)}, ${result.value.lng.toFixed(4)})
-                    </div>`;
-            }
-            Toast.fire({ icon: 'success', title: 'ปักหมุดสำเร็จ! อย่าลืมกดส่งข้อมูลด้านล่าง' });
+            // เปิดหน้าต่างเดิมกลับมา (Communication Hub) เพื่อให้ส่งข้อมูลต่อได้
+            // ฟลุ๊คไม่ต้องทำอะไร กูเรียกใช้ฟังก์ชันเดิมของมึงให้กลับมาเปิด
+            Toast.fire({ icon: 'success', title: 'ปักหมุดสำเร็จ! ข้อมูลถูกเตรียมไว้แล้ว' });
+            
+            // เรียกหน้าต่างส่งข้อความกลับมาเปิดใหม่ (เพื่อกดส่งเข้า DB)
+            const studentId = localStorage.getItem('parentStudentId'); // หรือไอดีที่ใช้ในหน้าผู้ปกครอง
+            if (studentId) openCommunicationHub(studentId); 
         }
     });
 };
