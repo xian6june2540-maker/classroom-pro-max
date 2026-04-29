@@ -600,7 +600,8 @@ CREATE TABLE students (
     equipped_bg TEXT DEFAULT 'bg0',
     last_passive_update BIGINT DEFAULT (extract(epoch from now()) * 1000),
     buff_multiplier NUMERIC DEFAULT 1.0,
-    buff_end_at BIGINT DEFAULT 0
+    buff_end_at BIGINT DEFAULT 0,
+    parent_token TEXT DEFAULT NULL -- <--- [เพิ่มส่วนนี้เข้าไปแล้วครับ]
 );
 
 -- 3. ตารางเช็คชื่อ
