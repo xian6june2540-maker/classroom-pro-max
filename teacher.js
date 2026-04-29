@@ -614,6 +614,7 @@
 
         f.forEach(function(s) { 
             const studentId = s[0];
+            const parentToken = s[28] || ""; // <--- เพิ่มบรรทัดนี้เพื่อดึงรหัสลับจากลำดับที่ 28
             const idx = studentsData.indexOf(s);
             
             let baseExp = parseFloat(s[22]) || 0; 
@@ -682,6 +683,7 @@
                     '<button class="btn btn-outline-danger btn-sm me-1" title="ส่งข้อความส่วนตัว" onclick="promptSendDM(\'' + studentId + '\', \'' + s[1] + '\')"><i class="bi bi-envelope-heart"></i> DM</button>' +
                     '<button class="btn btn-outline-success btn-sm me-1" title="เพิ่ม/ลด EXP" onclick="promptGiveExp(\'' + studentId + '\', \'' + s[1] + '\', ' + totalDisplayExp + ')"><i class="bi bi-arrow-up-circle-fill"></i> EXP</button>' +
                     '<button class="btn btn-outline-info btn-sm me-1" title="สมุดพก" onclick="generateStudentPDF(\'' + studentId + '\', \'' + s[4] + '\')"><i class="bi bi-printer-fill"></i></button>' +
+                    '<button class="btn btn-outline-primary btn-sm me-1" title="ลิงก์ผู้ปกครอง" onclick="copyParentLink(\'' + studentId + '\', \'' + parentToken + '\')"><i class="bi bi-person-heart"></i></button>' +
                     '<button class="btn btn-outline-warning btn-sm me-1" title="แก้ไข" onclick="editStudent(' + idx + ')"><i class="bi bi-pencil-square"></i></button>' +
                     '<button class="btn btn-outline-danger btn-sm" title="ลบ" onclick="deleteStudent(' + idx + ')"><i class="bi bi-trash-fill"></i></button>' +
                 '</td>' +
