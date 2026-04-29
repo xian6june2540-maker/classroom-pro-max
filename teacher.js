@@ -603,7 +603,7 @@
         });
     }
 
-    // --- [แก้ไข: แสดงไอคอนแจ้งเตือนท้ายชื่อนักเรียน] ---
+    // --- [ยกชุดนี้ไปทับ renderStudents เดิมทั้งหมด] ---
     function renderStudents() { 
         const tb = document.getElementById('studentTableBody');
         const f = studentsData.filter(function(s) { return s[4] === currentRoom; }); 
@@ -619,19 +619,21 @@
 
         f.forEach(function(s) { 
             const studentId = s[0];
+            const parentToken = s[28] || ""; // ดึง Token จาก index ที่ 28
             const idx = studentsData.indexOf(s);
             
-            // เช็คว่าเด็กคนนี้มีเรื่องที่ผู้ปกครองฝากไว้หรือไม่
+            // ตรวจสอบสถานะการขอคำปรึกษาจากผู้ปกครอง
             const hasConsult = (window.tempConsults || []).find(c => c.student_id === studentId);
             
             let totalDisplayExp = Math.floor(parseFloat(s[22]) || 0);
             let accScore = parseFloat(s[5]) || 0;
+            
             let displayName = s[1];
             if (s[2] && s[2].trim() !== "") displayName += ' <small class="text-muted">(' + s[2] + ')</small>';
             
-            // 🌟 เพิ่มไอคอนแจ้งเตือนท้ายชื่อ (Badge สีแดงกระพริบ)
+            // 🌟 แสดง Badge สีแดงถ้าผู้ปกครองฝากเบอร์ให้ติดต่อกลับ
             if (hasConsult) {
-                displayName += ` <span class="badge bg-danger pulse-text ms-1" style="cursor:pointer" onclick="openConsultDetail('${studentId}', '${s[1]}')" title="คลิกเพื่อดูรายละเอียดติดต่อกลับ">
+                displayName += ` <span class="badge bg-danger pulse-text ms-1" style="cursor:pointer" onclick="openConsultDetail('${studentId}', '${s[1]}')">
                     <i class="bi bi-telephone-outbound-fill"></i> ผปค. รอครูติดต่อกลับ!</span>`;
             }
             
@@ -643,11 +645,17 @@
                     '<span class="badge bg-success fw-bold px-2 py-2 d-block border border-white shadow-sm"><i class="bi bi-star-fill text-warning"></i> ' + totalDisplayExp.toLocaleString() + ' EXP</span>' +
                 '</td>' +
                 '<td class="text-center">' +
+                    // 1. ปุ่ม DM
                     '<button class="btn btn-outline-danger btn-sm me-1" title="ส่งข้อความส่วนตัว" onclick="promptSendDM(\'' + studentId + '\', \'' + s[1] + '\')"><i class="bi bi-envelope-heart"></i> DM</button>' +
+                    // 2. ปุ่ม EXP
                     '<button class="btn btn-outline-success btn-sm me-1" title="เพิ่ม/ลด EXP" onclick="promptGiveExp(\'' + studentId + '\', \'' + s[1] + '\', ' + totalDisplayExp + ')"><i class="bi bi-arrow-up-circle-fill"></i> EXP</button>' +
+                    // 3. ปุ่ม สมุดพก (PDF)
                     '<button class="btn btn-outline-info btn-sm me-1" title="สมุดพก" onclick="generateStudentPDF(\'' + studentId + '\', \'' + s[4] + '\')"><i class="bi bi-printer-fill"></i></button>' +
+                    // 4. ปุ่ม ลิงก์ผู้ปกครอง (ที่หายไป)
                     '<button class="btn btn-outline-primary btn-sm me-1" title="ลิงก์ผู้ปกครอง" onclick="copyParentLink(\'' + studentId + '\', \'' + parentToken + '\')"><i class="bi bi-person-heart"></i></button>' +
+                    // 5. ปุ่ม แก้ไข
                     '<button class="btn btn-outline-warning btn-sm me-1" title="แก้ไข" onclick="editStudent(' + idx + ')"><i class="bi bi-pencil-square"></i></button>' +
+                    // 6. ปุ่ม ลบ
                     '<button class="btn btn-outline-danger btn-sm" title="ลบ" onclick="deleteStudent(' + idx + ')"><i class="bi bi-trash-fill"></i></button>' +
                 '</td>' +
             '</tr>'; 
