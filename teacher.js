@@ -12,7 +12,9 @@
             s.father||"", s.mother||"", s.house_no||"", s.moo||"", s.sub_district||"", s.district||"",
             s.province||"", s.zipcode||"", s.avatar||"1", s.exp||0, s.last_check_in||"",
             JSON.stringify(s.dm||[]), JSON.stringify(s.inventory||[]), s.equipped_bg||"bg0", s.last_passive_update||0,
-            s.parent_token || "" // <--- เพิ่มตรงนี้
+            s.parent_token || "",
+            s.home_lat, // <--- ลำดับที่ 29
+            s.home_lng  // <--- ลำดับที่ 30
         ];
     }
 
@@ -609,11 +611,7 @@
     function renderStudents() { 
         const tb = document.getElementById('studentTableBody');
         const f = studentsData.filter(function(s) { return s[4] === currentRoom; }); 
-        
-        if (f.length === 0) {
-            tb.innerHTML = '<tr><td colspan="4" class="text-center py-4">ไม่มีรายชื่อนักเรียนในห้องนี้</td></tr>'; 
-            return;
-        }
+        if (f.length === 0) { tb.innerHTML = '<tr><td colspan="4" class="text-center py-4">ไม่มีรายชื่อนักเรียนในห้องนี้</td></tr>'; return; }
         
         const b = window.tempBonusData || { atts:[], subs:[], tasks:[], gSubs:[], groups:[] };
         let sHtml = '';
@@ -621,24 +619,25 @@
 
         f.forEach(function(s) { 
             const studentId = s[0];
-            const parentToken = s[28] || ""; // ดึง Token จาก index ที่ 28
+            const parentToken = s[28] || "";
+            const hLat = s[29]; // ดึงละติจูด
+            const hLng = s[30]; // ดึงลองจิจูด
             const idx = studentsData.indexOf(s);
-            
-            // ตรวจสอบสถานะการขอคำปรึกษาจากผู้ปกครอง
             const hasConsult = (window.tempConsults || []).find(c => c.student_id === studentId);
             
             let totalDisplayExp = Math.floor(parseFloat(s[22]) || 0);
             let accScore = parseFloat(s[5]) || 0;
-            
             let displayName = s[1];
             if (s[2] && s[2].trim() !== "") displayName += ' <small class="text-muted">(' + s[2] + ')</small>';
-            
-            // 🌟 แสดง Badge สีแดงถ้าผู้ปกครองฝากเบอร์ให้ติดต่อกลับ
             if (hasConsult) {
-                displayName += ` <span class="badge bg-danger pulse-text ms-1" style="cursor:pointer" onclick="openConsultDetail('${studentId}', '${s[1]}')">
-                    <i class="bi bi-telephone-outbound-fill"></i> ผปค. รอครูติดต่อกลับ!</span>`;
+                displayName += ` <span class="badge bg-danger pulse-text ms-1" style="cursor:pointer" onclick="openConsultDetail('${studentId}', '${s[1]}')"><i class="bi bi-telephone-outbound-fill"></i> ผปค. ติดต่อมา!</span>`;
             }
             
+            // 📍 ตรวจสอบว่ามีพิกัดบ้านไหม ถ้ามีให้ปุ่มเป็นสีส้ม ถ้าไม่มีให้เป็นสีเทา
+            const locationBtn = (hLat && hLng) 
+                ? `<button class="btn btn-outline-warning btn-sm me-1" title="นำทางไปบ้านนักเรียน" onclick="navigateToStudentHome(${hLat}, ${hLng})"><i class="bi bi-geo-alt-fill text-danger"></i></button>`
+                : `<button class="btn btn-outline-secondary btn-sm me-1 opacity-50" title="ยังไม่มีพิกัดบ้าน" disabled><i class="bi bi-geo-alt"></i></button>`;
+
             sHtml += '<tr>' +
                 '<td>' + studentId + '</td>' +
                 '<td>' + displayName + '</td>' +
@@ -647,18 +646,13 @@
                     '<span class="badge bg-success fw-bold px-2 py-2 d-block border border-white shadow-sm"><i class="bi bi-star-fill text-warning"></i> ' + totalDisplayExp.toLocaleString() + ' EXP</span>' +
                 '</td>' +
                 '<td class="text-center">' +
-                    // 1. ปุ่ม DM
-                    '<button class="btn btn-outline-danger btn-sm me-1" title="ส่งข้อความส่วนตัว" onclick="promptSendDM(\'' + studentId + '\', \'' + s[1] + '\')"><i class="bi bi-envelope-heart"></i> DM</button>' +
-                    // 2. ปุ่ม EXP
-                    '<button class="btn btn-outline-success btn-sm me-1" title="เพิ่ม/ลด EXP" onclick="promptGiveExp(\'' + studentId + '\', \'' + s[1] + '\', ' + totalDisplayExp + ')"><i class="bi bi-arrow-up-circle-fill"></i> EXP</button>' +
-                    // 3. ปุ่ม สมุดพก (PDF)
-                    '<button class="btn btn-outline-info btn-sm me-1" title="สมุดพก" onclick="generateStudentPDF(\'' + studentId + '\', \'' + s[4] + '\')"><i class="bi bi-printer-fill"></i></button>' +
-                    // 4. ปุ่ม ลิงก์ผู้ปกครอง (ที่หายไป)
+                    '<button class="btn btn-outline-danger btn-sm me-1" title="ส่งข้อความส่วนตัว" onclick="promptSendDM(\'' + studentId + '\', \'' + s[1] + '\')"><i class="bi bi-envelope-heart"></i></button>' +
+                    '<button class="btn btn-outline-success btn-sm me-1" onclick="promptGiveExp(\'' + studentId + '\', \'' + s[1] + '\', ' + totalDisplayExp + ')"><i class="bi bi-arrow-up-circle-fill"></i></button>' +
+                    '<button class="btn btn-outline-info btn-sm me-1" onclick="generateStudentPDF(\'' + studentId + '\', \'' + s[4] + '\')"><i class="bi bi-printer-fill"></i></button>' +
                     '<button class="btn btn-outline-primary btn-sm me-1" title="ลิงก์ผู้ปกครอง" onclick="copyParentLink(\'' + studentId + '\', \'' + parentToken + '\')"><i class="bi bi-person-heart"></i></button>' +
-                    // 5. ปุ่ม แก้ไข
-                    '<button class="btn btn-outline-warning btn-sm me-1" title="แก้ไข" onclick="editStudent(' + idx + ')"><i class="bi bi-pencil-square"></i></button>' +
-                    // 6. ปุ่ม ลบ
-                    '<button class="btn btn-outline-danger btn-sm" title="ลบ" onclick="deleteStudent(' + idx + ')"><i class="bi bi-trash-fill"></i></button>' +
+                    locationBtn + // 📍 ปุ่มพิกัดบ้านนักเรียน
+                    '<button class="btn btn-outline-warning btn-sm me-1" onclick="editStudent(' + idx + ')"><i class="bi bi-pencil-square"></i></button>' +
+                    '<button class="btn btn-outline-danger btn-sm" onclick="deleteStudent(' + idx + ')"><i class="bi bi-trash-fill"></i></button>' +
                 '</td>' +
             '</tr>'; 
         }); 
@@ -2272,41 +2266,63 @@
     // --- [อัปเกรด: ฟังก์ชันเปิดดูรายละเอียด พร้อมปุ่มโทร/แอดไลน์ อัตโนมัติ] ---
     window.openConsultDetail = function(studentId, studentName) {
         const consults = (window.tempConsults || []).filter(c => c.student_id === studentId);
+        
+        // ดึงพิกัดถาวรจากข้อมูลนักเรียนมาเตรียมไว้
+        const student = studentsData.find(s => s[0] === studentId);
+        const hLat = student ? student[29] : null;
+        const hLng = student ? student[30] : null;
+    
         let html = consults.map(c => {
             let rawContact = c.parent_contact || "";
-            let contactHtml = rawContact.startsWith("LINE:") ? 
-                `<a href="https://line.me/ti/p/~${rawContact.replace("LINE:","")}" target="_blank" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill py-2"><i class="bi bi-line"></i> แอด LINE: ${rawContact.replace("LINE:","")}</a>` :
-                `<a href="tel:${rawContact.replace(/\D/g,"")}" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill py-2"><i class="bi bi-telephone-fill"></i> โทร: ${rawContact}</a>`;
+            let contactHtml = "";
+    
+            if (rawContact.startsWith("LINE:")) {
+                contactHtml = `<a href="https://line.me/ti/p/~${rawContact.replace("LINE:","")}" target="_blank" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill mb-2"><i class="bi bi-line"></i> แอด LINE</a>`;
+            } else if (rawContact.startsWith("FB:")) {
+                // 🔵 ลิงก์ Facebook Messenger
+                contactHtml = `<a href="https://m.me/${rawContact.replace("FB:","")}" target="_blank" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill mb-2" style="background:#0084ff;"><i class="bi bi-messenger"></i> ทัก Messenger</a>`;
+            } else {
+                contactHtml = `<a href="tel:${rawContact.replace(/\D/g,"")}" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill mb-2"><i class="bi bi-telephone-fill"></i> โทร: ${rawContact}</a>`;
+            }
+    
+            // 🚗 ปุ่มนำทาง (ถ้ามีพิกัด)
+            let navHtml = (hLat && hLng) 
+                ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${hLat},${hLng}" target="_blank" class="btn btn-danger w-100 fw-bold shadow-sm rounded-pill py-2 mt-2"><i class="bi bi-car-front-fill"></i> นำทางไปบ้านนักเรียน</a>`
+                : `<div class="alert alert-secondary small p-2 mt-2 mb-0 text-center">ยังไม่ได้ระบุพิกัดบ้าน</div>`;
     
             return `
-                <div class="card border-0 shadow-sm mb-3 rounded-3 overflow-hidden text-start">
+                <div class="card border-0 shadow-sm mb-3 rounded-4 overflow-hidden text-start">
                     <div class="card-header bg-danger text-white small py-1"><i class="bi bi-clock"></i> ส่งเมื่อ: ${formatThaiDate(c.created_at.split('T')[0])}</div>
                     <div class="card-body bg-white">
                         <div class="mb-3"><small class="text-muted fw-bold d-block mb-1">เรื่องที่ต้องการปรึกษา:</small><div class="p-2 bg-light rounded border">${c.message}</div></div>
-                        <div class="p-3 rounded-4 bg-light border">
-                            <strong class="text-danger small"><i class="bi bi-person-lines-fill"></i> ติดต่อผู้ปกครอง:</strong>
+                        <div class="p-3 rounded-4" style="background:#f8f9fa; border: 1px solid #eee;">
+                            <strong class="text-danger small d-block mb-2">ช่องทางติดต่อ & การเดินทาง:</strong>
                             ${contactHtml}
+                            ${navHtml}
                         </div>
                     </div>
                 </div>`;
         }).join('');
     
         Swal.fire({
-            title: `<div class="fw-bold text-primary">คำขอปรึกษาจากผู้ปกครอง</div><div class="small text-muted fs-6">${studentName}</div>`,
+            title: `<div class="fw-bold text-primary">การติดต่อจากผู้ปกครอง</div><div class="small text-muted fs-6">${studentName}</div>`,
             html: `<div style="max-height:450px; overflow-y:auto; padding: 5px;">${html}</div>`,
             showCancelButton: true,
-            confirmButtonText: '<i class="bi bi-trash3-fill"></i> ติดต่อแล้ว (ลบข้อมูลออกจากระบบ)',
-            cancelButtonText: 'ปิดหน้าต่าง',
+            confirmButtonText: '<i class="bi bi-check-circle"></i> รับทราบและล้างแจ้งเตือน',
+            cancelButtonText: 'ปิด',
             confirmButtonColor: '#198754',
-            cancelButtonColor: '#6c757d',
             customClass: { popup: 'rounded-4' }
         }).then(async (result) => {
             if (result.isConfirmed) {
-                Swal.fire({ title: 'กำลังล้างข้อมูล...', didOpen: () => Swal.showLoading() });
-                // 🔔 ล้างข้อมูล (Delete) จากหลังบ้านถาวร
                 await supabaseClient.from('parent_communications').delete().eq('student_id', studentId).eq('target', 'teacher');
-                Swal.fire({ icon: 'success', title: 'ล้างข้อมูลสำเร็จ', text: 'ไอคอนแจ้งเตือนหายไปแล้วครับ', timer: 1500, showConfirmButton: false });
                 loadStudents(); 
+                Swal.fire({ icon: 'success', title: 'ล้างข้อมูลแล้ว', timer: 1000, showConfirmButton: false });
             }
         });
+    };
+    
+    // 📍 ฟังก์ชันเสริมสำหรับเปิด Google Maps จากตารางรายชื่อ
+    window.navigateToStudentHome = function(lat, lng) {
+        if(!lat || !lng) return;
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
     };
