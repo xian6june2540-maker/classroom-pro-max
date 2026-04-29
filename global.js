@@ -526,14 +526,11 @@ function formatThaiDate(dateStr) {
 // =====================================
 window.loadParentDashboard = async function(token) {
     const content = document.getElementById('parent-content');
-    
-    // โชว์ตัวโหลดข้างในหน้าจอเดิม (ไม่รีโหลดหน้า)
     content.innerHTML = '<div class="py-5 text-center"><div class="spinner-border text-primary mb-3"></div><h6 class="text-muted">กำลังดึงข้อมูลล่าสุด...</h6></div>';
 
     if (!supabaseClient) await initSupabaseAsync();
 
     try {
-        // 1. ดึงข้อมูลพื้นฐานนักเรียน
         const { data: student, error: stError } = await supabaseClient
             .from('students').select('*').eq('parent_token', token).single();
 
@@ -542,7 +539,6 @@ window.loadParentDashboard = async function(token) {
             return;
         }
 
-        // 2. 🚀 ดึงข้อมูลทุกอย่างขนานกัน (Parallel Fetch) และจำกัดจำนวนเพื่อความเร็ว
         const [attRes, tasksRes, subRes] = await Promise.all([
             supabaseClient.from('attendance').select('*').eq('student_id', student.id).order('check_date', { ascending: false }).limit(20),
             supabaseClient.from('tasks').select('*').eq('room', student.room).order('due_date', { ascending: false }).limit(20),
@@ -552,10 +548,9 @@ window.loadParentDashboard = async function(token) {
         const attData = attRes.data || [];
         const tasks = tasksRes.data || [];
         const submissions = subRes.data || [];
-
         const countAtt = (status) => attData.filter(a => a.status === status).length;
 
-        // 3. วาดหน้าจอใหม่
+        // วาดหน้าจอหลัก
         content.innerHTML = `
             <div class="text-center mb-4">
                 <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${student.avatar}" style="width: 90px; height: 90px; border-radius: 50%; border: 4px solid #0d6efd;" class="shadow-sm mb-2 bg-white">
@@ -569,62 +564,107 @@ window.loadParentDashboard = async function(token) {
             </div>
 
             <div class="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden text-start">
-                <div class="card-header bg-success bg-opacity-10 border-0 fw-bold text-success small"><i class="bi bi-calendar-check"></i> ประวัติการเข้าเรียน (ล่าสุด)</div>
+                <div class="card-header bg-success bg-opacity-10 border-0 fw-bold text-success small"><i class="bi bi-calendar-check"></i> ประวัติการเข้าเรียน</div>
                 <div class="card-body p-0">
                     <div class="row g-0 text-center py-2 bg-light border-bottom">
                         <div class="col-4"><div class="fw-bold text-success">${countAtt('มา')}</div><small class="text-muted">มา</small></div>
                         <div class="col-4"><div class="fw-bold text-warning text-dark">${countAtt('ลา')}</div><small class="text-muted">ลา</small></div>
                         <div class="col-4"><div class="fw-bold text-danger">${countAtt('ขาด')}</div><small class="text-muted">ขาด</small></div>
                     </div>
-                    <div style="max-height: 180px; overflow-y: auto;">
+                    <div style="max-height: 150px; overflow-y: auto;">
                         <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
                             <tbody>
-                                ${attData.length > 0 ? attData.map(a => `
-                                    <tr>
-                                        <td class="ps-3 py-2">${formatThaiDate(a.check_date)}</td>
-                                        <td class="pe-3 text-end py-2">
-                                            <span class="badge ${a.status==='มา'?'bg-success':a.status==='ลา'?'bg-warning text-dark':'bg-danger'}">${a.status}</span>
-                                        </td>
-                                    </tr>
-                                `).join('') : '<tr><td class="text-center py-3 text-muted">ยังไม่มีประวัติ</td></tr>'}
+                                ${attData.length > 0 ? attData.map(a => `<tr><td class="ps-3 py-2">${formatThaiDate(a.check_date)}</td><td class="pe-3 text-end py-2"><span class="badge ${a.status==='มา'?'bg-success':a.status==='ลา'?'bg-warning text-dark':'bg-danger'}">${a.status}</span></td></tr>`).join('') : '<tr><td class="text-center py-3">ไม่มีประวัติ</td></tr>'}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden text-start">
+            <div class="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden text-start">
                 <div class="card-header bg-primary bg-opacity-10 border-0 fw-bold text-primary small"><i class="bi bi-journal-check"></i> ภารกิจและการส่งงาน</div>
-                <div class="card-body p-0" style="max-height: 220px; overflow-y: auto;">
+                <div class="card-body p-0" style="max-height: 180px; overflow-y: auto;">
                     <div class="list-group list-group-flush">
                         ${tasks.length > 0 ? tasks.map(t => {
                             const sub = submissions.find(s => s.task_id === t.task_id);
                             const isDone = sub && sub.status === 'ส่งแล้ว';
-                            return `
-                                <div class="list-group-item py-2 px-3">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div style="max-width: 70%;">
-                                            <div class="fw-bold text-dark" style="font-size: 0.8rem;">${t.title}</div>
-                                            <small class="text-muted" style="font-size: 0.7rem;">กำหนด: ${formatThaiDate(t.due_date)}</small>
-                                        </div>
-                                        <div class="text-end">
-                                            ${isDone ? `<span class="badge bg-success mb-1" style="font-size:0.65rem;">ส่งแล้ว</span><div class="small fw-bold text-primary">${sub.score}/${t.max_score}</div>` 
-                                                     : `<span class="badge bg-danger" style="font-size:0.65rem;">ค้างส่ง</span>`}
-                                        </div>
-                                    </div>
-                                </div>`;
-                        }).join('') : '<div class="p-3 text-center text-muted small">ยังไม่มีงานที่สั่ง</div>'}
+                            return `<div class="list-group-item py-2 px-3"><div class="d-flex justify-content-between align-items-center"><div><div class="fw-bold text-dark" style="font-size: 0.8rem;">${t.title}</div><small class="text-muted" style="font-size: 0.7rem;">กำหนด: ${formatThaiDate(t.due_date)}</small></div><div class="text-end">${isDone ? `<span class="badge bg-success mb-1" style="font-size:0.65rem;">ส่งแล้ว</span>` : `<span class="badge bg-danger" style="font-size:0.65rem;">ค้างส่ง</span>`}</div></div></div>`;
+                        }).join('') : '<div class="p-3 text-center text-muted small">ไม่มีงาน</div>'}
                     </div>
                 </div>
             </div>
 
+            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden text-start" style="border: 2px solid #ff9a9e !important;">
+                <div class="card-header bg-danger text-white border-0 fw-bold small"><i class="bi bi-chat-heart-fill"></i> ศูนย์การสื่อสาร (ส่งหาลูก / ปรึกษาครู)</div>
+                <div class="card-body p-3">
+                    <label class="small fw-bold text-muted mb-2">1. ส่งกำลังใจให้ลูก:</label>
+                    <div class="d-flex gap-2 mb-2 overflow-auto pb-1">
+                        <button class="btn btn-sm btn-outline-danger shadow-sm bg-white" onclick="selectSticker('🌟','เก่งมาก!')">🌟</button>
+                        <button class="btn btn-sm btn-outline-danger shadow-sm bg-white" onclick="selectSticker('❤️','รักนะ')">❤️</button>
+                        <button class="btn btn-sm btn-outline-danger shadow-sm bg-white" onclick="selectSticker('✌️','สู้ๆ นะ')">✌️</button>
+                        <button class="btn btn-sm btn-outline-danger shadow-sm bg-white" onclick="selectSticker('🏆','สุดยอด')">🏆</button>
+                    </div>
+                    <div class="input-group input-group-sm mb-3">
+                        <input type="text" id="parentToStudentMsg" class="form-control" placeholder="ข้อความชมลูก...">
+                        <button class="btn btn-danger" onclick="sendToStudent('${student.id}')">ส่ง</button>
+                    </div>
+                    <hr>
+                    <label class="small fw-bold text-muted mb-2">2. ขอคำปรึกษาจากคุณครู:</label>
+                    <textarea id="parentToTeacherMsg" class="form-control form-control-sm mb-2" rows="2" placeholder="พิมพ์เรื่องที่ท่านกังวล..."></textarea>
+                    <input type="text" id="parentContactInfo" class="form-control form-control-sm mb-2" placeholder="เบอร์โทรหรือไลน์ของท่านเพื่อให้ครูติดต่อกลับ">
+                    <button class="btn btn-primary btn-sm w-100 fw-bold rounded-pill shadow-sm" onclick="sendToTeacher('${student.id}')">
+                        <i class="bi bi-telephone-outbound"></i> ส่งข้อมูลให้ครูติดต่อกลับ
+                    </button>
+                </div>
+            </div>
+
             <div class="px-2">
-                <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 shadow-sm" onclick="loadParentDashboard('${token}')">
-                    <i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลแบบด่วน
+                <button class="btn btn-outline-primary w-100 rounded-pill fw-bold py-2 mb-3" onclick="loadParentDashboard('${token}')">
+                    <i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลล่าสุด
                 </button>
             </div>
         `;
     } catch (e) {
-        content.innerHTML = `<div class="alert alert-danger m-3 small">เกิดข้อผิดพลาด: ${e.message}</div>`;
+        content.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
     }
+};
+
+// ฟังก์ชันช่วยเลือกสติกเกอร์
+window.selectSticker = (icon, text) => {
+    document.getElementById('parentToStudentMsg').value = icon + " " + text;
+};
+
+// ส่งข้อความชมลูก (เข้าระบบ DM ของเด็ก)
+window.sendToStudent = async function(studentId) {
+    const msg = document.getElementById('parentToStudentMsg').value.trim();
+    if(!msg) return Swal.fire('เตือน', 'กรุณาพิมพ์ข้อความชมลูกด้วยครับ', 'warning');
+    Swal.fire({ title: 'กำลังส่ง...', didOpen: () => Swal.showLoading() });
+    
+    await supabaseClient.from('parent_communications').insert([{ student_id: studentId, target: 'student', type: 'praise', message: msg }]);
+    
+    const displayMsg = `<div style="border: 2px solid #ff9a9e; background: #fff5f5; padding: 10px; border-radius: 15px; text-align: center;">
+        <h6 style="color: #ff0844; font-weight: bold;"><i class="bi bi-heart-fill"></i> ข้อความจากผู้ปกครอง</h6>
+        <p style="margin-bottom: 0; color: #333;">${msg}</p>
+    </div>`;
+    
+    google.script.run.withSuccessHandler(() => {
+        Swal.fire('ส่งสำเร็จ!', 'ลูกจะเห็นข้อความนี้ทันทีที่เข้าสู่ระบบครับ', 'success');
+        document.getElementById('parentToStudentMsg').value = '';
+    }).sendDMToStudent(studentId, displayMsg);
+};
+
+// ส่งเรื่องปรึกษาครู (เก็บเข้า DB เพื่อแจ้งเตือนที่หน้าครู)
+window.sendToTeacher = async function(studentId) {
+    const msg = document.getElementById('parentToTeacherMsg').value.trim();
+    const contact = document.getElementById('parentContactInfo').value.trim();
+    if(!msg || !contact) return Swal.fire('เตือน', 'กรุณากรอกทั้งเรื่องที่ปรึกษาและข้อมูลติดต่อกลับครับ', 'warning');
+    
+    Swal.fire({ title: 'กำลังส่ง...', didOpen: () => Swal.showLoading() });
+    await supabaseClient.from('parent_communications').insert([{ 
+        student_id: studentId, target: 'teacher', type: 'consult', message: msg, parent_contact: contact 
+    }]);
+    
+    Swal.fire('ส่งถึงครูแล้ว!', 'คุณครูได้รับการแจ้งเตือนแล้ว และจะติดต่อกลับตามข้อมูลที่ท่านให้ไว้ครับ', 'success');
+    document.getElementById('parentToTeacherMsg').value = '';
+    document.getElementById('parentContactInfo').value = '';
 };
