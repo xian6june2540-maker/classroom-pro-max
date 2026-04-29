@@ -75,18 +75,17 @@
       100% { transform: scale(1.8); opacity: 0; }
     } /* <--- ต้องมีปิดปีกกาตรงนี้ครับ */
 
-    /* 🌟 บังคับขนาดกล่องแผนที่ให้แน่นอน */
-    /* 🌟 1. บังคับหน้าต่างแผนที่ให้เป็นจตุรัสและกว้าง (แก้ปัญหาแผนที่แบน) */
+    /* 🌟 1. บังคับหน้าต่าง Popup ให้เป็นจตุรัส (แก้ปัญหาแผนที่แบน) */
     .map-popup-square {
-        width: 600px !important; /* บังคับความกว้าง */
+        width: 600px !important; 
         max-width: 95% !important;
         padding: 15px !important;
     }
 
-    /* 🌟 2. ตัวครอบแผนที่ บังคับสูง 500px เท่ากับความกว้าง (ให้เป็นจตุรัส) */
+    /* 🌟 2. ตัวครอบแผนที่ บังคับสูง 500px ให้เป็นทรงจตุรัสสบายตา */
     #map-wrapper {
         width: 100%;
-        height: 500px; /* บังคับสูงให้เท่ากับความกว้างโดยประมาณ */
+        height: 500px; 
         position: relative;
         border: 2px solid #ccc;
         border-radius: 15px;
@@ -94,12 +93,16 @@
         background: #eee;
     }
 
+    /* 🌟 3. ตัวแผนที่จริง ต้องเต็ม 100% ของตัวครอบ */
     #map-canvas {
         width: 100% !important;
         height: 100% !important;
+        display: block !important;
     }
 
-    .swal2-container { z-index: 10000 !important;
+    /* 🛡️ 4. กันแผนที่ลอยทับหน้าต่างอื่น */
+    .swal2-container {
+        z-index: 10000 !important;
     }
   </style>
 
