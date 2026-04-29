@@ -2238,13 +2238,13 @@
     };
 
     window.copyParentLink = async function(id, token) {
-        // 1. หาชื่อนักเรียนจากข้อมูลที่มีอยู่แล้วใน studentsData
+        // 1. หาชื่อนักเรียนจาก studentsData (Array index ที่ 1 คือชื่อ)
         const student = studentsData.find(s => s[0] === id);
         const studentName = student ? student[1] : "นักเรียน";
     
         let finalToken = token;
         
-        // 2. ถ้ายังไม่มีรหัสลับ ให้สร้างใหม่
+        // 2. ถ้ายังไม่มีรหัสลับ ให้สร้างใหม่ผ่าน Server
         if (!finalToken || finalToken === "" || finalToken === "null") {
             Swal.fire({ title: 'กำลังสร้างรหัสลับ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
             finalToken = await new Promise(resolve => {
@@ -2253,16 +2253,18 @@
             Swal.close();
         }
         
-        // 3. สร้าง URL ลิงก์ผู้ปกครอง
-        const url = GAS_WEB_APP_URL + "?page=parent&token=" + finalToken;
+        // 3. สร้าง URL โดยอิงจาก "หน้าเว็บปัจจุบันที่ครูเปิดอยู่" (เพื่อให้ลิงก์ชี้มาที่ Vercel เสมอ)
+        const baseUrl = window.location.origin + window.location.pathname;
+        const url = baseUrl + "?page=parent&token=" + finalToken;
         
-        // 4. แสดงหน้าต่างยืนยัน (Popup) ตามที่ฟลุ๊คต้องการ
+        // 4. แสดงหน้าต่าง Popup แจ้งเตือนสวยๆ ตามที่ฟลุ๊คต้องการ
         Swal.fire({
-            title: '<span class="text-primary">ลิงก์ติดตามสำหรับผู้ปกครอง</span>',
+            title: '<i class="bi bi-person-heart text-danger"></i> ลิงก์สำหรับผู้ปกครอง',
             html: `
                 <div class="text-start mb-3 p-3 bg-light rounded-3 border">
-                    <p class="mb-1 small fw-bold text-muted">นักเรียน:</p>
-                    <h5 class="mb-0 text-dark">${studentName} (รหัส: ${id})</h5>
+                    <small class="text-muted fw-bold">นักเรียน:</small>
+                    <h5 class="mb-0 text-dark">${studentName}</h5>
+                    <small class="text-secondary">รหัสประจำตัว: ${id}</small>
                 </div>
                 <div class="input-group mb-3">
                     <input type="text" id="parentLinkInput" class="form-control" value="${url}" readonly>
@@ -2270,7 +2272,7 @@
                         <i class="bi bi-copy"></i> คัดลอก
                     </button>
                 </div>
-                <p class="small text-danger"><i class="bi bi-exclamation-triangle"></i> ส่งลิงก์นี้ให้ผู้ปกครองผ่านทาง LINE ส่วนตัวเท่านั้น</p>
+                <p class="small text-muted"><i class="bi bi-info-circle"></i> ลิงก์นี้จะใช้เข้าดูข้อมูลของนักเรียนคนนี้ได้โดยตรงครับ</p>
             `,
             showConfirmButton: false,
             showCloseButton: true,
@@ -2278,18 +2280,17 @@
         });
     };
     
-    // ฟังก์ชันช่วยคัดลอกในหน้า Popup
+    // ฟังก์ชันเสริมสำหรับปุ่มคัดลอกใน Popup
     window.copyToClipboardFromPopup = function() {
         const copyText = document.getElementById("parentLinkInput");
         copyText.select();
-        copyText.setSelectionRange(0, 99999);
         navigator.clipboard.writeText(copyText.value);
         
         Swal.fire({
             toast: true,
             position: 'top-end',
             icon: 'success',
-            title: 'คัดลอกลิงก์เรียบร้อย!',
+            title: 'คัดลอกลิงก์แล้ว!',
             showConfirmButton: false,
             timer: 1500
         });
