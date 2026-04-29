@@ -468,7 +468,28 @@ window.google = { script: { run: createGASProxy(null, null) } };
         // 1. เชื่อมต่อฐานข้อมูล (ขอ Key รอบเดียวจบ)
         await initSupabaseAsync();
 
-        // 2. เช็คสถานะการเข้าสู่ระบบ
+        // --- [เพิ่มส่วนตรวจสอบลิงก์ผู้ปกครอง] ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const page = urlParams.get('page');
+        const token = urlParams.get('token');
+
+        if (page === 'parent' && token) {
+            // ซ่อนหน้าจออื่นและแสดงหน้าผู้ปกครองทันที
+            document.getElementById('btnLock').classList.add('hidden');
+            document.getElementById('student-search-view').classList.add('hidden');
+            document.getElementById('parent-view').classList.remove('hidden');
+            
+            // สั่งโหลดแดชบอร์ดผู้ปกครอง
+            if (typeof loadParentDashboard === 'function') {
+                loadParentDashboard(token);
+            } else {
+                console.error("Function loadParentDashboard not found.");
+            }
+            return; // จบการทำงานที่นี่ (ไม่ไปเช็ค Login ครู/นักเรียนต่อ)
+        }
+        // ------------------------------------
+
+        // 2. เช็คสถานะการเข้าสู่ระบบปกติ (สำหรับครูและนักเรียน)
         if (localStorage.getItem('teacherLoggedIn') === 'true') {
             document.getElementById('btnLock').classList.add('hidden');
             document.getElementById('btnTeacherConfig').classList.remove('hidden'); 
@@ -479,7 +500,6 @@ window.google = { script: { run: createGASProxy(null, null) } };
             
             Toast.fire({ icon: 'info', title: 'กู้คืนเซสชันครู...' });
             
-            // เรียกฟังก์ชันดึงข้อมูล (จะถูกแก้ไขให้ใช้ Supabase ตรงๆ ในไฟล์ JS_Teacher)
             loadAllData();
         }
         else if (localStorage.getItem('studentId')) {
@@ -489,7 +509,6 @@ window.google = { script: { run: createGASProxy(null, null) } };
             
             Toast.fire({ icon: 'info', title: 'เข้าสู่ระบบอัตโนมัติ...' });
             
-            // เรียกฟังก์ชันดึงข้อมูล (จะถูกแก้ไขให้ใช้ Supabase ตรงๆ ในไฟล์ JS_Student)
             loadFullDashboard(savedStudentId, true);
         }
     });
