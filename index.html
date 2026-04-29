@@ -71,6 +71,23 @@
     @keyframes chat-head-pulse {
       0% { transform: scale(1); opacity: 0.6; }
       100% { transform: scale(1.8); opacity: 0; }
+    } /* <--- ต้องมีปิดปีกกาตรงนี้ครับ */
+
+    /* 🌟 บังคับขนาดกล่องแผนที่ให้แน่นอน */
+    #map-container {
+        width: 100% !important;
+        height: 350px !important;
+        position: relative !important;
+        display: block !important;
+        background-color: #eee !important;
+        border-radius: 15px;
+        overflow: hidden;
+        z-index: 1; /* ให้แผนที่อยู่ชั้นล่าง */
+    }
+
+    /* 🛡️ ป้องกันแผนที่ลอยทับหน้าต่างเด้ง */
+    .swal2-container {
+        z-index: 10000 !important;
     }
   </style>
 
@@ -1342,11 +1359,11 @@ ALTER TABLE parent_communications DISABLE ROW LEVEL SECURITY;
     </div>
 </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
     <script src="global.js"></script>
     <script src="student.js"></script>
     <script src="teacher.js"></script>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   
   <script>
     document.addEventListener('DOMContentLoaded', function() {
