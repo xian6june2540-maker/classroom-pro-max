@@ -4,14 +4,15 @@
     let groupTasksData = [];
     let currentGroupsListCache = []; 
 
-    // ตัวแปลงข้อมูล JSON จาก Supabase ให้เป็น Array แบบที่โค้ดเดิมของคุณฟลุ๊คต้องการ (เพื่อไม่ให้โครงสร้างเดิมพัง)
+    // --- โค้ดหลังแก้ไข ---
     function mapStudentToArr(s) {
         return [
             s.id, s.name, s.nickname||"", s.gender||"", s.room||"", s.accumulated_score||0,
             s.pin||"", s.phone||"", s.disease||"", s.dob||"", s.sport||"", s.talent||"", s.hobby||"",
             s.father||"", s.mother||"", s.house_no||"", s.moo||"", s.sub_district||"", s.district||"",
             s.province||"", s.zipcode||"", s.avatar||"1", s.exp||0, s.last_check_in||"",
-            JSON.stringify(s.dm||[]), JSON.stringify(s.inventory||[]), s.equipped_bg||"bg0", s.last_passive_update||0
+            JSON.stringify(s.dm||[]), JSON.stringify(s.inventory||[]), s.equipped_bg||"bg0", s.last_passive_update||0,
+            s.parent_token || "" // <--- เพิ่มตรงนี้
         ];
     }
 
@@ -2232,4 +2233,22 @@
             confirmButtonText: 'ปิดหน้าต่าง',
             customClass: { popup: 'rounded-4' }
         });
+    };
+
+    window.copyParentLink = async function(id, token) {
+        let finalToken = token;
+        if (!finalToken || finalToken === "") {
+            // ถ้ายังไม่มีรหัส ให้สร้างใหม่ผ่าน Server
+            Swal.fire({ title: 'กำลังสร้างรหัสลับ...', didOpen: () => Swal.showLoading() });
+            finalToken = await new Promise(resolve => {
+                google.script.run.withSuccessHandler(resolve).generateParentToken(id);
+            });
+            Swal.close();
+        }
+        
+        // สร้าง URL (ฟลุ๊คต้องเอา URL ของ Web App ตัวเองมาใส่แทนที่ GAS_WEB_APP_URL นะ)
+        const url = GAS_WEB_APP_URL + "?page=parent&token=" + finalToken;
+        
+        navigator.clipboard.writeText(url);
+        Swal.fire('สำเร็จ!', 'คัดลอกลิงก์สำหรับผู้ปกครองแล้ว<br>ส่งให้ผู้ปกครองใน LINE ได้เลยครับ', 'success');
     };
