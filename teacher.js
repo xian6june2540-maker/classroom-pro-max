@@ -2267,38 +2267,64 @@
         });
     };
 
-    // --- [เพิ่มใหม่: ฟังก์ชันสำหรับครูเปิดดูรายละเอียดที่ผู้ปกครองส่งมา] ---
+    // --- [อัปเกรด: ฟังก์ชันเปิดดูรายละเอียด พร้อมปุ่มโทร/แอดไลน์ อัตโนมัติ] ---
     window.openConsultDetail = function(studentId, studentName) {
         const consults = (window.tempConsults || []).filter(c => c.student_id === studentId);
-        let html = consults.map(c => `
-            <div class="card border-0 shadow-sm mb-3 rounded-3 overflow-hidden text-start">
-                <div class="card-header bg-danger text-white small py-1"><i class="bi bi-clock"></i> ส่งเมื่อ: ${formatThaiDate(c.created_at.split('T')[0])}</div>
-                <div class="card-body bg-white">
-                    <div class="mb-3">
-                        <small class="text-muted fw-bold d-block mb-1">เรื่องที่ต้องการปรึกษา:</small>
-                        <div class="p-2 bg-light rounded border" style="font-size: 0.9rem;">${c.message}</div>
-                    </div>
-                    <div class="p-3 rounded-3" style="background:#fff3cd; border: 1px solid #ffeeba;">
-                        <strong class="text-danger"><i class="bi bi-person-lines-fill"></i> ข้อมูลติดต่อกลับผู้ปกครอง:</strong><br>
-                        <div class="fs-4 fw-bold mt-1 text-center">${c.parent_contact}</div>
+        
+        let html = consults.map(c => {
+            let contactHtml = "";
+            let rawContact = c.parent_contact || "";
+    
+            // ตรวจสอบประเภทข้อมูล (ถ้ามีคำว่า LINE: นำหน้า แสดงว่าเป็นไอดีไลน์)
+            if (rawContact.startsWith("LINE:")) {
+                const lineId = rawContact.replace("LINE:", "");
+                contactHtml = `
+                    <div class="mt-2">
+                        <a href="https://line.me/ti/p/~${lineId}" target="_blank" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill py-2">
+                            <i class="bi bi-line"></i> เปิด LINE เพื่อแอดเพื่อน (${lineId})
+                        </a>
+                        <small class="text-muted d-block mt-1 text-center">* หากปุ่มไม่ทำงาน ให้ก๊อปปี้ไอดี: <b>${lineId}</b> ไปค้นหาเองครับ</small>
+                    </div>`;
+            } else {
+                // ถ้าไม่มี LINE: นำหน้า แสดงว่าเป็นเบอร์โทรศัพท์
+                const cleanPhone = rawContact.replace(/\D/g, ""); // เอาขีดออกเพื่อส่งค่าให้ระบบโทรออก
+                contactHtml = `
+                    <div class="mt-2">
+                        <a href="tel:${cleanPhone}" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill py-2">
+                            <i class="bi bi-telephone-fill"></i> กดเพื่อโทรออก: ${rawContact}
+                        </a>
+                    </div>`;
+            }
+    
+            return `
+                <div class="card border-0 shadow-sm mb-3 rounded-3 overflow-hidden text-start">
+                    <div class="card-header bg-danger text-white small py-1"><i class="bi bi-clock"></i> ส่งเมื่อ: ${formatThaiDate(c.created_at.split('T')[0])}</div>
+                    <div class="card-body bg-white">
+                        <div class="mb-3">
+                            <small class="text-muted fw-bold d-block mb-1">เรื่องที่ต้องการปรึกษา:</small>
+                            <div class="p-2 bg-light rounded border" style="font-size: 0.95rem; line-height: 1.4;">${c.message}</div>
+                        </div>
+                        <div class="p-3 rounded-4" style="background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%); border: 1px solid #ffeeba;">
+                            <strong class="text-danger small"><i class="bi bi-person-lines-fill"></i> ช่องทางติดต่อผู้ปกครอง:</strong>
+                            ${contactHtml}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     
         Swal.fire({
             title: `<div class="fw-bold text-primary">คำขอปรึกษาจากผู้ปกครอง</div><div class="small text-muted fs-6">${studentName}</div>`,
-            html: `<div style="max-height:400px; overflow-y:auto; padding: 5px;">${html}</div>`,
+            html: `<div style="max-height:450px; overflow-y:auto; padding: 5px;">${html}</div>`,
             showCancelButton: true,
             showConfirmButton: true,
-            confirmButtonText: '<i class="bi bi-check-circle"></i> แก้ไขปัญหาเรียบร้อยแล้ว (ล้างสถานะ)',
-            cancelButtonText: 'ปิดหน้าต่าง (เก็บแจ้งเตือนไว้ก่อน)',
+            confirmButtonText: '<i class="bi bi-check-circle"></i> แก้ไขปัญหา/ติดต่อแล้ว (ล้างสถานะ)',
+            cancelButtonText: 'ปิดหน้าต่าง',
             confirmButtonColor: '#198754',
             cancelButtonColor: '#6c757d',
             customClass: { popup: 'rounded-4' }
         }).then(async (result) => {
             if (result.isConfirmed) {
-                // ครูจัดการปัญหาเรียบร้อยแล้ว -> สั่ง Update ฐานข้อมูล
                 Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
                 
                 const { error } = await supabaseClient
@@ -2310,8 +2336,8 @@
                 if (error) {
                     Swal.fire('ผิดพลาด', error.message, 'error');
                 } else {
-                    Swal.fire('สำเร็จ', 'ล้างสถานะแจ้งเตือนเรียบร้อยครับ ไอคอนแจ้งเตือนจะหายไป', 'success');
-                    loadStudents(); // รีโหลดข้อมูลเพื่ออัปเดตหน้าจอครูให้เป็นปัจจุบัน
+                    Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ล้างสถานะการแจ้งเตือนเรียบร้อยครับ', timer: 2000, showConfirmButton: false });
+                    loadStudents(); 
                 }
             }
         });
