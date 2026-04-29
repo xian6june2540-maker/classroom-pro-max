@@ -474,19 +474,19 @@ window.google = { script: { run: createGASProxy(null, null) } };
         const token = urlParams.get('token');
 
         if (page === 'parent' && token) {
-            // ซ่อนหน้าจออื่นและแสดงหน้าผู้ปกครองทันที
-            if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden'); // <-- เพิ่มบรรทัดนี้
+            // 🚀 แก้ปัญหาหน้าจอเด้ง: สั่งซ่อนทุกอย่างที่ขวางหน้าทันที
+            document.body.style.display = 'none'; // ซ่อนทั้งหน้าจอก่อนเพื่อความเนียน
+            
+            if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
             document.getElementById('btnLock').classList.add('hidden');
             document.getElementById('student-search-view').classList.add('hidden');
             document.getElementById('parent-view').classList.remove('hidden');
             
-            // สั่งโหลดแดชบอร์ดผู้ปกครอง
-            if (typeof loadParentDashboard === 'function') {
-                loadParentDashboard(token);
-            } else {
-                console.error("Function loadParentDashboard not found.");
-            }
-            return; // จบการทำงานที่นี่ (ไม่ไปเช็ค Login ครู/นักเรียนต่อ)
+            // ปล่อยให้หน้าจอแสดงผลเฉพาะส่วนที่จำเป็น
+            setTimeout(() => { document.body.style.display = 'block'; }, 50);
+
+            loadParentDashboard(token);
+            return; 
         }
         // ------------------------------------
 
@@ -520,78 +520,102 @@ window.sendPushNotification = function(title, message) {
 };
 
 // =====================================
-// 👨‍👩‍👧‍👦 PARENT DASHBOARD LOGIC (ดึงข้อมูลมาโชว์ผู้ปกครอง)
+// 👨‍👩‍👧‍👦 PARENT DASHBOARD LOGIC (HIGH-SPEED VERSION)
 // =====================================
 window.loadParentDashboard = async function(token) {
     const content = document.getElementById('parent-content');
     
-    // รอจนกว่า supabaseClient จะพร้อม
-    if (!supabaseClient) {
-        let attempts = 0;
-        while (!supabaseClient && attempts < 10) {
-            await new Promise(r => setTimeout(r, 500));
-            attempts++;
-        }
-    }
+    if (!supabaseClient) await initSupabaseAsync();
 
     try {
-        // 1. ดึงข้อมูลนักเรียนจาก Token ที่ได้รับ
-        let { data: student, error } = await supabaseClient
-            .from('students')
-            .select('*')
-            .eq('parent_token', token)
-            .single();
+        // 1. ดึงข้อมูลพื้นฐานนักเรียนก่อนเพื่อหา ID และห้อง
+        const { data: student, error: stError } = await supabaseClient
+            .from('students').select('*').eq('parent_token', token).single();
 
-        if (error || !student) {
-            content.innerHTML = `
-                <div class="alert alert-danger rounded-4 py-4 m-2 shadow-sm">
-                    <i class="bi bi-exclamation-octagon fs-1 d-block mb-3"></i>
-                    <h5 class="fw-bold">ไม่พบข้อมูลนักเรียน</h5>
-                    <p class="mb-0">ลิงก์อาจไม่ถูกต้อง หรือครูอาจเปลี่ยนรหัสใหม่แล้วครับ</p>
-                    <button class="btn btn-secondary mt-3 rounded-pill btn-sm" onclick="window.location.href=window.location.pathname">กลับหน้าหลัก</button>
-                </div>`;
+        if (stError || !student) {
+            content.innerHTML = `<div class="alert alert-danger rounded-4 py-4 m-2"><h5>ไม่พบข้อมูลนักเรียน</h5></div>`;
             return;
         }
 
-        // 2. ถ้าเจอข้อมูล ให้วาดหน้า Dashboard แบบ Read-only
+        // 2. 🚀 ดึงข้อมูลทุกอย่างขนานกัน (Parallel Fetch) เพื่อความรวดเร็วสูงสุด
+        const [attRes, tasksRes, subRes] = await Promise.all([
+            supabaseClient.from('attendance').select('*').eq('student_id', student.id).order('check_date', { ascending: false }),
+            supabaseClient.from('tasks').select('*').eq('room', student.room).order('due_date', { ascending: false }),
+            supabaseClient.from('submissions').select('*').eq('student_id', student.id)
+        ]);
+
+        const attData = attRes.data || [];
+        const tasks = tasksRes.data || [];
+        const submissions = subRes.data || [];
+
+        // 3. คำนวณสรุปผล
+        const attSummary = {
+            มา: attData.filter(a => a.status === 'มา').length,
+            ลา: attData.filter(a => a.status === 'ลา').length,
+            ขาด: attData.filter(a => a.status === 'ขาด').length
+        };
+
+        const taskStatus = tasks.map(t => {
+            const sub = submissions.find(s => s.task_id === t.task_id);
+            return { ...t, isDone: sub && sub.status === 'ส่งแล้ว', score: sub ? sub.score : null };
+        });
+
+        // 4. วาดหน้าจอ (รายละเอียดจัดเต็ม)
         content.innerHTML = `
             <div class="text-center mb-4 pt-2">
-                <div class="position-relative d-inline-block mb-3">
-                    <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${student.avatar}" 
-                         style="width: 100px; height: 100px; border-radius: 50%; border: 5px solid #0d6efd; background:#fff;" class="shadow-sm">
-                    <div class="position-absolute bottom-0 end-0 bg-success text-white rounded-circle p-1 px-2 small shadow border border-white" style="font-size:10px;">
-                        ACTIVE
-                    </div>
-                </div>
+                <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${student.avatar}" style="width: 100px; height: 100px; border-radius: 50%; border: 4px solid #0d6efd;" class="shadow-sm mb-2">
                 <h4 class="fw-bold text-dark mb-0">${student.name}</h4>
-                <p class="text-muted small mb-0">ระดับชั้น/ห้อง: <span class="text-primary fw-bold">${student.room}</span></p>
+                <p class="text-muted small">ระดับชั้น/ห้อง: ${student.room} | รหัส: ${student.id}</p>
             </div>
-            
-            <div class="row g-2 px-2 mb-4">
-                <div class="col-6">
-                    <div class="p-3 bg-white rounded-4 border shadow-sm">
-                        <small class="text-muted d-block mb-1">คะแนนสะสม</small>
-                        <h3 class="fw-bold text-success mb-0">${student.accumulated_score || 0}</h3>
+
+            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+                <div class="card-header bg-success bg-opacity-10 border-0 fw-bold text-success"><i class="bi bi-calendar-check"></i> สรุปการเข้าเรียน</div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4"><h4 class="fw-bold text-success mb-0">${attSummary.มา}</h4><small class="text-muted">มา</small></div>
+                        <div class="col-4 border-start"><h4 class="fw-bold text-warning mb-0">${attSummary.ลา}</h4><small class="text-muted">ลา</small></div>
+                        <div class="col-4 border-start"><h4 class="fw-bold text-danger mb-0">${attSummary.ขาด}</h4><small class="text-muted">ขาด</small></div>
                     </div>
-                </div>
-                <div class="col-6">
-                    <div class="p-3 bg-white rounded-4 border shadow-sm">
-                        <small class="text-muted d-block mb-1">แต้ม EXP</small>
-                        <h4 class="fw-bold text-dark mb-0">${Math.floor(student.exp || 0).toLocaleString()}</h4>
+                    <div class="mt-3 text-start small" style="max-height: 150px; overflow-y: auto;">
+                        <ul class="list-group list-group-flush">
+                            ${attData.length > 0 ? attData.map(a => `
+                                <li class="list-group-item d-flex justify-content-between align-items-center py-1 border-0">
+                                    <span>${a.check_date}</span>
+                                    <span class="badge ${a.status === 'มา' ? 'bg-success' : a.status === 'ลา' ? 'bg-warning text-dark' : 'bg-danger'}">${a.status}</span>
+                                </li>
+                            `).join('') : '<li class="text-center text-muted">ยังไม่มีประวัติการเช็คชื่อ</li>'}
+                        </ul>
                     </div>
                 </div>
             </div>
 
-            <div class="alert alert-primary bg-opacity-10 border-0 rounded-4 text-start p-3 mx-2">
-                <h6 class="fw-bold small mb-2"><i class="bi bi-info-circle-fill"></i> สถานะการเรียนปัจจุบัน</h6>
-                <div class="small text-dark opacity-75">
-                    <p class="mb-1"><i class="bi bi-check2 text-success"></i> ข้อมูลอัปเดตตรงจากระบบครู</p>
-                    <p class="mb-0"><i class="bi bi-check2 text-success"></i> คุณครูสามารถเช็คชื่อและงานได้ที่นี่</p>
+            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+                <div class="card-header bg-primary bg-opacity-10 border-0 fw-bold text-primary"><i class="bi bi-journal-check"></i> ตรวจสอบงานล่าสุด</div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        ${taskStatus.length > 0 ? taskStatus.map(t => `
+                            <div class="list-group-item border-0 border-bottom">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="text-start">
+                                        <div class="fw-bold small">${t.title}</div>
+                                        <small class="text-muted" style="font-size: 0.7rem;">ส่งภายใน: ${t.due_date}</small>
+                                    </div>
+                                    <div class="text-end">
+                                        ${t.isDone ? 
+                                            `<span class="badge bg-success"><i class="bi bi-check-circle"></i> ส่งแล้ว</span>
+                                             <div class="text-primary fw-bold small">${t.score || 0}/${t.max_score}</div>` : 
+                                            `<span class="badge bg-danger">ค้างส่ง</span>`
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('') : '<div class="p-4 text-center text-muted">ยังไม่มีการสั่งงาน</div>'}
+                    </div>
                 </div>
             </div>
-            
+
             <div class="px-2 pb-2">
-                <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 shadow" onclick="window.location.reload()">
+                <button class="btn btn-primary w-100 rounded-pill fw-bold py-2 shadow-sm" onclick="window.location.reload()">
                     <i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลล่าสุด
                 </button>
             </div>
