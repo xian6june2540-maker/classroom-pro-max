@@ -75,6 +75,9 @@
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -589,7 +592,7 @@
 -- ========================================================
 DROP TABLE IF EXISTS live_quiz_responses CASCADE;
 DROP TABLE IF EXISTS live_quiz_sessions CASCADE;
-DROP TABLE IF EXISTS parent_communications CASCADE; -- <--- [เพิ่มการล้างตารางใหม่]
+DROP TABLE IF EXISTS parent_communications CASCADE;
 DROP TABLE IF EXISTS boss_logs CASCADE;
 DROP TABLE IF EXISTS boss_quizzes CASCADE;
 DROP TABLE IF EXISTS group_submissions CASCADE;
@@ -604,7 +607,7 @@ DROP TABLE IF EXISTS students CASCADE;
 DROP TABLE IF EXISTS rooms CASCADE;
 
 -- ========================================================
--- ส่วนที่ 1: สร้างตารางทั้งหมดใหม่ (รองรับระบบเปลี่ยนชื่อห้อง ON UPDATE CASCADE)
+-- ส่วนที่ 1: สร้างตารางทั้งหมดใหม่
 -- ========================================================
 
 -- 1. ตารางห้องเรียน
@@ -613,7 +616,7 @@ CREATE TABLE rooms (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
 
--- 2. ตารางนักเรียน
+-- 2. ตารางนักเรียน (เพิ่มพื้นที่เก็บพิกัดบ้านนักเรียน)
 CREATE TABLE students (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -645,7 +648,9 @@ CREATE TABLE students (
     last_passive_update BIGINT DEFAULT (extract(epoch from now()) * 1000),
     buff_multiplier NUMERIC DEFAULT 1.0,
     buff_end_at BIGINT DEFAULT 0,
-    parent_token TEXT DEFAULT NULL
+    parent_token TEXT DEFAULT NULL,
+    home_lat NUMERIC DEFAULT NULL, -- 🌟 [เพิ่มใหม่: พิกัดบ้านละติจูด]
+    home_lng NUMERIC DEFAULT NULL  -- 🌟 [เพิ่มใหม่: พิกัดบ้านลองจิจูด]
 );
 
 -- 3. ตารางเช็คชื่อ
@@ -782,14 +787,14 @@ CREATE TABLE live_quiz_responses (
     UNIQUE(session_id, q_index, student_id)
 );
 
--- 15. ตารางสื่อสารระหว่างผู้ปกครอง ลูก และครู (🌟 เพิ่มใหม่)
+-- 15. ตารางสื่อสาร (Messenger/Line/Phone/GPS ถูกคุมด้วย Logic ฝั่ง JavaScript)
 CREATE TABLE parent_communications (
     id SERIAL PRIMARY KEY,
     student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
-    target TEXT, -- 'student' หรือ 'teacher'
-    type TEXT,   -- 'praise' หรือ 'consult'
+    target TEXT, 
+    type TEXT,   
     message TEXT,
-    parent_contact TEXT, -- ข้อมูลติดต่อกลับของผู้ปกครอง
+    parent_contact TEXT, 
     is_resolved BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
@@ -801,25 +806,21 @@ CREATE INDEX idx_submissions_student ON submissions(student_id);
 CREATE INDEX idx_groups_members ON groups USING gin (members);
 CREATE INDEX idx_live_quiz_responses_session_q ON live_quiz_responses(session_id, q_index);
 CREATE INDEX idx_boss_logs_boss_id ON boss_logs(boss_id);
-CREATE INDEX idx_parent_comm_student ON parent_communications(student_id); -- <--- [เพิ่ม Index ใหม่]
+CREATE INDEX idx_parent_comm_student ON parent_communications(student_id);
 
 -- ========================================================
--- ส่วนที่ 2: ระบบ VIEWS (ปรับปรุงให้รองรับการเปลี่ยนชื่อห้อง)
+-- ส่วนที่ 2: ระบบ VIEWS
 -- ========================================================
-
 CREATE OR REPLACE FUNCTION manage_room_student_views()
 RETURNS TRIGGER AS $$
 DECLARE
     old_view_name TEXT;
     new_view_name TEXT;
 BEGIN
-    -- กรณีเพิ่มห้องใหม่
     IF TG_OP = 'INSERT' THEN
         new_view_name := 'room_students_' || NEW.room_name;
         EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT * FROM students WHERE room = %L', new_view_name, NEW.room_name);
         RETURN NEW;
-    
-    -- กรณีเปลี่ยนชื่อห้อง (UPDATE)
     ELSIF TG_OP = 'UPDATE' THEN
         IF OLD.room_name <> NEW.room_name THEN
             old_view_name := 'room_students_' || OLD.room_name;
@@ -828,8 +829,6 @@ BEGIN
             EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT * FROM students WHERE room = %L', new_view_name, NEW.room_name);
         END IF;
         RETURN NEW;
-
-    -- กรณีลบห้อง
     ELSIF TG_OP = 'DELETE' THEN
         old_view_name := 'room_students_' || OLD.room_name;
         EXECUTE format('DROP VIEW IF EXISTS %I', old_view_name);
@@ -851,7 +850,7 @@ EXECUTE FUNCTION manage_room_student_views();
 ALTER TABLE students REPLICA IDENTITY FULL;
 ALTER TABLE live_quiz_responses REPLICA IDENTITY FULL;
 ALTER TABLE boss_quizzes REPLICA IDENTITY FULL;
-ALTER TABLE parent_communications REPLICA IDENTITY FULL; -- <--- [เพิ่มตารางใหม่เข้าระบบ Real-time]
+ALTER TABLE parent_communications REPLICA IDENTITY FULL;
 
 DROP PUBLICATION IF EXISTS supabase_realtime;
 CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
@@ -873,7 +872,7 @@ ALTER TABLE boss_quizzes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE boss_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE live_quiz_sessions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE live_quiz_responses DISABLE ROW LEVEL SECURITY;
-ALTER TABLE parent_communications DISABLE ROW LEVEL SECURITY; -- <--- [ปิด RLS ตารางใหม่]
+ALTER TABLE parent_communications DISABLE ROW LEVEL SECURITY;
 </textarea>
           </div>
         </div>
