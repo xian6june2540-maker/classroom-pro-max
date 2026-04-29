@@ -131,11 +131,14 @@ window.google = { script: { run: createGASProxy(null, null) } };
     // ฟังก์ชันจัดการเมื่อมีข้อมูลเปลี่ยนแปลง (Realtime Payload)
     function handleRealtimeEvent(payload) {
         const table = payload.table;
-        const eventType = payload.eventType;
-
-        // 1. ถ้าครูกำลังล็อกอิน และอยู่ในหน้าห้องเรียน
+    
+        // 1. ถ้าครูล็อกอิน และอยู่ในหน้าห้องเรียน
         if (localStorage.getItem('teacherLoggedIn') === 'true' && currentRoom !== "") {
-            
+            // 🔔 เพิ่มบรรทัดนี้: ถ้ามีการสื่อสารจากผู้ปกครองเข้ามา ให้รีโหลดรายชื่อเพื่อโชว์ไอคอนทันที
+            if (table === 'parent_communications') {
+                loadStudents(); 
+            }
+    
             if (table === 'attendance') {
                 let checkDate = document.getElementById('attDate').value;
                 if(checkDate) loadAttendanceForDate(); 
@@ -147,26 +150,24 @@ window.google = { script: { run: createGASProxy(null, null) } };
                  if(document.getElementById('groupTaskModal').classList.contains('show') && currentTaskId) openTaskSubmissions(currentTaskId, currentTaskTitle, currentTaskDue, currentTaskMax, true);
             }
             
-            if (table === 'leaves') {
-                 checkPendingLeaves();
-            }
-            
-            if (table === 'students' && document.getElementById('tab-students').classList.contains('active')) {
-                 loadStudents();
-            }
+            if (table === 'leaves') { checkPendingLeaves(); }
+            if (table === 'students') { loadStudents(); }
         }
-
-        // 2. ถ้านักเรียนกำลังล็อกอินอยู่
+    
+        // 2. ถ้านักเรียนล็อกอิน
         if (globalPortalStudent && globalPortalStudent.id) {
+            // 🔔 เพิ่มบรรทัดนี้: ถ้าผู้ปกครองส่งข้อความหาลูก ให้รีโหลดแดชบอร์ดเด็กทันที
+            if (table === 'parent_communications') {
+                loadFullDashboard(globalPortalStudent.id, true);
+            }
+    
             if ( (table === 'students' && payload.new && payload.new.id === globalPortalStudent.id) ||
                  (table === 'attendance' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
                  (table === 'submissions' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
                  (table === 'tasks') || (table === 'group_tasks') || (table === 'announcements') ) {
                  
                  clearTimeout(autoRefreshInterval);
-                 autoRefreshInterval = setTimeout(() => {
-                     loadFullDashboard(globalPortalStudent.id, true);
-                 }, 2000);
+                 autoRefreshInterval = setTimeout(() => { loadFullDashboard(globalPortalStudent.id, true); }, 2000);
             }
         }
     }
