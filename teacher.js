@@ -293,21 +293,26 @@
         if (currentRoom) renderGroupAssignments();
     }
 
-    // --- แก้ไข loadStudents ให้ดึงข้อมูลโบนัสมาด้วย ---
+    // --- [แก้ไข: ดึงข้อมูลนักเรียนพร้อมคำขอปรึกษาจากผู้ปกครอง] ---
     async function loadStudents() {
         if (!supabaseClient) return;
         
-        // 1. ดึงข้อมูลนักเรียน
-        let { data: sData } = await supabaseClient.from('students').select('*').order('id', { ascending: true });
-        
-        // 2. ดึงข้อมูลโบนัส (การมาเรียน และ การส่งงาน) เพื่อเอามาคำนวณให้ตรงกับหน้าจอเด็ก
+        // 1. ดึงข้อมูลนักเรียน และ ข้อมูลคำขอปรึกษาจากผู้ปกครองที่ยังไม่ได้แก้ไข (is_resolved = false)
+        let [sRes, cRes] = await Promise.all([
+            supabaseClient.from('students').select('*').order('id', { ascending: true }),
+            supabaseClient.from('parent_communications').select('*').eq('target', 'teacher').eq('is_resolved', false)
+        ]);
+
+        let sData = sRes.data;
+        window.tempConsults = cRes.data || []; // เก็บข้อมูลคำขอปรึกษาไว้ชั่วคราว
+
+        // 2. ดึงข้อมูลโบนัส (การมาเรียน และ การส่งงาน) เพื่อคำนวณหน้าจอให้ตรงกับเด็ก
         let { data: allAtt } = await supabaseClient.from('attendance').select('student_id, status').eq('room', currentRoom);
         let { data: allSubs } = await supabaseClient.from('submissions').select('student_id, status, timestamp, task_id');
         let { data: allTasks } = await supabaseClient.from('tasks').select('task_id, due_date').eq('room', currentRoom);
         let { data: allGSubs } = await supabaseClient.from('group_submissions').select('group_id, status');
         let { data: allGroups } = await supabaseClient.from('groups').select('group_id, members, task_id').eq('status', 'อนุมัติแล้ว');
 
-        // เก็บข้อมูลโบนัสไว้ในตัวแปรชั่วคราวเพื่อใช้ใน renderStudents
         window.tempBonusData = {
             atts: allAtt || [],
             subs: allSubs || [],
@@ -598,7 +603,7 @@
         });
     }
 
-    // --- START UPDATE: SYNCHRONIZED TEACHER VIEW ---
+    // --- [แก้ไข: แสดงไอคอนแจ้งเตือนท้ายชื่อนักเรียน] ---
     function renderStudents() { 
         const tb = document.getElementById('studentTableBody');
         const f = studentsData.filter(function(s) { return s[4] === currentRoom; }); 
@@ -614,76 +619,33 @@
 
         f.forEach(function(s) { 
             const studentId = s[0];
-            const parentToken = s[28] || ""; // <--- เพิ่มบรรทัดนี้เพื่อดึงรหัสลับจากลำดับที่ 28
             const idx = studentsData.indexOf(s);
             
-            let baseExp = parseFloat(s[22]) || 0; 
-            let eqBg = s[26] || "bg0"; 
-            let lastPass = parseInt(s[27]) || now; 
-            let inv = [];
-            try { inv = JSON.parse(s[25] || "[]"); } catch(e) { inv = []; }
-
-            let totalExpPerMs = 0; 
-            totalExpPerMs += getExpPerMs(eqBg); 
+            // เช็คว่าเด็กคนนี้มีเรื่องที่ผู้ปกครองฝากไว้หรือไม่
+            const hasConsult = (window.tempConsults || []).find(c => c.student_id === studentId);
             
-            let myItems = inv.filter(x => x.startsWith('i'));
-            if(myItems.length > 0) totalExpPerMs += getExpPerMs(myItems[myItems.length-1]);
-            
-            let myClothes = inv.filter(x => x.startsWith('m') || x.startsWith('w')); 
-            if(myClothes.length > 0) totalExpPerMs += getExpPerMs(myClothes[myClothes.length-1]);
-
-            let msPassed = now - lastPass;
-            // 🌟 ใช้ Math.floor ครอบการคำนวณ Passive ทุกขั้นตอน
-            let gained = Math.floor(msPassed * totalExpPerMs);
-            if (gained < 0) gained = 0;
-            
-            let currentRealExp = Math.floor(baseExp + gained); 
-
-            let bonusAtt = 0;
-            let bonusTask = 0;
-
-            b.atts.filter(a => a.student_id === studentId && a.status === 'มา').forEach(() => bonusAtt += 50);
-
-            b.subs.filter(sub => sub.student_id === studentId && sub.status === 'ส่งแล้ว').forEach(sub => {
-                let task = b.tasks.find(t => t.task_id === sub.task_id);
-                if (task) {
-                    let dueStr = (task.due_date || "").replace(/-/g, '');
-                    let pt = (sub.timestamp || "").match(/\d+/g);
-                    if (pt && pt.length >= 3) {
-                        let year = parseInt(pt[2]); if (year > 2500) year -= 543;
-                        let subStr = `${year}${pt[1].padStart(2,'0')}${pt[0].padStart(2,'0')}`;
-                        if (subStr <= dueStr) bonusTask += 500; else bonusTask += 250;
-                    } else { bonusTask += 250; }
-                }
-            });
-
-            let myGroups = b.groups.filter(g => (g.members || []).includes(studentId));
-            myGroups.forEach(g => {
-                let gSub = b.gSubs.find(gs => gs.group_id === g.group_id && gs.status === 'ส่งแล้ว');
-                if (gSub) bonusTask += 3500;
-            });
-
-            // 🌟 เลิกบวกซ้ำ! ให้ดึงค่าจากฐานข้อมูล (s[22]) มาโชว์ตรงๆ เลย
             let totalDisplayExp = Math.floor(parseFloat(s[22]) || 0);
-
             let accScore = parseFloat(s[5]) || 0;
             let displayName = s[1];
             if (s[2] && s[2].trim() !== "") displayName += ' <small class="text-muted">(' + s[2] + ')</small>';
+            
+            // 🌟 เพิ่มไอคอนแจ้งเตือนท้ายชื่อ (Badge สีแดงกระพริบ)
+            if (hasConsult) {
+                displayName += ` <span class="badge bg-danger pulse-text ms-1" style="cursor:pointer" onclick="openConsultDetail('${studentId}', '${s[1]}')" title="คลิกเพื่อดูรายละเอียดติดต่อกลับ">
+                    <i class="bi bi-telephone-outbound-fill"></i> ผปค. รอครูติดต่อกลับ!</span>`;
+            }
             
             sHtml += '<tr>' +
                 '<td>' + studentId + '</td>' +
                 '<td>' + displayName + '</td>' +
                 '<td class="text-center">' +
-                    // แถบคะแนนสะสม (สีน้ำเงิน)
                     '<span class="badge bg-primary fw-bold px-2 py-2 mb-1 d-block border border-white shadow-sm">' + accScore + ' คะแนน</span>' +
-                    // แถบ EXP รวม (สีเขียว - จุดที่เพิ่มใหม่)
                     '<span class="badge bg-success fw-bold px-2 py-2 d-block border border-white shadow-sm"><i class="bi bi-star-fill text-warning"></i> ' + totalDisplayExp.toLocaleString() + ' EXP</span>' +
                 '</td>' +
                 '<td class="text-center">' +
                     '<button class="btn btn-outline-danger btn-sm me-1" title="ส่งข้อความส่วนตัว" onclick="promptSendDM(\'' + studentId + '\', \'' + s[1] + '\')"><i class="bi bi-envelope-heart"></i> DM</button>' +
                     '<button class="btn btn-outline-success btn-sm me-1" title="เพิ่ม/ลด EXP" onclick="promptGiveExp(\'' + studentId + '\', \'' + s[1] + '\', ' + totalDisplayExp + ')"><i class="bi bi-arrow-up-circle-fill"></i> EXP</button>' +
                     '<button class="btn btn-outline-info btn-sm me-1" title="สมุดพก" onclick="generateStudentPDF(\'' + studentId + '\', \'' + s[4] + '\')"><i class="bi bi-printer-fill"></i></button>' +
-                    '<button class="btn btn-outline-primary btn-sm me-1" title="ลิงก์ผู้ปกครอง" onclick="copyParentLink(\'' + studentId + '\', \'' + parentToken + '\')"><i class="bi bi-person-heart"></i></button>' +
                     '<button class="btn btn-outline-warning btn-sm me-1" title="แก้ไข" onclick="editStudent(' + idx + ')"><i class="bi bi-pencil-square"></i></button>' +
                     '<button class="btn btn-outline-danger btn-sm" title="ลบ" onclick="deleteStudent(' + idx + ')"><i class="bi bi-trash-fill"></i></button>' +
                 '</td>' +
@@ -2293,5 +2255,55 @@
             title: 'คัดลอกลิงก์แล้ว!',
             showConfirmButton: false,
             timer: 1500
+        });
+    };
+
+    // --- [เพิ่มใหม่: ฟังก์ชันสำหรับครูเปิดดูรายละเอียดที่ผู้ปกครองส่งมา] ---
+    window.openConsultDetail = function(studentId, studentName) {
+        const consults = (window.tempConsults || []).filter(c => c.student_id === studentId);
+        let html = consults.map(c => `
+            <div class="card border-0 shadow-sm mb-3 rounded-3 overflow-hidden text-start">
+                <div class="card-header bg-danger text-white small py-1"><i class="bi bi-clock"></i> ส่งเมื่อ: ${formatThaiDate(c.created_at.split('T')[0])}</div>
+                <div class="card-body bg-white">
+                    <div class="mb-3">
+                        <small class="text-muted fw-bold d-block mb-1">เรื่องที่ต้องการปรึกษา:</small>
+                        <div class="p-2 bg-light rounded border" style="font-size: 0.9rem;">${c.message}</div>
+                    </div>
+                    <div class="p-3 rounded-3" style="background:#fff3cd; border: 1px solid #ffeeba;">
+                        <strong class="text-danger"><i class="bi bi-person-lines-fill"></i> ข้อมูลติดต่อกลับผู้ปกครอง:</strong><br>
+                        <div class="fs-4 fw-bold mt-1 text-center">${c.parent_contact}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    
+        Swal.fire({
+            title: `<div class="fw-bold text-primary">คำขอปรึกษาจากผู้ปกครอง</div><div class="small text-muted fs-6">${studentName}</div>`,
+            html: `<div style="max-height:400px; overflow-y:auto; padding: 5px;">${html}</div>`,
+            showCancelButton: true,
+            showConfirmButton: true,
+            confirmButtonText: '<i class="bi bi-check-circle"></i> แก้ไขปัญหาเรียบร้อยแล้ว (ล้างสถานะ)',
+            cancelButtonText: 'ปิดหน้าต่าง (เก็บแจ้งเตือนไว้ก่อน)',
+            confirmButtonColor: '#198754',
+            cancelButtonColor: '#6c757d',
+            customClass: { popup: 'rounded-4' }
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                // ครูจัดการปัญหาเรียบร้อยแล้ว -> สั่ง Update ฐานข้อมูล
+                Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+                
+                const { error } = await supabaseClient
+                    .from('parent_communications')
+                    .update({ is_resolved: true })
+                    .eq('student_id', studentId)
+                    .eq('target', 'teacher');
+                
+                if (error) {
+                    Swal.fire('ผิดพลาด', error.message, 'error');
+                } else {
+                    Swal.fire('สำเร็จ', 'ล้างสถานะแจ้งเตือนเรียบร้อยครับ ไอคอนแจ้งเตือนจะหายไป', 'success');
+                    loadStudents(); // รีโหลดข้อมูลเพื่ออัปเดตหน้าจอครูให้เป็นปัจจุบัน
+                }
+            }
         });
     };
