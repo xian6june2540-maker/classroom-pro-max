@@ -655,23 +655,33 @@ window.openCommunicationHub = function(studentId) {
 
                 <div id="sectionToTeacher" class="hidden">
                     <label class="small fw-bold text-muted mb-2">เรื่องที่ต้องการปรึกษาคุณครู:</label>
-                    <textarea id="hubMsgToTeacher" class="form-control mb-3" rows="2" placeholder="เช่น ขอปรึกษาเรื่องพฤติกรรม..."></textarea>
+                    <textarea id="hubMsgToTeacher" class="form-control mb-2" rows="2" placeholder="เช่น ขอปรึกษาเรื่องพฤติกรรม..."></textarea>
                     
-                    <label class="small fw-bold text-muted mb-2 d-block">ข้อมูลติดต่อกลับของคุณ:</label>
-                    <div class="btn-group w-100 mb-2" role="group">
-                        <input type="radio" class="btn-check" name="contactType" id="typePhone" value="phone" ${lastType === 'phone' ? 'checked' : ''} onchange="updateContactUI()">
-                        <label class="btn btn-outline-primary btn-sm" for="typePhone"><i class="bi bi-telephone"></i> เบอร์โทร</label>
-                        <input type="radio" class="btn-check" name="contactType" id="typeLine" value="line" ${lastType === 'line' ? 'checked' : ''} onchange="updateContactUI()">
-                        <label class="btn btn-outline-success btn-sm" for="typeLine"><i class="bi bi-line"></i> LINE ID</label>
+                    <div class="p-3 rounded-4 mb-3 border text-center" style="background: #fdf2f2;">
+                        <small class="fw-bold text-danger d-block mb-2"><i class="bi bi-geo-alt-fill"></i> ตำแหน่งบ้านสำหรับครูเยี่ยมบ้าน</small>
+                        <div id="locationStatus" class="small text-muted mb-2">ยังไม่ได้แชร์พิกัดปัจจุบัน</div>
+                        <button class="btn btn-sm btn-outline-danger fw-bold rounded-pill" onclick="getCurrentLocation()">
+                            <i class="bi bi-pin-map"></i> กดเพื่ออัปเดตตำแหน่งบ้านของคุณ
+                        </button>
+                        <input type="hidden" id="hubLat">
+                        <input type="hidden" id="hubLng">
                     </div>
 
-                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" 
-                           value="${lastContact}" placeholder="กรอกข้อมูลติดต่อ">
-                    
-                    <div id="contactPreview" class="small fw-bold mb-4 text-center" style="min-height: 20px;"></div>
+                    <label class="small fw-bold text-muted mb-1 d-block">ข้อมูลติดต่อกลับ:</label>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <input type="radio" class="btn-check" name="contactType" id="typePhone" value="phone" checked onchange="updateContactUI()">
+                        <label class="btn btn-outline-primary btn-sm" for="typePhone">เบอร์โทร</label>
+                        <input type="radio" class="btn-check" name="contactType" id="typeLine" value="line" onchange="updateContactUI()">
+                        <label class="btn btn-outline-success btn-sm" for="typeLine">LINE ID</label>
+                        <input type="radio" class="btn-check" name="contactType" id="typeFB" value="messenger" onchange="updateContactUI()">
+                        <label class="btn btn-outline-info btn-sm text-dark" for="typeFB">FB</label>
+                    </div>
+
+                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" placeholder="กรอกข้อมูลติดต่อ">
+                    <div id="contactPreview" class="small fw-bold mb-3 text-center"></div>
 
                     <button class="btn btn-primary w-100 fw-bold rounded-pill shadow" onclick="processSendToTeacher('${studentId}')">
-                        <i class="bi bi-telephone-outbound"></i> ส่งข้อมูลให้ครูติดต่อกลับ
+                        <i class="bi bi-send-check"></i> ส่งข้อมูลให้คุณครู
                     </button>
                 </div>
             </div>
@@ -773,29 +783,50 @@ window.processSendToTeacher = async function(id) {
     const msg = document.getElementById('hubMsgToTeacher').value.trim();
     const contact = document.getElementById('hubParentContact').value.trim();
     const type = document.querySelector('input[name="contactType"]:checked').value;
+    const lat = document.getElementById('hubLat').value;
+    const lng = document.getElementById('hubLng').value;
     
-    if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกเรื่องที่ปรึกษาและข้อมูลติดต่อกลับครับ', 'warning');
-    
-    // ตรวจสอบความถูกต้องเบื้องต้นสำหรับเบอร์โทร
-    if(type === 'phone' && contact.replace(/\D/g, '').length < 10) {
-        return Swal.fire('เบอร์โทรไม่ครบ', 'กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลักครับ', 'warning');
+    if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลให้ครบครับ', 'warning');
+
+    Swal.fire({ title: 'กำลังส่งข้อมูล...', didOpen: () => Swal.showLoading() });
+
+    // 1. อัปเดตพิกัดบ้านถาวรลงในตาราง students (ถ้ามีการดึงพิกัดมา)
+    if (lat && lng) {
+        await supabaseClient.from('students').update({ home_lat: lat, home_lng: lng }).eq('id', id);
     }
 
-    Swal.fire({ title: 'กำลังส่งข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-    
-    // บันทึกลงเครื่องเพื่อใช้ครั้งหน้า (Idea 2)
-    localStorage.setItem('parentLastContact', contact);
-    localStorage.setItem('parentLastContactType', type);
+    // 2. จัดรูปแบบช่องทางติดต่อ
+    let finalContact = contact;
+    if(type === 'line') finalContact = `LINE:${contact}`;
+    if(type === 'messenger') finalContact = `FB:${contact}`; // เก็บแบบระบุว่าเป็น FB
 
-    // ส่งข้อมูลเข้า Supabase (เก็บข้อมูลแบบมีระบุประเภทเพื่อให้ครูกดใช้ง่าย)
-    const finalContact = type === 'phone' ? contact : `LINE:${contact}`;
-    const { error } = await supabaseClient.from('parent_communications').insert([{ 
+    // 3. ส่งแจ้งเตือนหาครู (Delete ของเก่าออกก่อนเพื่อความคลีนตามที่สั่ง)
+    await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
+    await supabaseClient.from('parent_communications').insert([{ 
         student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact 
     }]);
 
-    if(error) {
-        Swal.fire('ผิดพลาด', error.message, 'error');
-    } else {
-        Swal.fire({ icon: 'success', title: 'ส่งสำเร็จ!', text: 'ครูได้รับการแจ้งเตือนแล้ว และจะติดต่อกลับหาท่านครับ', timer: 3000, showConfirmButton: false });
+    Swal.fire({ icon: 'success', title: 'ส่งสำเร็จ!', text: 'ข้อมูลของคุณและพิกัดบ้านถูกส่งถึงครูแล้วครับ', timer: 2000, showConfirmButton: false });
+};
+
+// ฟังก์ชันดึงพิกัด GPS ปัจจุบัน
+window.getCurrentLocation = function() {
+    const status = document.getElementById('locationStatus');
+    if (!navigator.geolocation) {
+        return Swal.fire('ไม่รองรับ', 'เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่งครับ', 'error');
     }
+
+    status.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังดึงพิกัด...';
+    
+    navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        document.getElementById('hubLat').value = lat;
+        document.getElementById('hubLng').value = lng;
+        status.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle"></i> ได้พิกัดแล้ว! (${lat.toFixed(4)}, ${lng.toFixed(4)})</span><br><small>ระบบจะบันทึกเมื่อกดปุ่ม "ส่งข้อมูล" ด้านล่าง</small>`;
+        Toast.fire({ icon: 'success', title: 'ดึงพิกัดสำเร็จ!' });
+    }, (err) => {
+        status.innerText = 'ไม่สามารถเข้าถึงพิกัดได้ (กรุณาเปิด GPS)';
+        Swal.fire('เข้าถึงพิกัดไม่ได้', 'กรุณาอนุญาตให้เข้าถึงตำแหน่งที่ตั้ง (GPS) ในเครื่องของคุณด้วยครับ', 'warning');
+    }, { enableHighAccuracy: true });
 };
