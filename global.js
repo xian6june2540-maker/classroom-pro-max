@@ -781,41 +781,63 @@ window.updateContactUI = function() {
 // --- [วางทับฟังก์ชันเดิม] ---
 window.processSendToTeacher = async function(id) {
     const msg = document.getElementById('hubMsgToTeacher').value.trim();
-    const rawContact = document.getElementById('hubParentContact').value.trim();
+    const contact = document.getElementById('hubParentContact').value.trim();
     const type = document.querySelector('input[name="contactType"]:checked').value;
+    
+    // ดึงพิกัดที่ผู้ปกครองปักไว้
     const lat = document.getElementById('hubLat').value;
     const lng = document.getElementById('hubLng').value;
     
-    if(!msg || !rawContact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อความและข้อมูลติดต่อครับ', 'warning');
+    if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลให้ครบครับ', 'warning');
 
-    Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-
-    // 1. ล้างลิงก์ FB หรือจัดรูปแบบข้อมูลก่อนส่ง
-    let finalContact = rawContact;
-    if(type === 'line') finalContact = `LINE:${rawContact}`;
-    if(type === 'messenger') finalContact = `FB:${parseFacebookLink(rawContact)}`; // ใช้ตัวล้างลิงก์
+    Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     try {
-        // 2. บันทึกพิกัดลงตาราง students (ต้องใช้ await)
+        // 1. อัปเดตพิกัดบ้านถาวรลงในตาราง students (ถ้ามีการปักหมุด)
         if (lat && lng) {
-            await supabaseClient.from('students').update({ 
+            const { error: stuErr } = await supabaseClient.from('students').update({ 
                 home_lat: parseFloat(lat), 
                 home_lng: parseFloat(lng) 
             }).eq('id', id);
+            
+            if (stuErr) throw stuErr;
         }
 
-        // 3. ส่งแจ้งเตือน (ลบอันเก่าก่อนตามที่ฟลุ๊คเคยสั่ง)
+        // 2. จัดรูปแบบการติดต่อ
+        let finalContact = contact;
+        if(type === 'line') finalContact = `LINE:${contact}`;
+        if(type === 'messenger') finalContact = `FB:${parseFacebookLink(contact)}`;
+
+        // 3. ส่งข้อมูลเข้าตารางสื่อสารหาครู (ลบของเก่าออกเพื่อไม่ให้รกตาราง)
         await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
-        await supabaseClient.from('parent_communications').insert([{ 
-            student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact 
+        
+        const { error: commErr } = await supabaseClient.from('parent_communications').insert([{ 
+            student_id: id, 
+            target: 'teacher', 
+            type: 'consult', 
+            message: msg, 
+            parent_contact: finalContact 
         }]);
 
-        Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'พิกัดบ้านและข้อมูลส่งถึงครูแล้ว', timer: 2000, showConfirmButton: false });
+        if (commErr) throw commErr;
+
+        // 4. สำเร็จ!
+        Swal.fire({ 
+            icon: 'success', 
+            title: 'ส่งสำเร็จ!', 
+            text: 'คุณครูได้รับข้อความและพิกัดบ้านของคุณแล้วครับ', 
+            timer: 2500, 
+            showConfirmButton: false 
+        });
+        
+        // ล้างค่าในฟอร์มหลังส่งเสร็จ
+        document.getElementById('hubMsgToTeacher').value = '';
+
     } catch (e) {
-        Swal.fire('Error', e.message, 'error');
+        console.error("Save Error:", e);
+        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้: ' + e.message, 'error');
     }
 };
-
 // ฟังก์ชันดึงพิกัด GPS ปัจจุบัน
 window.getCurrentLocation = function() {
     const status = document.getElementById('locationStatus');
@@ -858,92 +880,63 @@ window.parseFacebookLink = function(input) {
 };
 
 // 📍 ฟังก์ชันเปิดแผนที่ให้ผู้ปกครองเลื่อนหมุด (เวอร์ชันแก้ปัญหาจอขาว + Auto GPS)
-// 📍 ฟังก์ชันปักหมุดบ้าน (เวอร์ชัน Final - แก้ปัญหาจอขาวและการค้าง 100%)
 window.openMapPicker = function() {
-    // 1. เช็คพิกัดเดิมที่มีอยู่ในหน้าเว็บก่อน (ถ้าไม่มีให้ตั้งค่าเริ่มต้น)
-    let latInput = document.getElementById('hubLat');
-    let lngInput = document.getElementById('hubLng');
+    // ดึงพิกัดล่าสุดที่เคยเก็บไว้ (ถ้ามี)
+    let latVal = document.getElementById('hubLat').value;
+    let lngVal = document.getElementById('hubLng').value;
     
-    let defaultLat = (latInput && latInput.value) ? parseFloat(latInput.value) : 13.7563;
-    let defaultLng = (lngInput && lngInput.value) ? parseFloat(lngInput.value) : 100.5018;
+    let defaultLat = latVal ? parseFloat(latVal) : 13.7563;
+    let defaultLng = lngVal ? parseFloat(lngVal) : 100.5018;
 
     Swal.fire({
-        title: 'ปักหมุดบ้านนักเรียน',
+        title: '<span class="fw-bold">ปักหมุดบ้านนักเรียน</span>',
         html: `
             <div id="map-canvas"></div>
-            <div class="mt-3">
-                <button type="button" class="btn btn-sm btn-primary rounded-pill mb-2 shadow-sm" onclick="locateUserOnMap()">
-                    <i class="bi bi-crosshair"></i> ดึงพิกัดปัจจุบันของฉัน
+            <div class="map-controls">
+                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" onclick="locateUserOnMap()">
+                    <i class="bi bi-crosshair"></i> ดึงตำแหน่งปัจจุบัน
                 </button>
-                <p class="small text-muted mb-0">จิ้มที่แผนที่เพื่อเลื่อนหมุดไปยังตำแหน่งบ้าน</p>
+                <span class="small text-muted">จิ้มแผนที่เพื่อเลื่อนหมุด</span>
             </div>
         `,
         showCancelButton: true,
         confirmButtonText: 'บันทึกตำแหน่งนี้',
         cancelButtonText: 'ยกเลิก',
         allowOutsideClick: false,
-        customClass: { popup: 'rounded-4' },
-        
-        // 🌟 รันทันทีที่หน้าต่าง Swal ถูกวาดลงใน DOM
+        customClass: { popup: 'rounded-4 map-popup-custom' },
         didRender: () => {
-            try {
-                // เช็คว่ามี Library หรือยัง
-                if (typeof L === 'undefined') throw new Error("Leaflet Library Not Found");
-
-                // ล้างแผนที่เก่าถ้ามีค้างในระบบ
-                if (window.myLeafletMap) {
-                    window.myLeafletMap.remove();
-                    window.myLeafletMap = null;
-                }
-
-                // สร้างแผนที่ใหม่
+            setTimeout(() => {
+                if (window.myLeafletMap) window.myLeafletMap.remove();
+                
                 window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 16);
-
-                // โหลดภาพแผนที่ (ใช้ของ OSM ที่เสถียรที่สุด)
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap'
-                }).addTo(window.myLeafletMap);
-
-                // สร้างหมุด
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.myLeafletMap);
+                
                 window.myMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(window.myLeafletMap);
+                
+                // กระตุ้นให้แผนที่วาดตัวทันที (แก้ปัญหาจอขาว)
+                window.myLeafletMap.invalidateSize();
 
-                // 🚀 คำสั่งไม้ตาย: บังคับให้แผนที่รีเฟรชขนาดตัวเองทันที
-                setTimeout(() => {
-                    window.myLeafletMap.invalidateSize();
-                }, 300);
-
-                // คลิกเพื่อย้ายหมุด
                 window.myLeafletMap.on('click', (e) => {
-                    if (window.myMarker) window.myMarker.setLatLng(e.latlng);
+                    window.myMarker.setLatLng(e.latlng);
                 });
-
-            } catch (err) {
-                console.error(err);
-                document.getElementById('map-canvas').innerHTML = `
-                    <div class="p-5 text-center">
-                        <i class="bi bi-exclamation-triangle text-danger fs-1"></i>
-                        <p class="text-danger mt-2">ไม่สามารถโหลดแผนที่ได้<br>กรุณารีเฟรชหน้าเว็บแล้วลองใหม่อีกครั้ง</p>
-                    </div>`;
-            }
+            }, 300);
         },
         preConfirm: () => {
-            // ดึงค่าจากหมุดล่าสุด
-            if (window.myMarker) {
-                const pos = window.myMarker.getLatLng();
-                return { lat: pos.lat, lng: pos.lng };
-            }
-            return null;
+            const pos = window.myMarker.getLatLng();
+            return { lat: pos.lat, lng: pos.lng };
         }
     }).then((result) => {
-        if (result.isConfirmed && result.value) {
-            // บันทึกค่าลง Input ซ่อนในหน้าหลัก
-            if(latInput) latInput.value = result.value.lat;
-            if(lngInput) lngInput.value = result.value.lng;
+        if (result.isConfirmed) {
+            // 🌟 จุดสำคัญ: ต้องยัดค่ากลับเข้า Input ทันที
+            document.getElementById('hubLat').value = result.value.lat;
+            document.getElementById('hubLng').value = result.value.lng;
             
-            document.getElementById('locationStatus').innerHTML = 
-                `<span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> ปักหมุดพิกัดสำเร็จ</span>`;
-            
-            Toast.fire({ icon: 'success', title: 'เลือกตำแหน่งแล้ว' });
+            // อัปเดตข้อความในหน้าหลักให้ผู้ปกครองมั่นใจ
+            const statusEl = document.getElementById('locationStatus');
+            if (statusEl) {
+                statusEl.innerHTML = `<span class="badge bg-success px-3 py-2 rounded-pill"><i class="bi bi-check-circle-fill"></i> เตรียมพิกัดบ้านเรียบร้อยแล้ว</span>`;
+            }
+            Toast.fire({ icon: 'success', title: 'ปักหมุดชั่วคราวสำเร็จ' });
         }
     });
 };
