@@ -858,13 +858,18 @@ window.parseFacebookLink = function(input) {
 };
 
 // 📍 ฟังก์ชันเปิดแผนที่ให้ผู้ปกครองเลื่อนหมุด (เวอร์ชันแก้ปัญหาจอขาว + Auto GPS)
-// 📍 ฟังก์ชันปักหมุดบ้าน (เวอร์ชันแก้ปัญหาจอขาวถาวร)
+// 📍 ฟังก์ชันปักหมุดบ้าน (เวอร์ชัน Pro Max - กันค้าง + กันจอขาว)
 window.openMapPicker = function() {
+    // 🛡️ กันค้าง: ตรวจสอบว่าโหลด Library แผนที่มาหรือยัง
+    if (typeof L === 'undefined') {
+        return Swal.fire('Error', 'ไม่สามารถโหลดระบบแผนที่ได้ กรุณารีเฟรชหน้าจออีกครั้งครับ', 'error');
+    }
+
     Swal.fire({
         title: 'ปักหมุดบ้านนักเรียน',
         html: `
             <div id="map-container">
-                <div id="map-canvas" style="width: 100%; height: 100%;"></div>
+                <div id="map-canvas" style="width: 100%; height: 350px;"></div>
             </div>
             <div class="mt-3">
                 <button type="button" class="btn btn-sm btn-outline-primary rounded-pill mb-2" onclick="locateUserOnMap()">
@@ -876,69 +881,84 @@ window.openMapPicker = function() {
         showCancelButton: true,
         confirmButtonText: 'บันทึกตำแหน่งนี้',
         cancelButtonText: 'ยกเลิก',
+        allowOutsideClick: false,
         customClass: { popup: 'rounded-4' },
-        // 🌟 ใช้ didOpen และหน่วงเวลานิดนึงเพื่อให้ Popup กางเสร็จ 100%
         didOpen: () => {
+            // ⏳ ให้เวลากล่อง Popup กางออกให้เสร็จ (ใช้ 800ms เพื่อความชัวร์ที่สุด)
             setTimeout(() => {
-                // 1. ถ้าเคยมีแผนที่ค้างในหน่วยความจำ ให้ลบทิ้งก่อน
-                if (window.myLeafletMap != undefined) { 
-                    window.myLeafletMap.remove(); 
+                try {
+                    // ล้างแผนที่เก่าถ้ามี
+                    if (window.myLeafletMap) { window.myLeafletMap.remove(); }
+
+                    let startLat = parseFloat(document.getElementById('hubLat').value) || 13.7563;
+                    let startLng = parseFloat(document.getElementById('hubLng').value) || 100.5018;
+
+                    // สร้างแผนที่
+                    window.myLeafletMap = L.map('map-canvas').setView([startLat, startLng], 16);
+
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OSM'
+                    }).addTo(window.myLeafletMap);
+
+                    // สร้างหมุดและเก็บไว้ในตัวแปร global
+                    window.myMarker = L.marker([startLat, startLng], { draggable: true }).addTo(window.myLeafletMap);
+
+                    // 🌟 บังคับวาดภาพแผนที่ (แก้จอขาว)
+                    window.myLeafletMap.invalidateSize();
+
+                    window.myLeafletMap.on('click', (e) => {
+                        if (window.myMarker) window.myMarker.setLatLng(e.latlng);
+                    });
+                    
+                    // ถ้ายังไม่มีพิกัด ลองดึง GPS ทันที
+                    if (!document.getElementById('hubLat').value) { locateUserOnMap(); }
+
+                } catch (err) {
+                    console.error("Map Init Error:", err);
+                    document.getElementById('map-container').innerHTML = '<div class="p-5 text-danger">โหลดแผนที่ไม่ได้ กรุณาลองใหม่อีกครั้ง</div>';
                 }
-
-                // 2. ดึงพิกัดเดิม (ถ้าไม่มีใช้พิกัดกลางประเทศ)
-                let savedLat = parseFloat(document.getElementById('hubLat').value) || 13.7563;
-                let savedLng = parseFloat(document.getElementById('hubLng').value) || 100.5018;
-
-                // 3. เริ่มสร้างแผนที่ลงใน map-canvas
-                window.myLeafletMap = L.map('map-canvas').setView([savedLat, savedLng], 16);
-
-                // 4. โหลดภาพแผนที่
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap contributors'
-                }).addTo(window.myLeafletMap);
-
-                // 5. ปักหมุด
-                window.myMarker = L.marker([savedLat, savedLng], { draggable: true }).addTo(window.myLeafletMap);
-
-                // 🌟 หัวใจสำคัญ: สั่งให้วาดแผนที่ใหม่ตามขนาดกล่องปัจจุบัน
-                window.myLeafletMap.invalidateSize();
-
-                // 6. คลิกเพื่อย้ายหมุด
-                window.myLeafletMap.on('click', function(e) {
-                    window.myMarker.setLatLng(e.latlng);
-                });
-
-                // ลองดึง GPS ทันทีถ้ายังไม่มีพิกัดบันทึกไว้
-                if(!document.getElementById('hubLat').value) {
-                    locateUserOnMap();
-                }
-            }, 600); // หน่วงเวลา 0.6 วินาทีให้แอนิเมชั่น Popup จบก่อน
+            }, 800);
         },
         preConfirm: () => {
+            // 🛡️ กันค้าง: เช็คก่อนว่าหมุดถูกสร้างขึ้นจริงไหม
+            if (!window.myMarker) {
+                Swal.showValidationMessage('แผนที่ยังโหลดไม่เสร็จ กรุณารอสักครู่ครับ');
+                return false;
+            }
             const pos = window.myMarker.getLatLng();
             return { lat: pos.lat, lng: pos.lng };
         }
     }).then((result) => {
-        if (result.isConfirmed) {
+        if (result.isConfirmed && result.value) {
             document.getElementById('hubLat').value = result.value.lat;
             document.getElementById('hubLng').value = result.value.lng;
             document.getElementById('locationStatus').innerHTML = 
-                `<span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> ปักหมุดเรียบร้อย</span>`;
-            Toast.fire({ icon: 'success', title: 'บันทึกพิกัดชั่วคราวแล้ว' });
+                `<span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> ปักหมุดพิกัดเรียบร้อย</span>`;
+            Toast.fire({ icon: 'success', title: 'ปักหมุดสำเร็จ' });
         }
     });
 };
 
-// 🛰️ ฟังก์ชันช่วยดึง GPS
+// 🛰️ ฟังก์ชันดึง GPS (ปรับปรุงใหม่)
 window.locateUserOnMap = function() {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) return Toast.fire({ icon: 'error', title: 'เบราว์เซอร์ไม่รองรับ GPS' });
+
+    // เปลี่ยนปุ่มเป็น Loading
+    const btn = event?.target?.closest('button') || null;
+    const oldHtml = btn ? btn.innerHTML : '';
+    if(btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังดึงพิกัด...';
+
     navigator.geolocation.getCurrentPosition((pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        if (window.myLeafletMap) {
+        if (window.myLeafletMap && window.myMarker) {
             window.myLeafletMap.setView([lat, lng], 17);
             window.myMarker.setLatLng([lat, lng]);
-            window.myLeafletMap.invalidateSize(); // สั่งรีเฟรชขนาดอีกรอบ
+            window.myLeafletMap.invalidateSize();
         }
-    }, null, { enableHighAccuracy: true });
+        if(btn) btn.innerHTML = oldHtml;
+    }, (err) => {
+        if(btn) btn.innerHTML = oldHtml;
+        Swal.fire('GPS ล้มเหลว', 'กรุณาเปิด GPS และอนุญาตให้เข้าถึงตำแหน่งในเบราว์เซอร์ด้วยครับ', 'warning');
+    }, { enableHighAccuracy: true, timeout: 5000 });
 };
