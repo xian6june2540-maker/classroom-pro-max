@@ -267,14 +267,18 @@
     async function loadAllData() {
         if (!supabaseClient) return;
 
-        // ดึงข้อมูลห้อง
         let { data: rData } = await supabaseClient.from('rooms').select('room_name').order('room_name', { ascending: true });
         roomsData = rData ? rData.map(r => r.room_name) : [];
         renderRooms();
         
-        // ดึงข้อมูลนักเรียนทั้งหมด
-        let { data: sData } = await supabaseClient.from('students').select('*').order('id', { ascending: true });
-        studentsData = sData ? sData.map(mapStudentToArr) : [];
+        // 🔔 ดึงทั้งรายชื่อเด็ก และ ข้อความจากผู้ปกครองที่ยังค้างอยู่
+        let [sRes, cRes] = await Promise.all([
+            supabaseClient.from('students').select('*').order('id', { ascending: true }),
+            supabaseClient.from('parent_communications').select('*').eq('target', 'teacher')
+        ]);
+
+        studentsData = sRes.data ? sRes.data.map(mapStudentToArr) : [];
+        window.tempConsults = cRes.data || []; // เก็บไว้โชว์ไอคอนโทรศัพท์กระพริบ
         
         if (currentRoom) { 
             renderStudents(); 
@@ -282,12 +286,10 @@
             loadPendingLeaves();
         } 
         
-        // ดึงข้อมูลงานเดี่ยว
         let { data: tData } = await supabaseClient.from('tasks').select('*').order('task_id', { ascending: true });
         tasksData = tData ? tData.map(t => [t.task_id, t.title, t.description||"", t.due_date||"", t.room||"", t.max_score||0]) : [];
         if (currentRoom) renderAssignments();
         
-        // ดึงข้อมูลงานกลุ่ม
         let { data: gtData } = await supabaseClient.from('group_tasks').select('*').order('task_id', { ascending: true });
         groupTasksData = gtData ? gtData.map(t => [t.task_id, t.title, t.max_members, t.due_date||"", t.room||"", t.max_score||0]) : [];
         if (currentRoom) renderGroupAssignments();
@@ -2270,75 +2272,41 @@
     // --- [อัปเกรด: ฟังก์ชันเปิดดูรายละเอียด พร้อมปุ่มโทร/แอดไลน์ อัตโนมัติ] ---
     window.openConsultDetail = function(studentId, studentName) {
         const consults = (window.tempConsults || []).filter(c => c.student_id === studentId);
-        
         let html = consults.map(c => {
-            let contactHtml = "";
             let rawContact = c.parent_contact || "";
-    
-            // ตรวจสอบประเภทข้อมูล (ถ้ามีคำว่า LINE: นำหน้า แสดงว่าเป็นไอดีไลน์)
-            if (rawContact.startsWith("LINE:")) {
-                const lineId = rawContact.replace("LINE:", "");
-                contactHtml = `
-                    <div class="mt-2">
-                        <a href="https://line.me/ti/p/~${lineId}" target="_blank" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill py-2">
-                            <i class="bi bi-line"></i> เปิด LINE เพื่อแอดเพื่อน (${lineId})
-                        </a>
-                        <small class="text-muted d-block mt-1 text-center">* หากปุ่มไม่ทำงาน ให้ก๊อปปี้ไอดี: <b>${lineId}</b> ไปค้นหาเองครับ</small>
-                    </div>`;
-            } else {
-                // ถ้าไม่มี LINE: นำหน้า แสดงว่าเป็นเบอร์โทรศัพท์
-                const cleanPhone = rawContact.replace(/\D/g, ""); // เอาขีดออกเพื่อส่งค่าให้ระบบโทรออก
-                contactHtml = `
-                    <div class="mt-2">
-                        <a href="tel:${cleanPhone}" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill py-2">
-                            <i class="bi bi-telephone-fill"></i> กดเพื่อโทรออก: ${rawContact}
-                        </a>
-                    </div>`;
-            }
+            let contactHtml = rawContact.startsWith("LINE:") ? 
+                `<a href="https://line.me/ti/p/~${rawContact.replace("LINE:","")}" target="_blank" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill py-2"><i class="bi bi-line"></i> แอด LINE: ${rawContact.replace("LINE:","")}</a>` :
+                `<a href="tel:${rawContact.replace(/\D/g,"")}" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill py-2"><i class="bi bi-telephone-fill"></i> โทร: ${rawContact}</a>`;
     
             return `
                 <div class="card border-0 shadow-sm mb-3 rounded-3 overflow-hidden text-start">
                     <div class="card-header bg-danger text-white small py-1"><i class="bi bi-clock"></i> ส่งเมื่อ: ${formatThaiDate(c.created_at.split('T')[0])}</div>
                     <div class="card-body bg-white">
-                        <div class="mb-3">
-                            <small class="text-muted fw-bold d-block mb-1">เรื่องที่ต้องการปรึกษา:</small>
-                            <div class="p-2 bg-light rounded border" style="font-size: 0.95rem; line-height: 1.4;">${c.message}</div>
-                        </div>
-                        <div class="p-3 rounded-4" style="background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%); border: 1px solid #ffeeba;">
-                            <strong class="text-danger small"><i class="bi bi-person-lines-fill"></i> ช่องทางติดต่อผู้ปกครอง:</strong>
+                        <div class="mb-3"><small class="text-muted fw-bold d-block mb-1">เรื่องที่ต้องการปรึกษา:</small><div class="p-2 bg-light rounded border">${c.message}</div></div>
+                        <div class="p-3 rounded-4 bg-light border">
+                            <strong class="text-danger small"><i class="bi bi-person-lines-fill"></i> ติดต่อผู้ปกครอง:</strong>
                             ${contactHtml}
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
     
         Swal.fire({
             title: `<div class="fw-bold text-primary">คำขอปรึกษาจากผู้ปกครอง</div><div class="small text-muted fs-6">${studentName}</div>`,
             html: `<div style="max-height:450px; overflow-y:auto; padding: 5px;">${html}</div>`,
             showCancelButton: true,
-            showConfirmButton: true,
-            confirmButtonText: '<i class="bi bi-check-circle"></i> แก้ไขปัญหา/ติดต่อแล้ว (ล้างสถานะ)',
+            confirmButtonText: '<i class="bi bi-trash3-fill"></i> ติดต่อแล้ว (ลบข้อมูลออกจากระบบ)',
             cancelButtonText: 'ปิดหน้าต่าง',
             confirmButtonColor: '#198754',
             cancelButtonColor: '#6c757d',
             customClass: { popup: 'rounded-4' }
         }).then(async (result) => {
             if (result.isConfirmed) {
-                Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-                
-                const { error } = await supabaseClient
-                    .from('parent_communications')
-                    .update({ is_resolved: true })
-                    .eq('student_id', studentId)
-                    .eq('target', 'teacher');
-                
-                if (error) {
-                    Swal.fire('ผิดพลาด', error.message, 'error');
-                } else {
-                    Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'ล้างสถานะการแจ้งเตือนเรียบร้อยครับ', timer: 2000, showConfirmButton: false });
-                    loadStudents(); 
-                }
+                Swal.fire({ title: 'กำลังล้างข้อมูล...', didOpen: () => Swal.showLoading() });
+                // 🔔 ล้างข้อมูล (Delete) จากหลังบ้านถาวร
+                await supabaseClient.from('parent_communications').delete().eq('student_id', studentId).eq('target', 'teacher');
+                Swal.fire({ icon: 'success', title: 'ล้างข้อมูลสำเร็จ', text: 'ไอคอนแจ้งเตือนหายไปแล้วครับ', timer: 1500, showConfirmButton: false });
+                loadStudents(); 
             }
         });
     };
