@@ -76,21 +76,29 @@
     } /* <--- ต้องมีปิดปีกกาตรงนี้ครับ */
 
     /* 🌟 บังคับขนาดกล่องแผนที่ให้แน่นอน */
+    /* 🌟 บังคับขนาดกล่องแผนที่ให้ใหญ่และเสถียร */
     #map-container {
         width: 100% !important;
-        height: 350px !important;
+        height: 500px !important; /* ปรับเป็น 500px เพื่อความ Pro Max */
         position: relative !important;
+        display: block !important;
         background-color: #eee !important;
         border-radius: 15px;
         overflow: hidden;
         z-index: 1;
     }
 
-    /* 🚀 เพิ่มอันนี้: ตัวแปรที่ JS ใช้เรียกวาดแผนที่ ต้องสูง 100% ตลอดเวลา */
     #map-canvas {
         width: 100% !important;
         height: 100% !important;
         display: block !important;
+    }
+
+    /* 📱 ขยายหน้าต่าง Popup ให้กว้างขึ้นรองรับแผนที่ */
+    .map-popup-custom {
+        width: 95% !important;
+        max-width: 850px !important;
+        padding: 15px !important;
     }
 
     /* 🛡️ ป้องกันแผนที่ลอยทับหน้าต่างเด้ง */
