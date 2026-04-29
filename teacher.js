@@ -2321,8 +2321,9 @@
         });
     };
     
-    // 📍 ฟังก์ชันเสริมสำหรับเปิด Google Maps จากตารางรายชื่อ
+    // 📍 ฟังก์ชันนำทางสากล (ใช้ได้ทั้งคอมและมือถือ)
     window.navigateToStudentHome = function(lat, lng) {
-        if(!lat || !lng) return;
+        if(!lat || !lng) return Swal.fire('ไม่พบพิกัด', 'ผู้ปกครองยังไม่ได้ปักหมุดบ้านครับ', 'info');
+        // ใช้ Google Maps Direction API
         window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
     };
