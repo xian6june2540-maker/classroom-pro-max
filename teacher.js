@@ -569,21 +569,16 @@
         showAppModal('teacherLeaveModal');
     }
 
+    // =====================================
+    // ฟังก์ชันจัดการคำร้องขอลาของครู (ลบออกจากฐานข้อมูลทันที & หน้าต่างไม่พับ)
+    // =====================================
     async function approveLeave(idx, dateStr, studentId, statusStr) {
         Swal.fire({ title: 'กำลังดำเนินการ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
         
         try {
             if (!supabaseClient) throw new Error("ฐานข้อมูลไม่พร้อมใช้งาน");
-            
-            // 1. เปลี่ยนสถานะใบลาเป็น อนุมัติ / ไม่อนุมัติ
-            const { error: updateErr } = await supabaseClient
-                .from('leaves')
-                .update({ status: statusStr + 'แล้ว' }) 
-                .eq('id', idx);
-                
-            if (updateErr) throw updateErr;
     
-            // 2. ถ้าครูกด "อนุมัติ" ให้แกะวันที่ที่มัดรวมไว้ ออกมาเช็คชื่อทีละวัน
+            // 1. ถ้าครูกด "อนุมัติ" ให้แกะวันที่ที่มัดรวมไว้ แล้วเช็คชื่อ "ลา" ลงตารางให้ครบทุกวัน
             if (statusStr === 'อนุมัติ') {
                 let parts = dateStr.split(' ถึง ');
                 let d1 = new Date(parts[0]);
@@ -595,23 +590,46 @@
                     d1.setDate(d1.getDate() + 1);
                 }
     
-                // วนลูปจับลงตารางเช็คชื่อ (ครูกดคลิกเดียว ระบบรันให้หมด)
                 for (const d of dateArray) {
                     await supabaseClient.from('attendance').upsert({
                         student_id: studentId,
-                        room: currentRoom, // ใช้ตัวแปรห้องเรียนปัจจุบัน
+                        room: currentRoom,
                         check_date: d,
                         status: 'ลา'
                     }, { onConflict: 'student_id,check_date' });
                 }
             }
     
+            // 2. 🗑️ ลบคำร้องออกจากฐานข้อมูลถาวร (เคลียร์ทิ้งไม่ให้รกหลังบ้าน ไม่ว่าจะกดอนุมัติหรือไม่อนุมัติ)
+            const { error: deleteErr } = await supabaseClient
+                .from('leaves')
+                .delete()
+                .eq('id', idx);
+                
+            if (deleteErr) throw deleteErr;
+    
             Swal.close();
             Toast.fire({ icon: 'success', title: statusStr + 'เรียบร้อย' });
-            loadPendingLeaves(); // กล่องเหลืองอัปเดต
-            loadAttendanceForDate(); // ตารางเช็คชื่ออัปเดต
+    
+            // 3. รีโหลดข้อมูลใหม่ (อัปเดตตัวเลขการแจ้งเตือนและตารางเช็คชื่อด้านหลัง)
+            await loadPendingLeaves(); 
+            loadAttendanceForDate();
+    
+            // 4. ✨ ลบแถวคำร้องนี้ออกจากหน้าต่างป็อปอัปทันที "โดยไม่ต้องปิดหน้าต่าง"
+            const rowBtn = document.querySelector(`button[onclick*="approveLeave(${idx}"]`) || document.querySelector(`button[onclick*="approveLeave('${idx}'"]`);
+            if (rowBtn) {
+                const tr = rowBtn.closest('tr');
+                if (tr) tr.remove();
+            }
+    
+            // เช็คว่าถ้าลบจนหมดแล้ว ให้ขึ้นข้อความบอกว่าเคลียร์หมดแล้ว
+            const tbody = document.getElementById('teacherLeaveTableBody');
+            if (tbody && tbody.children.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-success fw-bold"><i class="bi bi-check-circle"></i> เคลียร์คำร้องหมดแล้วครับ</td></tr>';
+            }
     
         } catch (e) {
+            Swal.close();
             Swal.fire('ผิดพลาด', e.message, 'error');
         }
     }
