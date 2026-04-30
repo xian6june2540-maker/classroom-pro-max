@@ -486,6 +486,10 @@ async function processSubmitLeave(studentId, data) {
     Swal.fire({ title: 'กำลังตรวจสอบและบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     try {
+        // 🟢 1. ดึงชื่อและห้องของนักเรียน (เพื่อส่งเข้าตารางใบลาให้ครูค้นหาเจอ)
+        const { data: stuData, error: stuErr } = await supabaseClient.from('students').select('name, room').eq('id', studentId).single();
+        if (stuErr || !stuData) throw new Error('ดึงข้อมูลนักเรียนไม่สำเร็จ');
+
         let currentDate = new Date(data.start);
         const endDate = new Date(data.end);
         let dateArray = [];
@@ -535,31 +539,30 @@ async function processSubmitLeave(studentId, data) {
             else throw new Error('อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
         }
 
-        // 🟢 FIX: เอาลิงก์รูปไปฝังใน "เหตุผล" แทนการใช้ proof_url เพื่อแก้ปัญหา Error
-        let finalReason = data.reason;
+        // 🟢 2. แปะป้ายบอกครูว่าเป็น "ผู้ปกครอง" และสร้างปุ่มดูรูปภาพ
+        let finalReason = `<b class="text-danger">[ผู้ปกครองแจ้ง]</b><br>[${data.type}] ${data.reason}`;
         if (finalUrl) {
-            finalReason += ` <br><a href="${finalUrl}" target="_blank" class="badge bg-info text-dark text-decoration-none mt-1 shadow-sm"><i class="bi bi-image"></i> กดเพื่อดูรูปแนบ/ใบรับรองแพทย์</a>`;
+            finalReason += `<br><a href="${finalUrl}" target="_blank" class="btn btn-sm btn-info text-dark mt-2 shadow-sm fw-bold"><i class="bi bi-image"></i> ดูรูป/ใบรับรองแพทย์</a>`;
         }
 
-        Swal.fire({ title: 'กำลังอัปเดตระบบตารางเรียน...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+        Swal.fire({ title: 'กำลังส่งคำร้องให้คุณครู...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
         for (const date of dateArray) {
+            // 🟢 3. บันทึกข้อมูลลงตาราง leaves ให้ครบถ้วน
             const { error: insertError } = await supabaseClient.from('leaves').insert([{
                 student_id: studentId,
+                student_name: stuData.name, // ใส่ชื่อนักเรียน
+                room: stuData.room,         // ใส่ห้องเรียน ครูจะได้เห็น
                 leave_date: date,
-                reason: `[${data.type}] ${finalReason}`, // รวมประเภทการลาเข้าไปในข้อความเลย
-                status: 'อนุมัติแล้ว'
+                reason: finalReason, 
+                status: 'รออนุมัติ'           // เปลี่ยนเป็น "รออนุมัติ" ถอดสิทธิ์ VIP
             }]);
             
             if (insertError) throw insertError;
-
-            await supabaseClient.from('attendance').upsert({
-                student_id: studentId,
-                check_date: date,
-                status: 'ลา'
-            }, { onConflict: 'student_id,check_date' });
+            
+            // ❌ ลบโค้ดอัปเดตตาราง attendance อัตโนมัติทิ้งไปแล้ว
         }
 
-        await Swal.fire({ icon: 'success', title: 'แจ้งลาสำเร็จ!', text: `บันทึกการลาจำนวน ${dateArray.length} วัน เรียบร้อยแล้ว`, timer: 2000, showConfirmButton: false });
+        await Swal.fire({ icon: 'success', title: 'ส่งคำร้องสำเร็จ!', text: `ส่งคำร้องขอลา ${dateArray.length} วัน รอคุณครูอนุมัติแล้วครับ`, timer: 2500, showConfirmButton: false });
         loadParentDashboard(localStorage.getItem('parentToken'));
 
     } catch (e) {
