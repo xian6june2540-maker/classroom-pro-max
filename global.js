@@ -467,7 +467,7 @@ function togglePetMenu() {
 }
 
 // =====================================
-// จุดแก้ไขที่ 2: ปรับปรุง DOMContentLoaded (เวอร์ชันแก้ไข Syntax Error)
+// จุดแก้ไขที่ 2: ปรับปรุง DOMContentLoaded
 // =====================================
 document.addEventListener('DOMContentLoaded', async function() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -477,51 +477,49 @@ document.addEventListener('DOMContentLoaded', async function() {
     const savedStudentId = localStorage.getItem('studentId');
     const isTeacherIn = localStorage.getItem('teacherLoggedIn') === 'true';
 
+    // 1. เชื่อมต่อฐานข้อมูล Supabase ให้พร้อมใช้งาน
     await initSupabaseAsync();
 
+    // 2. [ส่วนของผู้ปกครอง] ตรวจสอบสิทธิ์การเข้าใช้งาน
     const parentToken = urlToken || savedParentToken;
 
-    // 👨‍👩‍👧‍👦 กรณีเข้าใช้งานของผู้ปกครอง (สำคัญที่สุด ต้องเช็คก่อน)
     if ((page === 'parent' && urlToken) || savedParentToken) {
-        // สั่งซ่อนหน้าอื่นให้หมดเพื่อกันการทับซ้อน
-        document.getElementById('student-search-view').classList.add('hidden');
-        document.getElementById('student-dashboard-view').classList.add('hidden');
-        document.getElementById('teacher-view').classList.add('hidden');
+        // จัดการ UI ให้แสดงผลเฉพาะหน้าผู้ปกครองแบบ "เงียบกริบ"
         if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
-        
+        document.getElementById('btnLock').classList.add('hidden');
+        document.getElementById('student-search-view').classList.add('hidden');
         document.getElementById('parent-view').classList.remove('hidden');
+        
+        // โหลดข้อมูล Dashboard ของผู้ปกครอง (ฟังก์ชันนี้ย้ายไปอยู่ที่ parent.js แล้ว)
         loadParentDashboard(parentToken);
         return; 
     }
 
-    // 👨‍🏫 กรณีคุณครู
+    // 3. [ส่วนของคุณครู]
     if (isTeacherIn) {
         document.getElementById('student-search-view').classList.add('hidden');
-        document.getElementById('parent-view').classList.add('hidden');
+        document.getElementById('btnLock').classList.add('hidden');
+        document.getElementById('btnTeacherConfig').classList.remove('hidden');
+        document.getElementById('btnLogout').classList.remove('hidden');
         document.getElementById('teacher-view').classList.remove('hidden');
         document.getElementById('view-rooms').classList.remove('hidden');
         loadAllData();
     } 
-    // 🎓 กรณีนักเรียน
+    // 4. [ส่วนของนักเรียน]
     else if (savedStudentId) {
         document.getElementById('student-search-view').classList.add('hidden');
-        document.getElementById('parent-view').classList.add('hidden');
         loadFullDashboard(savedStudentId, true);
     }
 });
 
 window.sendPushNotification = function(title, message) {
-    // ใช้ Proxy ตัวเดิมที่มึงทำไว้ แต่แก้เรื่อง CORS ให้แล้ว
     google.script.run.sendOneSignalNotification(title, message);
 };
 
-// =====================================
 // 🇹🇭 ฟังก์ชันแปลงวันที่เป็นภาษาไทย (พ.ศ.)
-// =====================================
 function formatThaiDate(dateStr) {
     if (!dateStr) return "-";
     const months = ["", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-    // รองรับทั้ง 2024-01-31 และ 2024/01/31
     const parts = dateStr.includes('-') ? dateStr.split('-') : dateStr.split('/');
     if (parts.length < 3) return dateStr;
     const y = parseInt(parts[0]);
@@ -529,484 +527,3 @@ function formatThaiDate(dateStr) {
     const d = parseInt(parts[2]);
     return `${d} ${months[m]} ${y + 543}`;
 }
-
-// =====================================
-// 👨‍👩‍👧‍👦 PARENT DASHBOARD LOGIC (เวอร์ชันเพิ่มปุ่ม Logout และซ่อนส่วนเกิน)
-// =====================================
-window.loadParentDashboard = async function(token) {
-    const content = document.getElementById('parent-content');
-    content.innerHTML = '<div class="py-5 text-center"><div class="spinner-border text-primary mb-3"></div><h6 class="text-muted">กำลังดึงข้อมูลล่าสุด...</h6></div>';
-
-    if (!supabaseClient) await initSupabaseAsync();
-
-    try {
-        const { data: student, error: stError } = await supabaseClient
-            .from('students').select('*').eq('parent_token', token).single();
-
-        if (stError || !student) {
-            content.innerHTML = `<div class="alert alert-danger rounded-4 py-4 m-2"><h5>ไม่พบข้อมูลนักเรียน</h5></div>`;
-            return;
-        }
-
-        const chatHead = document.getElementById('parentChatHead');
-        if(chatHead) {
-            chatHead.classList.remove('hidden');
-            chatHead.dataset.studentId = student.id; 
-            localStorage.setItem('parentStudentId', student.id);
-            if(student.home_lat && student.home_lng) {
-                window.tempHomeLat = student.home_lat;
-                window.tempHomeLng = student.home_lng;
-            }
-        }
-
-        const [attRes, tasksRes, subRes] = await Promise.all([
-            supabaseClient.from('attendance').select('*').eq('student_id', student.id).order('check_date', { ascending: false }).limit(20),
-            supabaseClient.from('tasks').select('*').eq('room', student.room).order('due_date', { ascending: false }).limit(20),
-            supabaseClient.from('submissions').select('*').eq('student_id', student.id)
-        ]);
-
-        const attData = attRes.data || [];
-        const tasks = tasksRes.data || [];
-        const submissions = subRes.data || [];
-        const countAtt = (status) => attData.filter(a => a.status === status).length;
-
-        content.innerHTML = `
-            <div class="text-center mb-4">
-                <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${student.avatar}" style="width: 90px; height: 90px; border-radius: 50%; border: 4px solid #0d6efd;" class="shadow-sm mb-2 bg-white">
-                <h4 class="fw-bold text-dark mb-0">${student.name}</h4>
-                <p class="text-muted small">ระดับชั้น/ห้อง: ${student.room}</p>
-            </div>
-
-            <div class="row g-2 mb-3">
-                <div class="col-6"><div class="p-3 bg-white rounded-4 shadow-sm border-start border-4 border-success text-start"><small class="text-muted d-block fw-bold">คะแนนรวม</small><span class="h3 fw-bold text-success">${student.accumulated_score || 0}</span></div></div>
-                <div class="col-6"><div class="p-3 bg-white rounded-4 shadow-sm border-start border-4 border-warning text-start"><small class="text-muted d-block fw-bold">แต้ม EXP</small><span class="h4 fw-bold text-warning">${Math.floor(student.exp || 0).toLocaleString()}</span></div></div>
-            </div>
-
-            <div class="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden text-start">
-                <div class="card-header bg-success bg-opacity-10 border-0 fw-bold text-success small">ประวัติการเข้าเรียน</div>
-                <div class="card-body p-0">
-                    <div class="row g-0 text-center py-2 bg-light border-bottom">
-                        <div class="col-4"><div class="fw-bold text-success">${countAtt('มา')}</div><small class="text-muted">มา</small></div>
-                        <div class="col-4"><div class="fw-bold text-warning text-dark">${countAtt('ลา')}</div><small class="text-muted">ลา</small></div>
-                        <div class="col-4"><div class="fw-bold text-danger">${countAtt('ขาด')}</div><small class="text-muted">ขาด</small></div>
-                    </div>
-                    <div style="max-height: 150px; overflow-y: auto;">
-                        <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
-                            <tbody>
-                                ${attData.length > 0 ? attData.map(a => `<tr><td class="ps-3 py-2">${formatThaiDate(a.check_date)}</td><td class="pe-3 text-end py-2"><span class="badge ${a.status==='มา'?'bg-success':a.status==='ลา'?'bg-warning text-dark':'bg-danger'}">${a.status}</span></td></tr>`).join('') : '<tr><td class="text-center py-3">ไม่มีประวัติ</td></tr>'}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden text-start">
-                <div class="card-header bg-primary bg-opacity-10 border-0 fw-bold text-primary small">ภารกิจและการส่งงาน</div>
-                <div class="card-body p-0" style="max-height: 180px; overflow-y: auto;">
-                    <div class="list-group list-group-flush">
-                        ${tasks.length > 0 ? tasks.map(t => {
-                            const sub = submissions.find(s => s.task_id === t.task_id);
-                            const isDone = sub && sub.status === 'ส่งแล้ว';
-                            return `<div class="list-group-item py-2 px-3"><div class="d-flex justify-content-between align-items-center"><div><div class="fw-bold text-dark" style="font-size: 0.8rem;">${t.title}</div><small class="text-muted" style="font-size: 0.7rem;">กำหนด: ${formatThaiDate(t.due_date)}</small></div><div class="text-end">${isDone ? `<span class="badge bg-success mb-1" style="font-size:0.65rem;">ส่งแล้ว</span>` : `<span class="badge bg-danger" style="font-size:0.65rem;">ค้างส่ง</span>`}</div></div></div>`;
-                        }).join('') : '<div class="p-3 text-center text-muted small">ไม่มีงาน</div>'}
-                    </div>
-                </div>
-            </div>
-
-            <div class="px-2">
-                <!-- 🌟 ลำดับใหม่: ปุ่มอัปเดตอยู่บน Logout อยู่ล่าง -->
-                <button class="btn btn-outline-primary w-100 rounded-pill fw-bold py-2 mb-2" onclick="loadParentDashboard('${token}')">
-                    <i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลล่าสุด
-                </button>
-                <button class="btn btn-danger w-100 rounded-pill fw-bold py-2 mb-3 shadow-sm" onclick="logoutParent()">
-                    <i class="bi bi-box-arrow-right"></i> ออกจากระบบผู้ปกครอง
-                </button>
-            </div>
-        `;
-    } catch (e) {
-        content.innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
-    }
-};
-
-// =========================================================
-// 👨‍👩‍👧‍👦 SYSTEM: PARENT COMMUNICATION HUB (3-TAB & AUTO SAVE)
-// =========================================================
-
-// 🔘 1. ตัวเชื่อมปุ่ม Chat Head
-window.openCommunicationHubFromHead = function() {
-    const studentId = document.getElementById('parentChatHead').dataset.studentId || localStorage.getItem('parentStudentId');
-    if(studentId) { window.openCommunicationHub(studentId); } 
-    else { console.error("Student ID not found"); }
-};
-
-// 🏠 2. ฟังก์ชันหน้าต่างหลัก (แยก 3 แท็บ)
-window.openCommunicationHub = function(studentId) {
-    let hasLocation = window.tempHomeLat !== null;
-    let locationStatusHtml = hasLocation 
-        ? `<div class="badge bg-success px-3 py-2 rounded-pill w-100 mb-3 shadow-sm border-0"><i class="bi bi-check-circle-fill"></i> ส่งพิกัดบ้านล่าสุดเรียบร้อยแล้ว</div>`
-        : `<div id="lastLocationStatus" class="small text-muted mb-2 text-center">ยังไม่ได้ระบุตำแหน่งบ้าน</div>`;
-
-    Swal.fire({
-        title: '<div class="fw-bold text-danger"><i class="bi bi-chat-heart"></i> ศูนย์การสื่อสาร</div>',
-        html: `
-            <div class="text-start mt-3">
-                <div class="d-flex gap-1 mb-4 bg-light p-1 rounded-pill border shadow-sm">
-                    <button class="btn btn-sm flex-grow-1 rounded-pill active" id="btnTabStudent" onclick="switchCommTab('student')">❤️ ส่งใจ</button>
-                    <button class="btn btn-sm flex-grow-1 rounded-pill btn-outline-dark" id="btnTabLocation" onclick="switchCommTab('location')">📍 พิกัดบ้าน</button>
-                    <button class="btn btn-sm flex-grow-1 rounded-pill btn-outline-primary" id="btnTabTeacher" onclick="switchCommTab('teacher')">👨‍🏫 ปรึกษาครู</button>
-                </div>
-
-                <div id="sectionStudent">
-                    <label class="small fw-bold text-muted mb-2">เลือกสติกเกอร์ส่งพลังใจ:</label>
-                    <div class="d-flex gap-2 mb-3 overflow-auto pb-2">
-                        <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('🌟','เก่งมาก!')">🌟</button>
-                        <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('❤️','รักนะ')">❤️</button>
-                        <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('✌️','สู้ๆ นะ')">✌️</button>
-                        <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('🏆','สุดยอด')">🏆</button>
-                    </div>
-                    <textarea id="hubMsgToStudent" class="form-control mb-3" rows="2" placeholder="พิมพ์ข้อความให้กำลังใจลูก..."></textarea>
-                    <button class="btn btn-danger w-100 fw-bold rounded-pill shadow" onclick="processSendToStudent('${studentId}')">ส่งพลังใจให้ลูก</button>
-                </div>
-
-                <div id="sectionLocation" class="hidden text-center py-3">
-                    <div class="mb-4">
-                        <i class="bi bi-geo-alt-fill text-danger" style="font-size: 3.5rem;"></i>
-                        <h6 class="fw-bold mt-2">ระบุตำแหน่งบ้านนักเรียน</h6>
-                        <p class="small text-muted">กดปุ่มสีดำเพื่อเปิดแผนที่และส่งพิกัดให้ครู</p>
-                    </div>
-                    ${locationStatusHtml}
-                    <button class="btn btn-dark w-100 rounded-pill py-3 shadow-lg fw-bold" onclick="openMapPicker('${studentId}')">
-                        <i class="bi bi-pin-map-fill text-warning"></i> เปิดแผนที่ปักหมุดบ้าน
-                    </button>
-                </div>
-
-                <div id="sectionTeacher" class="hidden">
-                    <label class="small fw-bold text-muted mb-2">เรื่องที่ต้องการปรึกษาคุณครู:</label>
-                    <textarea id="hubMsgToTeacher" class="form-control mb-3" rows="2" placeholder="พิมพ์ข้อความที่ต้องการแจ้งคุณครู..."></textarea>
-                    
-                    <label class="small fw-bold text-muted mb-1 d-block">ข้อมูลติดต่อกลับของคุณ:</label>
-                    <div class="btn-group w-100 mb-2" role="group">
-                        <input type="radio" class="btn-check" name="contactType" id="typePhone" value="phone" checked onchange="updateContactUI()">
-                        <label class="btn btn-outline-primary btn-sm" for="typePhone">เบอร์โทร</label>
-                        <input type="radio" class="btn-check" name="contactType" id="typeLine" value="line" onchange="updateContactUI()">
-                        <label class="btn btn-outline-success btn-sm" for="typeLine">LINE</label>
-                        <input type="radio" class="btn-check" name="contactType" id="typeFB" value="messenger" onchange="updateContactUI()">
-                        <label class="btn btn-outline-info btn-sm text-dark" for="typeFB">Facebook</label>
-                    </div>
-                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" placeholder="ข้อมูลติดต่อกลับ">
-                    <div id="contactPreview" class="small fw-bold mb-4 text-center" style="min-height:20px;"></div>
-
-                    <button class="btn btn-primary w-100 fw-bold rounded-pill shadow-lg py-2" onclick="processSendToTeacher('${studentId}')">
-                        <i class="bi bi-send-fill"></i> ยืนยันและส่งข้อความหาครู
-                    </button>
-                </div>
-            </div>
-        `,
-        showConfirmButton: false,
-        showCloseButton: true,
-        customClass: { popup: 'rounded-4' },
-        didOpen: () => {
-            const input = document.getElementById('hubParentContact');
-            if(input) { 
-                input.addEventListener('input', updateContactUI); 
-                updateContactUI(); 
-            }
-        }
-    });
-};
-
-// 🌟 3. ฟังก์ชันสลับแท็บ
-window.switchCommTab = (tab) => {
-    const tabs = ['Student', 'Location', 'Teacher'];
-    tabs.forEach(t => {
-        const btn = document.getElementById(`btnTab${t}`);
-        const sec = document.getElementById(`section${t}`);
-        if (btn && sec) {
-            btn.classList.toggle('active', t.toLowerCase() === tab);
-            
-            // สลับสีปุ่มให้สวยงามตามแท็บ
-            btn.classList.toggle('btn-outline-danger', t === 'Student' && t.toLowerCase() !== tab);
-            btn.classList.toggle('btn-danger', t === 'Student' && t.toLowerCase() === tab);
-            btn.classList.toggle('btn-outline-dark', t === 'Location' && t.toLowerCase() !== tab);
-            btn.classList.toggle('btn-dark', t === 'Location' && t.toLowerCase() === tab);
-            btn.classList.toggle('btn-outline-primary', t === 'Teacher' && t.toLowerCase() !== tab);
-            btn.classList.toggle('btn-primary', t === 'Teacher' && t.toLowerCase() === tab);
-            
-            sec.classList.toggle('hidden', t.toLowerCase() !== tab);
-        }
-    });
-};
-
-// 📍 4. ฟังก์ชันเปิดแผนที่ (ปักปุ๊บ บันทึกและส่งทันที!)
-window.openMapPicker = function(studentId) {
-    let defaultLat = window.tempHomeLat || 13.7563;
-    let defaultLng = window.tempHomeLng || 100.5018;
-
-    Swal.fire({
-        title: '<h5 class="fw-bold m-0 text-primary">ปักหมุดบ้านนักเรียน</h5>',
-        html: `
-            <div style="position: relative;">
-                <button type="button" class="btn btn-primary fw-bold shadow" 
-                        style="position: absolute; top: 15px; right: 15px; z-index: 1000; border-radius: 20px; font-size: 0.8rem;" 
-                        onclick="locateUserOnMap()">
-                    <i class="bi bi-crosshair"></i> ตำแหน่งปัจจุบัน
-                </button>
-                <div id="map-wrapper"><div id="map-canvas"></div></div>
-            </div>
-            <p class="small text-muted mt-2 fw-bold text-center">ปักหมุดแล้วกด "ยืนยันและส่ง" เพื่อบันทึกพิกัดให้ครูทันที</p>
-        `,
-        customClass: { popup: 'map-popup-square rounded-4' },
-        showCancelButton: true,
-        confirmButtonText: 'ยืนยันและส่งพิกัดให้ครู',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#198754',
-        allowOutsideClick: false,
-        didOpen: () => {
-            setTimeout(() => {
-                if (window.myLeafletMap) window.myLeafletMap.remove();
-                window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 18);
-                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
-                }).addTo(window.myLeafletMap); 
-                window.myMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(window.myLeafletMap);
-                window.myLeafletMap.invalidateSize();
-                window.myLeafletMap.on('click', (e) => { window.myMarker.setLatLng(e.latlng); });
-            }, 500);
-        },
-        preConfirm: () => {
-            if (window.myMarker) {
-                const pos = window.myMarker.getLatLng();
-                return { lat: pos.lat, lng: pos.lng };
-            }
-        }
-    }).then(async (result) => {
-        if (result.isConfirmed) {
-            Swal.fire({ title: 'กำลังบันทึกและส่งข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-            try {
-                // 🚀 บันทึกลงตาราง students ทันที!
-                await supabaseClient.from('students').update({ 
-                    home_lat: result.value.lat, 
-                    home_lng: result.value.lng 
-                }).eq('id', studentId);
-
-                // 🚀 ส่ง Log แจ้งเตือนครู
-                await supabaseClient.from('parent_communications').insert([{ 
-                    student_id: studentId, target: 'teacher', type: 'consult', message: '📍 อัปเดตพิกัดบ้านนักเรียนเรียบร้อย' 
-                }]);
-
-                window.tempHomeLat = result.value.lat;
-                window.tempHomeLng = result.value.lng;
-
-                await Swal.fire({ icon: 'success', title: 'ส่งพิกัดเรียบร้อย!', timer: 1500, showConfirmButton: false });
-                
-                openCommunicationHub(studentId); // กลับหน้า Hub
-                setTimeout(() => switchCommTab('location'), 100); // สลับไปแท็บพิกัดทันที
-                
-            } catch (e) {
-                Swal.fire('Error', 'ส่งข้อมูลไม่สำเร็จ: ' + e.message, 'error');
-            }
-        }
-    });
-};
-
-window.locateUserOnMap = function() {
-    if (!navigator.geolocation) return Swal.fire('Error', 'เบราว์เซอร์ไม่รองรับ GPS', 'error');
-    Swal.showLoading(); 
-    navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const accuracy = pos.coords.accuracy; // ดึงค่าความแม่นยำ (เมตร)
-
-        if (window.myLeafletMap && window.myMarker) {
-            // 1. ซูมเข้าไปที่ระดับ 19 (ซูมลึกมากเพื่อให้ผู้ปกครองเล็งหลังคาบ้านได้ง่าย)
-            window.myLeafletMap.setView([lat, lng], 19);
-            
-            // 2. ย้ายหมุดไปจุดที่ GPS ตรวจเจอทันที
-            window.myMarker.setLatLng([lat, lng]);
-
-            // 3. วาดวงกลมแสดงรัศมีความคลาดเคลื่อน (วงกลมสีฟ้าจางๆ)
-            if (accuracyCircle) window.myLeafletMap.removeLayer(accuracyCircle);
-            accuracyCircle = L.circle([lat, lng], {
-                radius: accuracy,
-                color: '#0d6efd',
-                fillColor: '#0d6efd',
-                fillOpacity: 0.15,
-                weight: 1
-            }).addTo(window.myLeafletMap);
-
-            window.myLeafletMap.invalidateSize();
-        }
-        Swal.hideLoading();
-    }, (err) => {
-        Swal.hideLoading();
-        Swal.fire('GPS ล้มเหลว', 'กรุณาเปิด GPS และอนุญาตให้แอปเข้าถึงตำแหน่งครับ', 'warning');
-    }, { enableHighAccuracy: true, timeout: 10000 }); // เพิ่มเวลารอเป็น 10 วินาทีเพื่อความแม่นยำสูง
-};
-
-// ❤️ ฟังก์ชันส่งพลังใจหาลูก
-window.processSendToStudent = async function(id) {
-    const msg = document.getElementById('hubMsgToStudent').value.trim();
-    if(!msg) return Swal.showValidationMessage('กรุณาพิมพ์ข้อความด้วยครับ');
-    Swal.fire({ title: 'กำลังส่งพลังใจ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-    
-    await supabaseClient.from('parent_communications').insert([{ student_id: id, target: 'student', type: 'praise', message: msg }]);
-    const displayMsg = `<div style="border: 2px solid #ff9a9e; background: #fff5f5; padding: 15px; border-radius: 20px; text-align: center;"><h5 style="color: #ff0844; font-weight: bold;"><i class="bi bi-heart-fill"></i> ข้อความจากผู้ปกครอง</h5><p style="margin-bottom: 0; font-size: 1.1rem; color: #333; font-weight: 500;">${msg}</p></div>`;
-    google.script.run.withSuccessHandler(() => { Swal.fire({ icon: 'success', title: 'ส่งเรียบร้อย!', timer: 2000, showConfirmButton: false }); }).sendDMToStudent(id, displayMsg);
-};
-
-window.selectCommSticker = (icon, text) => {
-    const input = document.getElementById('hubMsgToStudent');
-    if(input) input.value = icon + " " + text;
-};
-
-// 👨‍🏫 ฟังก์ชันส่งข้อความหาครู
-window.updateContactUI = function() {
-    const input = document.getElementById('hubParentContact');
-    const preview = document.getElementById('contactPreview');
-    const checkedRadio = document.querySelector('input[name="contactType"]:checked');
-    if(!checkedRadio) return;
-    
-    const type = checkedRadio.value;
-    let value = input.value;
-
-    if (type === 'phone') {
-        input.type = 'tel';
-        input.placeholder = '0xx-xxx-xxxx';
-        let numbers = value.replace(/\D/g, '').substring(0, 10);
-        let formatted = numbers.length > 0 ? numbers.substring(0, 3) : '';
-        if (numbers.length > 3) formatted += '-' + numbers.substring(3, 6);
-        if (numbers.length > 6) formatted += '-' + numbers.substring(6, 10);
-        input.value = formatted;
-        preview.innerHTML = formatted ? `<span class="text-primary"><i class="bi bi-telephone-fill"></i> ครูจะโทรหาที่เบอร์นี้</span>` : '';
-    } 
-    else if (type === 'line') {
-        input.type = 'text';
-        input.placeholder = 'กรอก LINE ID ของท่าน';
-        preview.innerHTML = value ? `<span class="text-success"><i class="bi bi-line"></i> ลิงก์ LINE: line.me/ti/p/~${value}</span>` : '';
-    } 
-    else if (type === 'messenger') {
-        input.type = 'text';
-        input.placeholder = 'ชื่อโปรไฟล์ หรือ ลิงก์เฟสบุ๊ค';
-        let cleanFB = parseFacebookLink(value);
-        preview.innerHTML = cleanFB ? `<span class="text-info"><i class="bi bi-messenger"></i> ลิงก์ Messenger: m.me/${cleanFB}</span>` : '';
-    }
-};
-
-window.processSendToTeacher = async function(id) {
-    const msg = document.getElementById('hubMsgToTeacher').value.trim();
-    const contact = document.getElementById('hubParentContact').value.trim();
-    const type = document.querySelector('input[name="contactType"]:checked').value;
-    
-    if(!msg || !contact) return Swal.fire('ข้อมูลไม่ครบ', 'กรุณากรอกข้อความและข้อมูลติดต่อครับ', 'warning');
-    Swal.fire({ title: 'กำลังส่งข้อความ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-    
-    try {
-        let finalContact = (type === 'messenger') ? `FB:${window.parseFacebookLink(contact)}` : (type === 'line' ? `LINE:${contact}` : contact);
-        
-        await supabaseClient.from('parent_communications').delete().eq('student_id', id).eq('target', 'teacher');
-        await supabaseClient.from('parent_communications').insert([{ student_id: id, target: 'teacher', type: 'consult', message: msg, parent_contact: finalContact }]);
-        
-        Swal.fire({ icon: 'success', title: 'ส่งข้อความสำเร็จ!', text: 'ครูจะติดต่อกลับหาท่านเร็วๆ นี้ครับ', timer: 2000, showConfirmButton: false });
-    } catch (e) {
-        Swal.fire('Error', e.message, 'error');
-    }
-};
-
-window.parseFacebookLink = function(input) {
-    let value = input.trim();
-    if (!value) return "";
-    try {
-        if (value.includes("facebook.com")) {
-            const url = new URL(value.startsWith('http') ? value : 'https://' + value);
-            if (url.searchParams.has("id")) return url.searchParams.get("id");
-            let path = url.pathname.replace(/\//g, "");
-            return path === "profile.php" ? "" : path;
-        }
-        return value;
-    } catch (e) { return value; }
-};
-
-// ฟังก์ชันสำหรับเรียกหน้าต่างกรอกรหัสผู้ปกครอง
-window.promptParentLogin = function() {
-    Swal.fire({
-        title: 'เข้าใช้งานสำหรับผู้ปกครอง',
-        text: 'กรุณากรอกรหัส Access Code ที่ได้รับจากคุณครู',
-        input: 'text',
-        inputPlaceholder: 'เช่น PXXXXXXXX',
-        showCancelButton: true,
-        confirmButtonText: 'ตกลง',
-        cancelButtonText: 'ยกเลิก',
-        inputValidator: (value) => { if (!value) return 'กรุณากรอกรหัสด้วยครับ' }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            loginWithParentToken(result.value.trim().toUpperCase());
-        }
-    });
-};
-
-// ฟังก์ชันตรวจสอบรหัสกับฐานข้อมูล
-window.loginWithParentToken = async function(token) {
-    Swal.fire({ title: 'กำลังตรวจสอบรหัส...', didOpen: () => Swal.showLoading() });
-    try {
-        if (!supabaseClient) await initSupabaseAsync();
-        const { data, error } = await supabaseClient.from('students').select('parent_token').eq('parent_token', token).single();
-        
-        if (data) {
-            localStorage.setItem('parentToken', token);
-            Swal.close();
-            
-            // 🌟 จุดสำคัญ: ซ่อนหน้าค้นหาและหน้า Dashboard นักเรียนทันทีที่ Login สำเร็จ
-            document.getElementById('student-search-view').classList.add('hidden');
-            document.getElementById('student-dashboard-view').classList.add('hidden');
-            document.getElementById('parent-view').classList.remove('hidden');
-            if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
-            
-            loadParentDashboard(token);
-        } else {
-            Swal.fire('รหัสไม่ถูกต้อง', 'กรุณาตรวจสอบรหัสอีกครั้ง หรือติดต่อคุณครูครับ', 'error');
-        }
-    } catch (e) {
-        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'error');
-    }
-};
-
-window.logoutParent = function() {
-    Swal.fire({
-        title: 'ออกจากระบบผู้ปกครอง?',
-        text: 'ต้องการกลับไปหน้าค้นหาใช่หรือไม่?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'ออกจากระบบ',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#d33'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            localStorage.removeItem('parentToken');
-            localStorage.removeItem('parentStudentId');
-            window.location.href = window.location.origin + window.location.pathname; // ล้าง Query String บน URL ด้วย
-        }
-    });
-};
-
-// ฟังก์ชันสำหรับสลับแท็บระหว่างนักเรียนและผู้ปกครองในหน้าแรก
-window.switchSearchTab = function(role) {
-    const studentContext = document.getElementById('student-search-context');
-    const parentContext = document.getElementById('parent-login-context');
-    const studentBtn = document.getElementById('tab-student-role');
-    const parentBtn = document.getElementById('tab-parent-role');
-    const resultBox = document.getElementById('selectResultBox');
-
-    if (role === 'student') {
-        studentContext.classList.remove('hidden');
-        parentContext.classList.add('hidden');
-        studentBtn.classList.add('active');
-        parentBtn.classList.remove('active');
-    } else {
-        studentContext.classList.add('hidden');
-        parentContext.classList.remove('hidden');
-        studentBtn.classList.remove('active');
-        parentBtn.classList.add('active');
-        // 🌟 จุดสำคัญ: ซ่อนผลการค้นหาชื่อนักเรียนทันทีถ้าผู้ปกครองคลิกมาแท็บตัวเอง
-        if(resultBox) resultBox.classList.add('hidden');
-    }
-};
