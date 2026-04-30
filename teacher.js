@@ -2227,11 +2227,13 @@
                     <p class="mb-3 small"><b>วิธีใช้:</b> ให้ผู้ปกครองเข้าเว็บปกติแล้วกรอกรหัสนี้ได้เลยครับ</p>
                 </div>
                 <div class="d-grid gap-2">
-                    <button class="btn btn-primary fw-bold py-2" onclick="navigator.clipboard.writeText('${finalToken}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'คัดลอกรหัสแล้ว', showConfirmButton:false, timer:1500})">
-                        <i class="bi bi-copy"></i> คัดลอกเฉพาะรหัส
+                    <!-- 🔑 ปุ่มที่ 1: เปลี่ยนชื่อและไอคอนเป็นรูปกุญแจ -->
+                    <button class="btn btn-primary fw-bold py-2" onclick="navigator.clipboard.writeText('${finalToken}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'คัดลอกรหัส Access Code สำเร็จ', showConfirmButton:false, timer:1500})">
+                        <i class="bi bi-key-fill"></i> คัดลอกรหัส Access Code
                     </button>
-                    <button class="btn btn-outline-success fw-bold" onclick="navigator.clipboard.writeText('แจ้งรหัสเข้าดูข้อมูลของ ${studentName}\\nรหัสคือ: ${finalToken}\\nเข้าใช้งานที่: ' + window.location.origin + window.location.pathname); Swal.fire({toast:true, position:'top-end', icon:'success', title:'คัดลอกข้อความสำหรับ LINE แล้ว', showConfirmButton:false, timer:1500})">
-                        <i class="bi bi-line"></i> คัดลอกข้อความส่ง LINE
+                        <!-- 💬 ปุ่มที่ 2: เปลี่ยนชื่อและไอคอนเป็นรูปบับเบิ้ลคำพูด -->
+                    <button class="btn btn-outline-success fw-bold" onclick="navigator.clipboard.writeText('แจ้งรหัสเข้าดูข้อมูลของ ${studentName}\\nรหัสคือ: ${finalToken}\\nเข้าใช้งานที่: ' + window.location.origin + window.location.pathname); Swal.fire({toast:true, position:'top-end', icon:'success', title:'คัดลอกคำแนะนำการใช้สำเร็จ', showConfirmButton:false, timer:1500})">
+                        <i class="bi bi-chat-quote-fill"></i> คัดลอกคำแนะนำการใช้
                     </button>
                 </div>
             `,
