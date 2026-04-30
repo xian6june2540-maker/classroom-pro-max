@@ -1449,21 +1449,24 @@
         const d1 = document.getElementById('studentLeaveDate').value; 
         const d2 = document.getElementById('studentLeaveEndDate').value; 
         const r = document.getElementById('studentLeaveReason').value.trim();
-        const btnSubmit = document.getElementById('btnSubmitLeave'); // ดึงปุ่มมาเตรียมล็อก
+        const btnSubmit = document.getElementById('btnSubmitLeave'); 
         
         if (!d1 || !d2 || !r) return Swal.fire('เตือน', 'กรุณาระบุเหตุผลการลาให้ครบถ้วนนะครับ', 'warning');
         if (d1 > d2) return Swal.fire('เตือน', 'วันที่เริ่มลาต้องไม่มากกว่าถึงวันที่นะครับ', 'error');
         
         let finalDateStr = d1 === d2 ? d1 : d1 + ' ถึง ' + d2;
         
-        // 🌟 1. ล็อกปุ่มกด + โชว์หน้าต่างโหลด เพื่อกันเด็กใจร้อนกดย้ำๆ
+        // 🟢 แปะป้ายบอกครูชัดๆ ว่า "นักเรียน" เป็นคนแจ้งเอง
+        let finalReason = `<b class="text-primary">[นักเรียนแจ้ง]</b><br>${r}`;
+    
+        // ล็อกปุ่มกดกันสแปมรัวๆ
         if(btnSubmit) {
             btnSubmit.disabled = true;
             btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังส่งข้อมูล...';
         }
         Swal.fire({ title: 'กำลังส่งคำร้อง...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
     
-        // 🌟 2. ส่งข้อมูลไปให้หลังบ้าน
+        // ส่งไปหลังบ้าน (เปลี่ยนจากการส่ง r เฉยๆ เป็น finalReason แทน)
         google.script.run
             .withSuccessHandler(function() {
                 Swal.close();
@@ -1471,14 +1474,14 @@
                 Swal.fire('ส่งคำร้องสำเร็จ!', 'ระบบบันทึกแล้ว รอคุณครูอนุมัตินะครับ', 'success');
             })
             .withFailureHandler(function(err) {
-                // ถ้าเน็ตหลุดหรือมีปัญหา ให้ปลดล็อกปุ่มให้กดใหม่ได้
+                // ถ้าเน็ตหลุด ปลดล็อกปุ่มให้กดใหม่
                 if(btnSubmit) {
                     btnSubmit.disabled = false;
                     btnSubmit.innerHTML = '<i class="bi bi-send-fill"></i> ยืนยันการส่งคำร้อง';
                 }
                 Swal.fire('ส่งไม่สำเร็จ', 'เกิดข้อผิดพลาด: ' + err.message, 'error');
             })
-            .submitLeaveRequest(globalPortalStudent.id, globalPortalStudent.name, globalPortalStudent.room, finalDateStr, r);
+            .submitLeaveRequest(globalPortalStudent.id, globalPortalStudent.name, globalPortalStudent.room, finalDateStr, finalReason);
     }
 
     function showLevelModal() {
