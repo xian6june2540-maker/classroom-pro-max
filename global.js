@@ -80,6 +80,7 @@ let boardInterval = null;
 // --- SUPABASE REALTIME & CLIENT VARIABLES ---
 let supabaseClient = null;
 let globalRealtimeChannel = null;
+let accuracyCircle = null; // เพิ่มบรรทัดนี้เพื่อใช้เก็บวงกลมรัศมี GPS
 
 function getLocalTodayStr() {
     const d = new Date();
@@ -756,8 +757,10 @@ window.openMapPicker = function(studentId) {
         didOpen: () => {
             setTimeout(() => {
                 if (window.myLeafletMap) window.myLeafletMap.remove();
-                window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 16);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.myLeafletMap);
+                window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 18);
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
+                }).addTo(window.myLeafletMap); 
                 window.myMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(window.myLeafletMap);
                 window.myLeafletMap.invalidateSize();
                 window.myLeafletMap.on('click', (e) => { window.myMarker.setLatLng(e.latlng); });
@@ -799,23 +802,38 @@ window.openMapPicker = function(studentId) {
     });
 };
 
-// 🛰️ ฟังก์ชันดึง GPS
 window.locateUserOnMap = function() {
     if (!navigator.geolocation) return Swal.fire('Error', 'เบราว์เซอร์ไม่รองรับ GPS', 'error');
     Swal.showLoading(); 
     navigator.geolocation.getCurrentPosition((pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy; // ดึงค่าความแม่นยำ (เมตร)
+
         if (window.myLeafletMap && window.myMarker) {
-            window.myLeafletMap.setView([lat, lng], 17);
+            // 1. ซูมเข้าไปที่ระดับ 19 (ซูมลึกมากเพื่อให้ผู้ปกครองเล็งหลังคาบ้านได้ง่าย)
+            window.myLeafletMap.setView([lat, lng], 19);
+            
+            // 2. ย้ายหมุดไปจุดที่ GPS ตรวจเจอทันที
             window.myMarker.setLatLng([lat, lng]);
+
+            // 3. วาดวงกลมแสดงรัศมีความคลาดเคลื่อน (วงกลมสีฟ้าจางๆ)
+            if (accuracyCircle) window.myLeafletMap.removeLayer(accuracyCircle);
+            accuracyCircle = L.circle([lat, lng], {
+                radius: accuracy,
+                color: '#0d6efd',
+                fillColor: '#0d6efd',
+                fillOpacity: 0.15,
+                weight: 1
+            }).addTo(window.myLeafletMap);
+
             window.myLeafletMap.invalidateSize();
         }
         Swal.hideLoading();
     }, (err) => {
         Swal.hideLoading();
         Swal.fire('GPS ล้มเหลว', 'กรุณาเปิด GPS และอนุญาตให้แอปเข้าถึงตำแหน่งครับ', 'warning');
-    }, { enableHighAccuracy: true, timeout: 8000 });
+    }, { enableHighAccuracy: true, timeout: 10000 }); // เพิ่มเวลารอเป็น 10 วินาทีเพื่อความแม่นยำสูง
 };
 
 // ❤️ ฟังก์ชันส่งพลังใจหาลูก
