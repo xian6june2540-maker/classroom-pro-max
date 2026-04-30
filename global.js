@@ -548,13 +548,11 @@ window.loadParentDashboard = async function(token) {
             return;
         }
 
-        // 🟢 โชว์ปุ่ม Chat Head และเก็บ ID เด็ก
         const chatHead = document.getElementById('parentChatHead');
         if(chatHead) {
             chatHead.classList.remove('hidden');
             chatHead.dataset.studentId = student.id; 
             localStorage.setItem('parentStudentId', student.id);
-            
             if(student.home_lat && student.home_lng) {
                 window.tempHomeLat = student.home_lat;
                 window.tempHomeLng = student.home_lng;
@@ -616,12 +614,12 @@ window.loadParentDashboard = async function(token) {
             </div>
 
             <div class="px-2">
-                <!-- 🌟 ปุ่มออกจากระบบผู้ปกครอง -->
-                <button class="btn btn-danger w-100 rounded-pill fw-bold py-2 mb-2" onclick="logoutParent()">
-                    <i class="bi bi-box-arrow-right"></i> ออกจากระบบผู้ปกครอง
-                </button>
-                <button class="btn btn-outline-primary w-100 rounded-pill fw-bold py-2 mb-3" onclick="loadParentDashboard('${token}')">
+                <!-- 🌟 ลำดับใหม่: ปุ่มอัปเดตอยู่บน Logout อยู่ล่าง -->
+                <button class="btn btn-outline-primary w-100 rounded-pill fw-bold py-2 mb-2" onclick="loadParentDashboard('${token}')">
                     <i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลล่าสุด
+                </button>
+                <button class="btn btn-danger w-100 rounded-pill fw-bold py-2 mb-3 shadow-sm" onclick="logoutParent()">
+                    <i class="bi bi-box-arrow-right"></i> ออกจากระบบผู้ปกครอง
                 </button>
             </div>
         `;
@@ -988,4 +986,27 @@ window.logoutParent = function() {
             window.location.href = window.location.origin + window.location.pathname; // ล้าง Query String บน URL ด้วย
         }
     });
+};
+
+// ฟังก์ชันสำหรับสลับแท็บระหว่างนักเรียนและผู้ปกครองในหน้าแรก
+window.switchSearchTab = function(role) {
+    const studentContext = document.getElementById('student-search-context');
+    const parentContext = document.getElementById('parent-login-context');
+    const studentBtn = document.getElementById('tab-student-role');
+    const parentBtn = document.getElementById('tab-parent-role');
+    const resultBox = document.getElementById('selectResultBox');
+
+    if (role === 'student') {
+        studentContext.classList.remove('hidden');
+        parentContext.classList.add('hidden');
+        studentBtn.classList.add('active');
+        parentBtn.classList.remove('active');
+    } else {
+        studentContext.classList.add('hidden');
+        parentContext.classList.remove('hidden');
+        studentBtn.classList.remove('active');
+        parentBtn.classList.add('active');
+        // 🌟 จุดสำคัญ: ซ่อนผลการค้นหาชื่อนักเรียนทันทีถ้าผู้ปกครองคลิกมาแท็บตัวเอง
+        if(resultBox) resultBox.classList.add('hidden');
+    }
 };
