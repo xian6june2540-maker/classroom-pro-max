@@ -472,41 +472,40 @@ function togglePetMenu() {
 document.addEventListener('DOMContentLoaded', async function() {
     const urlParams = new URLSearchParams(window.location.search);
     const page = urlParams.get('page');
-    const urlToken = urlParams.get('token'); // รหัสที่ติดมากับลิงก์
-    const savedParentToken = localStorage.getItem('parentToken'); // รหัสที่จำไว้ในเครื่องผู้ปกครอง
-    const savedStudentId = localStorage.getItem('studentId'); // รหัสที่จำไว้ในเครื่องนักเรียน
-    const isTeacherIn = localStorage.getItem('teacherLoggedIn') === 'true'; // สถานะครู
+    const urlToken = urlParams.get('token');
+    const savedParentToken = localStorage.getItem('parentToken');
+    const savedStudentId = localStorage.getItem('studentId');
+    const isTeacherIn = localStorage.getItem('teacherLoggedIn') === 'true';
 
-    // 1. เชื่อมต่อฐานข้อมูล Supabase ให้พร้อมใช้งาน
     await initSupabaseAsync();
 
-    // 2. [ส่วนของผู้ปกครอง] ตรวจสอบสิทธิ์การเข้าใช้งาน
     const parentToken = urlToken || savedParentToken;
 
+    // 👨‍👩‍👧‍👦 กรณีเข้าใช้งานของผู้ปกครอง (สำคัญที่สุด ต้องเช็คก่อน)
     if ((page === 'parent' && urlToken) || savedParentToken) {
-        // จัดการ UI ให้แสดงผลเฉพาะหน้าผู้ปกครอง
-        if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
-        document.getElementById('btnLock').classList.add('hidden');
+        // สั่งซ่อนหน้าอื่นให้หมดเพื่อกันการทับซ้อน
         document.getElementById('student-search-view').classList.add('hidden');
-        document.getElementById('parent-view').classList.remove('hidden');
+        document.getElementById('student-dashboard-view').classList.add('hidden');
+        document.getElementById('teacher-view').classList.add('hidden');
+        if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
         
-        // โหลดข้อมูล Dashboard ของผู้ปกครอง
+        document.getElementById('parent-view').classList.remove('hidden');
         loadParentDashboard(parentToken);
-        return; // จบการทำงาน
+        return; 
     }
 
-    // 3. [ส่วนของคุณครู] ถ้าเคยล็อกอินค้างไว้
+    // 👨‍🏫 กรณีคุณครู
     if (isTeacherIn) {
-        document.getElementById('btnLock').classList.add('hidden');
-        document.getElementById('btnTeacherConfig').classList.remove('hidden');
-        document.getElementById('btnLogout').classList.remove('hidden');
         document.getElementById('student-search-view').classList.add('hidden');
+        document.getElementById('parent-view').classList.add('hidden');
         document.getElementById('teacher-view').classList.remove('hidden');
         document.getElementById('view-rooms').classList.remove('hidden');
-        loadAllData(); 
+        loadAllData();
     } 
-    // 4. [ส่วนของนักเรียน] ถ้าเคยล็อกอินค้างไว้
+    // 🎓 กรณีนักเรียน
     else if (savedStudentId) {
+        document.getElementById('student-search-view').classList.add('hidden');
+        document.getElementById('parent-view').classList.add('hidden');
         loadFullDashboard(savedStudentId, true);
     }
 });
@@ -532,7 +531,7 @@ function formatThaiDate(dateStr) {
 }
 
 // =====================================
-// 👨‍👩‍👧‍👦 PARENT DASHBOARD LOGIC (V.2 ความเร็วสูง + วันที่ไทย)
+// 👨‍👩‍👧‍👦 PARENT DASHBOARD LOGIC (เวอร์ชันเพิ่มปุ่ม Logout และซ่อนส่วนเกิน)
 // =====================================
 window.loadParentDashboard = async function(token) {
     const content = document.getElementById('parent-content');
@@ -549,14 +548,13 @@ window.loadParentDashboard = async function(token) {
             return;
         }
 
-        // 🟢 โชว์ปุ่ม Chat Head ที่มุมจอ และเก็บ ID เด็กไว้ส่งข้อมูล
+        // 🟢 โชว์ปุ่ม Chat Head และเก็บ ID เด็ก
         const chatHead = document.getElementById('parentChatHead');
         if(chatHead) {
             chatHead.classList.remove('hidden');
-            chatHead.dataset.studentId = student.id; // เก็บ ID ไว้ที่ตัวปุ่ม
-            localStorage.setItem('parentStudentId', student.id); // 🌟 กันข้อมูลหาย
+            chatHead.dataset.studentId = student.id; 
+            localStorage.setItem('parentStudentId', student.id);
             
-            // เก็บพิกัดเดิมไว้ใช้ตอนเปิดแผนที่
             if(student.home_lat && student.home_lng) {
                 window.tempHomeLat = student.home_lat;
                 window.tempHomeLng = student.home_lng;
@@ -618,6 +616,10 @@ window.loadParentDashboard = async function(token) {
             </div>
 
             <div class="px-2">
+                <!-- 🌟 ปุ่มออกจากระบบผู้ปกครอง -->
+                <button class="btn btn-danger w-100 rounded-pill fw-bold py-2 mb-2" onclick="logoutParent()">
+                    <i class="bi bi-box-arrow-right"></i> ออกจากระบบผู้ปกครอง
+                </button>
                 <button class="btn btn-outline-primary w-100 rounded-pill fw-bold py-2 mb-3" onclick="loadParentDashboard('${token}')">
                     <i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลล่าสุด
                 </button>
@@ -952,16 +954,38 @@ window.loginWithParentToken = async function(token) {
         const { data, error } = await supabaseClient.from('students').select('parent_token').eq('parent_token', token).single();
         
         if (data) {
-            localStorage.setItem('parentToken', token); // จำรหัสไว้ในเครื่อง
+            localStorage.setItem('parentToken', token);
             Swal.close();
-            loadParentDashboard(token);
+            
+            // 🌟 จุดสำคัญ: ซ่อนหน้าค้นหาและหน้า Dashboard นักเรียนทันทีที่ Login สำเร็จ
             document.getElementById('student-search-view').classList.add('hidden');
+            document.getElementById('student-dashboard-view').classList.add('hidden');
             document.getElementById('parent-view').classList.remove('hidden');
             if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
+            
+            loadParentDashboard(token);
         } else {
             Swal.fire('รหัสไม่ถูกต้อง', 'กรุณาตรวจสอบรหัสอีกครั้ง หรือติดต่อคุณครูครับ', 'error');
         }
     } catch (e) {
         Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'error');
     }
+};
+
+window.logoutParent = function() {
+    Swal.fire({
+        title: 'ออกจากระบบผู้ปกครอง?',
+        text: 'ต้องการกลับไปหน้าค้นหาใช่หรือไม่?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'ออกจากระบบ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#d33'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            localStorage.removeItem('parentToken');
+            localStorage.removeItem('parentStudentId');
+            window.location.href = window.location.origin + window.location.pathname; // ล้าง Query String บน URL ด้วย
+        }
+    });
 };
