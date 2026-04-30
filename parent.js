@@ -292,16 +292,24 @@ window.switchSearchTab = function(role) {
 };
 
 // =========================================================
-// 📝 SYSTEM: PARENT LEAVE REQUEST (ระบบแจ้งลาพร้อมเทมเพลต)
+// 📝 SYSTEM: SMART PARENT LEAVE (ImgBB + Date Range + Anti-Duplicate)
 // =========================================================
 
 window.openLeaveRequestModal = function(studentId) {
     Swal.fire({
-        title: '<h5 class="fw-bold m-0 text-warning"><i class="bi bi-pencil-square"></i> แบบฟอร์มแจ้งลาหยุด</h5>',
+        title: '<h5 class="fw-bold m-0 text-warning"><i class="bi bi-pencil-square"></i> แบบฟอร์มแจ้งลาหยุด (สำหรับผู้ปกครอง)</h5>',
         html: `
             <div class="text-start mt-3">
-                <label class="small fw-bold text-muted mb-1">วันที่ต้องการลา:</label>
-                <input type="date" id="leaveDate" class="form-control mb-3 rounded-3" value="${getLocalTodayStr()}">
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="small fw-bold text-muted mb-1">เริ่มต้นวันที่:</label>
+                        <input type="date" id="leaveDateStart" class="form-control rounded-3" value="${getLocalTodayStr()}">
+                    </div>
+                    <div class="col-6">
+                        <label class="small fw-bold text-muted mb-1">ถึงวันที่:</label>
+                        <input type="date" id="leaveDateEnd" class="form-control rounded-3" value="${getLocalTodayStr()}">
+                    </div>
+                </div>
                 
                 <label class="small fw-bold text-muted mb-1">ประเภทการลา:</label>
                 <select id="leaveType" class="form-select mb-3 rounded-3" onchange="updateLeaveTemplate()">
@@ -309,16 +317,17 @@ window.openLeaveRequestModal = function(studentId) {
                     <option value="ลากิจ">ลากิจ</option>
                 </select>
 
-                <label class="small fw-bold text-muted mb-1">เลือกสาเหตุจากเทมเพลต:</label>
+                <label class="small fw-bold text-muted mb-1">เลือกสาเหตุที่สมเหตุสมผล:</label>
                 <select id="leaveTemplate" class="form-select mb-3 rounded-3" onchange="applyLeaveTemplate()">
-                    <!-- เทมเพลตจะเปลี่ยนตามประเภทการลา -->
+                    <!-- เทมเพลตจะโหลดที่นี่ -->
                 </select>
 
-                <label class="small fw-bold text-muted mb-1">ระบุรายละเอียดเพิ่มเติม:</label>
-                <textarea id="leaveReason" class="form-control mb-3 rounded-3" rows="2" placeholder="พิมพ์รายละเอียดเพิ่มเติม..."></textarea>
+                <label class="small fw-bold text-muted mb-1">ระบุรายละเอียดเพิ่มเติม (แต่งคำพูดให้อัตโนมัติ):</label>
+                <textarea id="leaveReason" class="form-control mb-3 rounded-3" rows="3" placeholder="ระบุรายละเอียดเพิ่มเติมเพื่อความสมบูรณ์..."></textarea>
 
-                <label class="small fw-bold text-muted mb-1">แนบหลักฐาน (ถ้ามี):</label>
+                <label class="small fw-bold text-muted mb-1">แนบหลักฐาน (ถ้ามี - รองรับรูปภาพสูงสุด 32MB):</label>
                 <input type="file" id="leaveFile" class="form-control rounded-3" accept="image/*">
+                <p class="text-primary mt-2 mb-0" style="font-size: 0.7rem;">* ระบบจะตรวจสอบความซ้ำซ้อนของวันที่ยื่นลาก่อนบันทึก</p>
             </div>
         `,
         showCancelButton: true,
@@ -326,86 +335,145 @@ window.openLeaveRequestModal = function(studentId) {
         cancelButtonText: 'ยกเลิก',
         confirmButtonColor: '#ffc107',
         customClass: { popup: 'rounded-4' },
-        didOpen: () => {
-            updateLeaveTemplate(); // โหลดเทมเพลตเริ่มต้น
-        },
+        didOpen: () => updateLeaveTemplate(),
         preConfirm: () => {
-            const date = document.getElementById('leaveDate').value;
+            const start = document.getElementById('leaveDateStart').value;
+            const end = document.getElementById('leaveDateEnd').value;
             const type = document.getElementById('leaveType').value;
             const reason = document.getElementById('leaveReason').value;
-            const fileInput = document.getElementById('leaveFile');
+            const file = document.getElementById('leaveFile').files[0];
             
-            if (!date || !reason) return Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
-            return { date, type, reason, file: fileInput.files[0] };
+            if (!start || !end || !reason) return Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
+            if (new Date(start) > new Date(end)) return Swal.showValidationMessage('วันที่เริ่มต้นต้องไม่มากกว่าวันที่สิ้นสุด');
+            
+            return { start, end, type, reason, file };
         }
-    }).then((result) => {
+    }).then(async (result) => {
         if (result.isConfirmed) processSubmitLeave(studentId, result.value);
     });
 };
 
-// 💡 ฟังก์ชันจัดการเทมเพลตคำพูด (เลียนแบบของนักเรียน)
 window.updateLeaveTemplate = function() {
     const type = document.getElementById('leaveType').value;
     const templateSelect = document.getElementById('leaveTemplate');
     
     const templates = {
-        'ลาป่วย': ['ปวดหัว ตัวร้อน', 'เป็นไข้ ไม่สบาย', 'ปวดท้อง ท้องเสีย', 'ประสบอุบัติเหตุ', 'อื่นๆ (ระบุเอง)'],
-        'ลากิจ': ['ไปทำธุระกับครอบครัว', 'เดินทางไปต่างจังหวัด', 'ไปร่วมงานบวช/งานแต่ง', 'ทำธุระเรื่องเอกสาร', 'อื่นๆ (ระบุเอง)']
+        'ลาป่วย': [
+            'มีอาการไข้สูงและตัวร้อนจัด ไม่สามารถลุกเดินมาเรียนได้ตามปกติ',
+            'มีอาการปวดท้องอย่างรุนแรงและท้องเสีย คาดว่าเกิดจากอาหารเป็นพิษ',
+            'ประสบอุบัติเหตุเล็กน้อยระหว่างเดินทาง ทำให้ได้รับบาดเจ็บต้องพักฟื้น',
+            'พบแพทย์แล้ว แพทย์มีความเห็นให้หยุดพักรักษาตัวเพื่อเฝ้าดูอาการ',
+            'มีอาการปวดหัวอย่างหนักและวิงเวียนศีรษะ จำเป็นต้องพักผ่อนในที่มืด'
+        ],
+        'ลากิจ': [
+            'มีความจำเป็นต้องติดตามผู้ปกครองไปทำธุระสำคัญที่ต่างจังหวัด ซึ่งไม่สามารถเลื่อนได้',
+            'เข้าร่วมพิธีทางศาสนาและงานสำคัญของครอบครัวที่จัดขึ้นตามประเพณี',
+            'ต้องไปดำเนินการด้านเอกสารสำคัญ ณ หน่วยงานราชการร่วมกับผู้ปกครอง',
+            'สมาชิกในครอบครัวประสบเหตุฉุกเฉิน จำเป็นต้องอยู่ดูแลอย่างใกล้ชิด',
+            'มีความจำเป็นส่วนตัวที่สำคัญยิ่งในการเข้าร่วมงานสังคมของครอบครัว'
+        ]
     };
 
-    templateSelect.innerHTML = `<option value="">-- เลือกสาเหตุการลา --</option>` + 
+    templateSelect.innerHTML = `<option value="">-- เลือกเทมเพลตคำพูด --</option>` + 
         templates[type].map(t => `<option value="${t}">${t}</option>`).join('');
 };
 
 window.applyLeaveTemplate = function() {
     const template = document.getElementById('leaveTemplate').value;
     const reasonInput = document.getElementById('leaveReason');
-    if (template && template !== 'อื่นๆ (ระบุเอง)') {
-        reasonInput.value = template;
+    if (template) {
+        reasonInput.value = `เนื่องจากบุตรหลาน${template} จึงใคร่ขอลาหยุดเรียนตามวันที่ระบุไว้ข้างต้น`;
     } else {
         reasonInput.value = '';
-        reasonInput.focus();
     }
 };
 
 async function processSubmitLeave(studentId, data) {
-    Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    Swal.fire({ title: 'กำลังตรวจสอบและบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     try {
-        let proofUrl = "";
-
-        if (data.file) {
-            const fileName = `proof_${studentId}_${Date.now()}.jpg`;
-            const { error: uploadError } = await supabaseClient.storage
-                .from('leaves') // ⚠️ ต้องสร้าง Bucket นี้ใน Supabase ก่อน!
-                .upload(fileName, data.file);
-            
-            if (uploadError) throw uploadError;
-            const { data: urlData } = supabaseClient.storage.from('leaves').getPublicUrl(fileName);
-            proofUrl = urlData.publicUrl;
+        // 1. สร้าง Array ของวันที่ทั้งหมดที่ต้องการลา
+        let currentDate = new Date(data.start);
+        const endDate = new Date(data.end);
+        let dateArray = [];
+        
+        while (currentDate <= endDate) {
+            dateArray.push(currentDate.toISOString().split('T')[0]);
+            currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        await supabaseClient.from('leaves').insert([{
-            student_id: studentId,
-            leave_date: data.date,
-            type: data.type,
-            reason: data.reason,
-            proof_url: proofUrl,
-            status: 'อนุมัติแล้ว'
-        }]);
+        // 2. Cross-Check: ตรวจสอบข้อมูลซ้ำซ้อน
+        const { data: existingLeaves, error: checkError } = await supabaseClient
+            .from('leaves')
+            .select('leave_date')
+            .eq('student_id', studentId)
+            .in('leave_date', dateArray);
 
-        await supabaseClient.from('attendance').upsert({
-            student_id: studentId,
-            check_date: data.date,
-            status: 'ลา'
-        }, { onConflict: 'student_id,check_date' });
+        if (checkError) throw checkError;
 
-        await Swal.fire({ icon: 'success', title: 'ส่งใบลาเรียบร้อย!', timer: 2000, showConfirmButton: false });
+        if (existingLeaves && existingLeaves.length > 0) {
+            const duplicateDates = existingLeaves.map(d => formatThaiDate(d.leave_date)).join(', ');
+            throw new Error(`ไม่สามารถทำรายการได้: วันที่ [${duplicateDates}] มีการยื่นใบลาไว้ในระบบเรียบร้อยแล้วครับ`);
+        }
+
+        // 3. ดึง API KEY ของ ImgBB จากการตั้งค่าของครู (Dynamic Fetch)
+        let myImgbbKey = "";
+        
+        // เราใช้วิธีเรียกขอข้อมูล config จากฐานข้อมูลโดยตรงเพื่อความแม่นยำ (กรณีครูไม่ได้ล็อกอินค้างไว้)
+        const { data: configData } = await supabaseClient.from('system_config').select('config_value').eq('config_key', 'IMGBB_API_KEY').single();
+        if(configData) {
+            myImgbbKey = configData.config_value;
+        }
+
+        // 4. จัดการอัปโหลดไฟล์ไปที่ ImgBB
+        let finalUrl = "";
+        if (data.file) {
+            if (!myImgbbKey) {
+                throw new Error('ไม่พบข้อมูล API Key สำหรับอัปโหลดรูปภาพ กรุณาแจ้งครูให้ตั้งค่าระบบครับ');
+            }
+
+            Swal.fire({ title: 'กำลังอัปโหลดรูปภาพ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+            const formData = new FormData();
+            formData.append('image', data.file);
+            
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${myImgbbKey}`, {
+                method: 'POST',
+                body: formData
+            });
+            const resData = await res.json();
+            
+            if (resData.success) {
+                finalUrl = resData.data.url;
+            } else {
+                throw new Error('อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+            }
+        }
+
+        // 5. บันทึกข้อมูลลงฐานข้อมูล (ทำทีละวันจนครบ)
+        Swal.fire({ title: 'กำลังอัปเดตระบบตารางเรียน...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+        for (const date of dateArray) {
+            const { error: insertError } = await supabaseClient.from('leaves').insert([{
+                student_id: studentId,
+                leave_date: date,
+                type: data.type,
+                reason: data.reason,
+                proof_url: finalUrl,
+                status: 'อนุมัติแล้ว'
+            }]);
+            
+            if (insertError) throw insertError;
+
+            await supabaseClient.from('attendance').upsert({
+                student_id: studentId,
+                check_date: date,
+                status: 'ลา'
+            }, { onConflict: 'student_id,check_date' });
+        }
+
+        await Swal.fire({ icon: 'success', title: 'แจ้งลาสำเร็จ!', text: `บันทึกการลาจำนวน ${dateArray.length} วัน เรียบร้อยแล้ว`, timer: 2000, showConfirmButton: false });
         loadParentDashboard(localStorage.getItem('parentToken'));
 
     } catch (e) {
-        // 🛠️ แจ้งเตือนเรื่อง Bucket ถ้ายังไม่ได้สร้าง
-        const msg = e.message === 'Bucket not found' ? 'กรุณาแจ้งครูให้สร้าง Storage Bucket ชื่อ "leaves" ในระบบก่อนครับ' : e.message;
-        Swal.fire('เกิดข้อผิดพลาด', msg, 'error');
+        Swal.fire('แจ้งเตือนการทำรายการ', e.message, 'warning');
     }
 }
