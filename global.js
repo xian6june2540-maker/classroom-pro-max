@@ -466,42 +466,52 @@ function togglePetMenu() {
     setTimeout(() => { if (menu.classList.contains('show')) menu.classList.remove('show'); }, 4000);
 }
 
-// 🟢 อัปเกรด: ระบบ Routing ด่วนพิเศษสำหรับผู้ปกครอง
+// =====================================
+// จุดแก้ไขที่ 2: ปรับปรุง DOMContentLoaded
+// =====================================
 document.addEventListener('DOMContentLoaded', async function() {
     const urlParams = new URLSearchParams(window.location.search);
     const page = urlParams.get('page');
-    const token = urlParams.get('token');
+    const urlToken = urlParams.get('token'); // รหัสที่ติดมากับลิงก์
+    const savedParentToken = localStorage.getItem('parentToken'); // รหัสที่จำไว้ในเครื่องผู้ปกครอง
+    const savedStudentId = localStorage.getItem('studentId'); // รหัสที่จำไว้ในเครื่องนักเรียน
+    const isTeacherIn = localStorage.getItem('teacherLoggedIn') === 'true'; // สถานะครู
 
-    // ⚡ จุดแก้: ถ้าเป็นหน้าผู้ปกครอง ให้สั่งซ่อนทุกอย่างทันทีแบบ "เงียบกริบ"
-    if (page === 'parent' && token) {
-        if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
-        document.getElementById('btnLock').classList.add('hidden');
-        document.getElementById('student-search-view').classList.add('hidden');
-        document.getElementById('parent-view').classList.remove('hidden');
+    // 1. เชื่อมต่อฐานข้อมูล Supabase ให้พร้อมใช้งาน
+    await initSupabaseAsync();[cite: 5]
+
+    // 2. [ส่วนของผู้ปกครอง] ตรวจสอบสิทธิ์การเข้าใช้งาน
+    // กรณีที่ 1: เข้าผ่านลิงก์ที่มี Token หรือ กรณีที่ 2: เคยล็อกอินด้วยรหัส Access Code ค้างไว้
+    const parentToken = urlToken || savedParentToken;
+
+    if ((page === 'parent' && urlToken) || savedParentToken) {[cite: 5]
+        // จัดการ UI ให้แสดงผลเฉพาะหน้าผู้ปกครองแบบ "เงียบกริบ"
+        if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');[cite: 1, 5]
+        document.getElementById('btnLock').classList.add('hidden');[cite: 1, 5]
+        document.getElementById('student-search-view').classList.add('hidden');[cite: 1, 5]
+        document.getElementById('parent-view').classList.remove('hidden');[cite: 1, 5]
+        
+        // โหลดข้อมูล Dashboard ของผู้ปกครอง
+        loadParentDashboard(parentToken);[cite: 5]
+        return; // จบการทำงาน ไม่ต้องไปเช็คส่วนนักเรียนหรือครูต่อ
     }
 
-    // เชื่อมต่อฐานข้อมูล (Supabase)
-    await initSupabaseAsync();
-
-    // 👨‍👩‍👧‍👦 กรณีหน้าผู้ปกครอง: สั่งโหลดข้อมูลและจบการทำงานส่วนนี้ทันที
-    if (page === 'parent' && token) {
-        loadParentDashboard(token);
-        return; 
+    // 3. [ส่วนของคุณครู] ถ้าเคยล็อกอินค้างไว้ ให้เปิดหน้าจัดการห้องเรียน
+    if (isTeacherIn) {[cite: 4, 5]
+        document.getElementById('btnLock').classList.add('hidden');[cite: 1]
+        document.getElementById('btnTeacherConfig').classList.remove('hidden');[cite: 1]
+        document.getElementById('btnLogout').classList.remove('hidden');[cite: 1]
+        document.getElementById('student-search-view').classList.add('hidden');[cite: 1]
+        document.getElementById('teacher-view').classList.remove('hidden');[cite: 1]
+        document.getElementById('view-rooms').classList.remove('hidden');[cite: 1]
+        loadAllData(); // ดึงข้อมูลห้องเรียนทั้งหมด[cite: 4]
+    } 
+    // 4. [ส่วนของนักเรียน] ถ้าเคยล็อกอินค้างไว้ ให้เปิดหน้า Dashboard นักเรียน
+    else if (savedStudentId) {[cite: 2, 5]
+        loadFullDashboard(savedStudentId, true); // โหลดหน้าแดชบอร์ดแบบเงียบ[cite: 2]
     }
-
-    // 2. เช็คสถานะการเข้าสู่ระบบปกติ (สำหรับครูและนักเรียน)
-    if (localStorage.getItem('teacherLoggedIn') === 'true') {
-        document.getElementById('btnLock').classList.add('hidden');
-        document.getElementById('btnTeacherConfig').classList.remove('hidden'); 
-        document.getElementById('btnLogout').classList.remove('hidden');
-        document.getElementById('student-search-view').classList.add('hidden');
-        document.getElementById('teacher-view').classList.remove('hidden');
-        document.getElementById('view-rooms').classList.remove('hidden');
-        loadAllData();
-    }
-    else if (localStorage.getItem('studentId')) {
-        loadFullDashboard(localStorage.getItem('studentId'), true);
-    }
+    
+    // หมายเหตุ: หากไม่มีการล็อกอินค้างไว้ ระบบจะแสดงหน้า student-search-view (หน้าค้นหา) ตามปกติครับ[cite: 1]
 });
 
 window.sendPushNotification = function(title, message) {
@@ -917,4 +927,44 @@ window.parseFacebookLink = function(input) {
         }
         return value;
     } catch (e) { return value; }
+};
+
+// ฟังก์ชันสำหรับเรียกหน้าต่างกรอกรหัสผู้ปกครอง
+window.promptParentLogin = function() {
+    Swal.fire({
+        title: 'เข้าใช้งานสำหรับผู้ปกครอง',
+        text: 'กรุณากรอกรหัส Access Code ที่ได้รับจากคุณครู',
+        input: 'text',
+        inputPlaceholder: 'เช่น PXXXXXXXX',
+        showCancelButton: true,
+        confirmButtonText: 'ตกลง',
+        cancelButtonText: 'ยกเลิก',
+        inputValidator: (value) => { if (!value) return 'กรุณากรอกรหัสด้วยครับ' }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            loginWithParentToken(result.value.trim().toUpperCase());
+        }
+    });
+};
+
+// ฟังก์ชันตรวจสอบรหัสกับฐานข้อมูล
+window.loginWithParentToken = async function(token) {
+    Swal.fire({ title: 'กำลังตรวจสอบรหัส...', didOpen: () => Swal.showLoading() });
+    try {
+        if (!supabaseClient) await initSupabaseAsync();
+        const { data, error } = await supabaseClient.from('students').select('parent_token').eq('parent_token', token).single();
+        
+        if (data) {
+            localStorage.setItem('parentToken', token); // จำรหัสไว้ในเครื่อง
+            Swal.close();
+            loadParentDashboard(token);
+            document.getElementById('student-search-view').classList.add('hidden');
+            document.getElementById('parent-view').classList.remove('hidden');
+            if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
+        } else {
+            Swal.fire('รหัสไม่ถูกต้อง', 'กรุณาตรวจสอบรหัสอีกครั้ง หรือติดต่อคุณครูครับ', 'error');
+        }
+    } catch (e) {
+        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'error');
+    }
 };
