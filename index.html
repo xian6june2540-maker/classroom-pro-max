@@ -151,22 +151,41 @@
     </div>
 
     <div id="student-search-view" class="container pb-5">
-        <div class="student-box border-top border-4 border-primary text-center">
-            <h3 class="text-primary fw-bold mb-3"><i class="bi bi-search"></i> ตรวจสอบสถานะการเรียน</h3>
-            <p class="text-muted mb-4">กรุณากรอกเลขที่/รหัส หรือ ชื่อ-นามสกุล ของตนเอง</p>
-            <div class="mb-3"><input type="text" id="portalStudentId" class="form-control form-control-lg search-input text-center fw-bold" placeholder="เลขที่/รหัส หรือ ชื่อ-นามสกุล" onkeypress="if(event.key === 'Enter') searchStudent()"></div>
-            <button class="btn btn-primary btn-lg w-100 fw-bold rounded-pill shadow-sm mb-3" onclick="searchStudent()" id="btnSearch"><i class="bi bi-search"></i> ค้นหาข้อมูลนักเรียน</button>
-            
-            <!-- ส่วนที่เพิ่มใหม่: ทางเข้าของผู้ปกครอง -->
-            <div class="pt-3 border-top mt-2">
-                <p class="small text-muted mb-2">สำหรับผู้ปกครองที่มีรหัส Access Code</p>
-                <button class="btn btn-outline-danger w-100 rounded-pill fw-bold" onclick="promptParentLogin()">
-                    <i class="bi bi-shield-lock"></i> เข้าใช้งานสำหรับผู้ปกครอง
-                </button>
-            </div>
-    
-            <div id="selectResultBox" class="mt-4 text-start hidden"><h6 class="text-muted fw-bold mb-3">คลิกเลือกชื่อของคุณเพื่อเข้าสู่ระบบ:</h6><div id="matchListContainer"></div></div>
+      <div class="student-box border-top border-4 border-primary text-center">
+        <!-- 🌟 เริ่มส่วนแท็บเลือกบทบาท -->
+        <ul class="nav nav-pills justify-content-center mb-4 bg-light p-1 rounded-pill shadow-sm" id="roleTabs" style="max-width: 400px; margin: 0 auto;">
+          <li class="nav-item w-50">
+            <button class="nav-link active w-100 rounded-pill fw-bold" onclick="switchSearchTab('student')" id="tab-student-role"><i class="bi bi-person-badge"></i> นักเรียน</button>
+          </li>
+          <li class="nav-item w-50">
+            <button class="nav-link w-100 rounded-pill fw-bold" onclick="switchSearchTab('parent')" id="tab-parent-role"><i class="bi bi-person-heart"></i> ผู้ปกครอง</button>
+          </li>
+        </ul>
+
+        <!-- 🎓 ส่วนของนักเรียน -->
+        <div id="student-search-context">
+          <h3 class="text-primary fw-bold mb-3">ตรวจสอบสถานะการเรียน</h3>
+          <p class="text-muted mb-4 small">กรุณากรอกเลขที่/รหัส หรือ ชื่อ-นามสกุล ของตนเอง</p>
+          <div class="mb-3">
+            <input type="text" id="portalStudentId" class="form-control form-control-lg search-input text-center fw-bold" placeholder="เลขที่/รหัส หรือ ชื่อ-นามสกุล" onkeypress="if(event.key === 'Enter') searchStudent()">
+          </div>
+          <button class="btn btn-primary btn-lg w-100 fw-bold rounded-pill shadow-sm" onclick="searchStudent()" id="btnSearch"><i class="bi bi-search"></i> ค้นหาข้อมูล</button>
+          <div id="selectResultBox" class="mt-4 text-start hidden">
+            <h6 class="text-muted fw-bold mb-3">คลิกเลือกชื่อของคุณเพื่อเข้าสู่ระบบ:</h6>
+            <div id="matchListContainer"></div>
+          </div>
         </div>
+
+        <!-- 👨‍👩‍👧‍👦 ส่วนของผู้ปกครอง -->
+        <div id="parent-login-context" class="hidden py-4">
+          <i class="bi bi-shield-lock text-danger" style="font-size: 3rem;"></i>
+          <h3 class="text-danger fw-bold mt-2">พอร์ทัลผู้ปกครอง</h3>
+          <p class="text-muted mb-4 small">กรุณาเข้าใช้งานด้วยรหัส Access Code ที่ได้รับจากครู</p>
+          <button class="btn btn-danger btn-lg w-100 rounded-pill fw-bold shadow-lg" onclick="promptParentLogin()">
+            <i class="bi bi-key-fill"></i> เข้าใช้งานด้วยรหัสลับ
+          </button>
+        </div>
+      </div>
     </div>
 
     <div id="parent-view" class="container mt-4 hidden">
