@@ -1409,23 +1409,77 @@
         });
     }
 
+    // =====================================
+    // 📝 SYSTEM: STUDENT LEAVE REQUEST (อัปเกรดกันสแปม + ปุ่มเทมเพลต)
+    // =====================================
+    
     function openStudentLeave() {
-        document.getElementById('studentLeaveDate').value = getLocalTodayStr(); document.getElementById('studentLeaveEndDate').value = getLocalTodayStr(); document.getElementById('studentLeaveReason').value = '';
+        document.getElementById('studentLeaveDate').value = getLocalTodayStr(); 
+        document.getElementById('studentLeaveEndDate').value = getLocalTodayStr(); 
+        document.getElementById('studentLeaveReason').value = '';
+        
+        // รีเซ็ตปุ่มกดยืนยันให้กลับมาคลิกได้ปกติ
+        let btnSubmit = document.getElementById('btnSubmitLeave');
+        if(btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = '<i class="bi bi-send-fill"></i> ยืนยันการส่งคำร้อง';
+        }
+    
         showAppModal('studentLeaveModal');
     }
-
-    function applyLeaveTemplate(text) { document.getElementById('studentLeaveReason').value = text; }
-
+    
+    // 🌟 ฟังก์ชันนี้รับหน้าที่เติมคำลงในกล่องข้อความทันทีที่เด็กกดปุ่ม
+    function applyLeaveTemplate(type) { 
+        const reasonBox = document.getElementById('studentLeaveReason');
+        
+        // แต่งคำพูดเตรียมไว้ตามประเภทที่กด
+        if (type === 'ลาป่วย') {
+            reasonBox.value = 'ลาป่วย: มีอาการไข้ ไม่สบาย ไม่สามารถมาเรียนได้ครับ/ค่ะ';
+        } else if (type === 'ลากิจ') {
+            reasonBox.value = 'ลากิจ: ติดธุระสำคัญกับครอบครัวครับ/ค่ะ';
+        } else if (type === 'ลาแพทย์') {
+            reasonBox.value = 'ลาพบแพทย์: มีนัดตรวจสุขภาพ/ทำฟันครับ/ค่ะ';
+        } else if (type === 'เหตุฉุกเฉิน') {
+            reasonBox.value = 'เหตุฉุกเฉิน: เกิดเหตุสุดวิสัยกะทันหันครับ/ค่ะ';
+        } else {
+            reasonBox.value = type; // เผื่อกรณีมีการส่งข้อความตรงๆ เข้ามา
+        }
+    }
+    
     function submitLeave() {
-        const d1 = document.getElementById('studentLeaveDate').value; const d2 = document.getElementById('studentLeaveEndDate').value; const r = document.getElementById('studentLeaveReason').value;
-        if (!d1 || !d2 || !r) return Swal.fire('เตือน', 'กรุณาระบุข้อมูลให้ครบถ้วน', 'warning');
-        if (d1 > d2) return Swal.fire('เตือน', 'วันที่เริ่มลาต้องไม่มากกว่าถึงวันที่', 'error');
+        const d1 = document.getElementById('studentLeaveDate').value; 
+        const d2 = document.getElementById('studentLeaveEndDate').value; 
+        const r = document.getElementById('studentLeaveReason').value.trim();
+        const btnSubmit = document.getElementById('btnSubmitLeave'); // ดึงปุ่มมาเตรียมล็อก
+        
+        if (!d1 || !d2 || !r) return Swal.fire('เตือน', 'กรุณาระบุเหตุผลการลาให้ครบถ้วนนะครับ', 'warning');
+        if (d1 > d2) return Swal.fire('เตือน', 'วันที่เริ่มลาต้องไม่มากกว่าถึงวันที่นะครับ', 'error');
         
         let finalDateStr = d1 === d2 ? d1 : d1 + ' ถึง ' + d2;
-        google.script.run.withSuccessHandler(function() {
-            hideAppModal('studentLeaveModal');
-            Swal.fire('ส่งคำร้องสำเร็จ!', 'ระบบบันทึกแล้ว รอคุณครูอนุมัตินะครับ', 'success');
-        }).submitLeaveRequest(globalPortalStudent.id, globalPortalStudent.name, globalPortalStudent.room, finalDateStr, r);
+        
+        // 🌟 1. ล็อกปุ่มกด + โชว์หน้าต่างโหลด เพื่อกันเด็กใจร้อนกดย้ำๆ
+        if(btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังส่งข้อมูล...';
+        }
+        Swal.fire({ title: 'กำลังส่งคำร้อง...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    
+        // 🌟 2. ส่งข้อมูลไปให้หลังบ้าน
+        google.script.run
+            .withSuccessHandler(function() {
+                Swal.close();
+                hideAppModal('studentLeaveModal');
+                Swal.fire('ส่งคำร้องสำเร็จ!', 'ระบบบันทึกแล้ว รอคุณครูอนุมัตินะครับ', 'success');
+            })
+            .withFailureHandler(function(err) {
+                // ถ้าเน็ตหลุดหรือมีปัญหา ให้ปลดล็อกปุ่มให้กดใหม่ได้
+                if(btnSubmit) {
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = '<i class="bi bi-send-fill"></i> ยืนยันการส่งคำร้อง';
+                }
+                Swal.fire('ส่งไม่สำเร็จ', 'เกิดข้อผิดพลาด: ' + err.message, 'error');
+            })
+            .submitLeaveRequest(globalPortalStudent.id, globalPortalStudent.name, globalPortalStudent.room, finalDateStr, r);
     }
 
     function showLevelModal() {
