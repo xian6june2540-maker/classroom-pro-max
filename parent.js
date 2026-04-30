@@ -483,89 +483,82 @@ window.applyLeaveTemplate = function() {
 };
 
 async function processSubmitLeave(studentId, data) {
-    Swal.fire({ title: 'กำลังตรวจสอบและบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    Swal.fire({ title: 'กำลังตรวจสอบ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     try {
-        // 🟢 1. ดึงชื่อและห้องของนักเรียน (เพื่อส่งเข้าตารางใบลาให้ครูค้นหาเจอ)
         const { data: stuData, error: stuErr } = await supabaseClient.from('students').select('name, room').eq('id', studentId).single();
         if (stuErr || !stuData) throw new Error('ดึงข้อมูลนักเรียนไม่สำเร็จ');
 
+        // 1. สร้าง Array วันที่กำลังจะยื่นลา
         let currentDate = new Date(data.start);
         const endDate = new Date(data.end);
-        let dateArray = [];
-        
+        let requestedDates = [];
         while (currentDate <= endDate) {
-            dateArray.push(currentDate.toISOString().split('T')[0]);
+            requestedDates.push(currentDate.toISOString().split('T')[0]);
             currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        const { data: existingLeaves, error: checkError } = await supabaseClient
-            .from('leaves')
-            .select('leave_date')
-            .eq('student_id', studentId)
-            .in('leave_date', dateArray);
-
+        // 2. ดึงประวัติการลา "ทั้งหมด" ของนักเรียนคนนี้มาเช็ค
+        const { data: allLeaves, error: checkError } = await supabaseClient.from('leaves').select('leave_date').eq('student_id', studentId);
         if (checkError) throw checkError;
 
-        if (existingLeaves && existingLeaves.length > 0) {
-            const duplicateDates = existingLeaves.map(d => formatThaiDate(d.leave_date)).join(', ');
-            throw new Error(`ไม่สามารถทำรายการได้: วันที่ [${duplicateDates}] มีการยื่นใบลาไว้ในระบบเรียบร้อยแล้วครับ`);
+        let existingDates = [];
+        (allLeaves || []).forEach(l => {
+            let parts = l.leave_date.split(' ถึง ');
+            let d1 = new Date(parts[0]);
+            let d2 = new Date(parts[parts.length - 1]);
+            while (d1 <= d2) {
+                existingDates.push(d1.toISOString().split('T')[0]);
+                d1.setDate(d1.getDate() + 1);
+            }
+        });
+
+        // ตรวจสอบว่าวันที่ขอลา มีอยู่ในระบบแล้วหรือยัง
+        const overlaps = requestedDates.filter(d => existingDates.includes(d));
+        if (overlaps.length > 0) {
+            throw new Error(`ไม่สามารถยื่นซ้ำได้: วันที่ [${overlaps.map(d => formatThaiDate(d)).join(', ')}] มีการยื่นใบลาในระบบไปแล้วครับ`);
         }
 
+        // 3. เตรียมรูปภาพ
         let myImgbbKey = await new Promise((resolve) => {
-            google.script.run
-                .withSuccessHandler(function(config) {
-                    resolve(config && config.IMGBB_API_KEY ? config.IMGBB_API_KEY : "");
-                })
-                .withFailureHandler(function() { resolve(""); })
-                .getTeacherConfigMasked(); 
+            google.script.run.withSuccessHandler(config => resolve(config && config.IMGBB_API_KEY ? config.IMGBB_API_KEY : "")).withFailureHandler(() => resolve("")).getTeacherConfigMasked(); 
         });
 
         let finalUrl = "";
         if (data.file) {
-            if (!myImgbbKey) throw new Error('ไม่พบข้อมูล API Key สำหรับอัปโหลดรูปภาพ กรุณาแจ้งครูให้ตั้งค่าระบบครับ');
-
-            Swal.fire({ title: 'กำลังอัปโหลดรูปภาพ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+            if (!myImgbbKey) throw new Error('ไม่พบ API Key สำหรับอัปโหลดรูปภาพ');
+            Swal.fire({ title: 'กำลังแนบหลักฐาน...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
             const formData = new FormData();
             formData.append('image', data.file);
-            
-            const res = await fetch(`https://api.imgbb.com/1/upload?key=${myImgbbKey}`, {
-                method: 'POST',
-                body: formData
-            });
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${myImgbbKey}`, { method: 'POST', body: formData });
             const resData = await res.json();
-            
             if (resData.success) finalUrl = resData.data.url;
-            else throw new Error('อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+            else throw new Error('อัปโหลดรูปภาพไม่สำเร็จ');
         }
 
-        // 🟢 2. แปะป้ายบอกครูว่าเป็น "ผู้ปกครอง" และสร้างปุ่มดูรูปภาพ
+        // 4. มัดรวมวันลาและส่งเข้าหลังบ้าน 1 รายการ
         let finalReason = `<b class="text-danger">[ผู้ปกครองแจ้ง]</b><br>[${data.type}] ${data.reason}`;
-        if (finalUrl) {
-            finalReason += `<br><a href="${finalUrl}" target="_blank" class="btn btn-sm btn-info text-dark mt-2 shadow-sm fw-bold"><i class="bi bi-image"></i> ดูรูป/ใบรับรองแพทย์</a>`;
-        }
-
+        if (finalUrl) finalReason += `<br><a href="${finalUrl}" target="_blank" class="btn btn-sm btn-info text-dark mt-2 shadow-sm fw-bold"><i class="bi bi-image"></i> ดูรูป/ใบรับรองแพทย์</a>`;
+        
+        let finalDateStr = data.start === data.end ? data.start : `${data.start} ถึง ${data.end}`; // มัดรวมวันที่
+        
         Swal.fire({ title: 'กำลังส่งคำร้องให้คุณครู...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-        for (const date of dateArray) {
-            // 🟢 3. บันทึกข้อมูลลงตาราง leaves ให้ครบถ้วน
-            const { error: insertError } = await supabaseClient.from('leaves').insert([{
-                student_id: studentId,
-                student_name: stuData.name, // ใส่ชื่อนักเรียน
-                room: stuData.room,         // ใส่ห้องเรียน ครูจะได้เห็น
-                leave_date: date,
-                reason: finalReason, 
-                status: 'รออนุมัติ'           // เปลี่ยนเป็น "รออนุมัติ" ถอดสิทธิ์ VIP
-            }]);
-            
-            if (insertError) throw insertError;
-            
-            // ❌ ลบโค้ดอัปเดตตาราง attendance อัตโนมัติทิ้งไปแล้ว
-        }
+        
+        const { error: insertError } = await supabaseClient.from('leaves').insert([{
+            student_id: studentId,
+            student_name: stuData.name,
+            room: stuData.room,
+            leave_date: finalDateStr, 
+            reason: finalReason, 
+            status: 'รออนุมัติ'
+        }]);
+        
+        if (insertError) throw insertError;
 
-        await Swal.fire({ icon: 'success', title: 'ส่งคำร้องสำเร็จ!', text: `ส่งคำร้องขอลา ${dateArray.length} วัน รอคุณครูอนุมัติแล้วครับ`, timer: 2500, showConfirmButton: false });
+        await Swal.fire({ icon: 'success', title: 'ส่งคำร้องสำเร็จ!', text: `รอคุณครูอนุมัติการลานะครับ`, timer: 2500, showConfirmButton: false });
         loadParentDashboard(localStorage.getItem('parentToken'));
 
     } catch (e) {
-        Swal.fire('แจ้งเตือนการทำรายการ', e.message, 'warning');
+        Swal.fire('แจ้งเตือน', e.message, 'warning');
     }
 }
