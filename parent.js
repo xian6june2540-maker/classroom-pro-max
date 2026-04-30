@@ -416,14 +416,17 @@ async function processSubmitLeave(studentId, data) {
             throw new Error(`ไม่สามารถทำรายการได้: วันที่ [${duplicateDates}] มีการยื่นใบลาไว้ในระบบเรียบร้อยแล้วครับ`);
         }
 
-        // 3. ดึง API KEY ของ ImgBB จากการตั้งค่าของครู (Dynamic Fetch)
-        let myImgbbKey = "";
-        
-        // เราใช้วิธีเรียกขอข้อมูล config จากฐานข้อมูลโดยตรงเพื่อความแม่นยำ (กรณีครูไม่ได้ล็อกอินค้างไว้)
-        const { data: configData } = await supabaseClient.from('system_config').select('config_value').eq('config_key', 'IMGBB_API_KEY').single();
-        if(configData) {
-            myImgbbKey = configData.config_value;
-        }
+        // 3. ดึง API KEY ของ ImgBB จากฝั่งเซิร์ฟเวอร์ (GAS) ที่คุณครูตั้งค่าไว้
+        let myImgbbKey = await new Promise((resolve) => {
+            google.script.run
+                .withSuccessHandler(function(config) {
+                    resolve(config && config.IMGBB_API_KEY ? config.IMGBB_API_KEY : "");
+                })
+                .withFailureHandler(function() {
+                    resolve("");
+                })
+                .getTeacherConfigMasked(); 
+        });
 
         // 4. จัดการอัปโหลดไฟล์ไปที่ ImgBB
         let finalUrl = "";
