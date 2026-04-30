@@ -292,7 +292,7 @@ window.switchSearchTab = function(role) {
 };
 
 // =========================================================
-// 📝 SYSTEM: PARENT LEAVE REQUEST (ระบบแจ้งลาโดยผู้ปกครอง)
+// 📝 SYSTEM: PARENT LEAVE REQUEST (ระบบแจ้งลาพร้อมเทมเพลต)
 // =========================================================
 
 window.openLeaveRequestModal = function(studentId) {
@@ -304,39 +304,68 @@ window.openLeaveRequestModal = function(studentId) {
                 <input type="date" id="leaveDate" class="form-control mb-3 rounded-3" value="${getLocalTodayStr()}">
                 
                 <label class="small fw-bold text-muted mb-1">ประเภทการลา:</label>
-                <select id="leaveType" class="form-select mb-3 rounded-3">
+                <select id="leaveType" class="form-select mb-3 rounded-3" onchange="updateLeaveTemplate()">
                     <option value="ลาป่วย">ลาป่วย</option>
                     <option value="ลากิจ">ลากิจ</option>
                 </select>
 
-                <label class="small fw-bold text-muted mb-1">เหตุผลการลา:</label>
-                <textarea id="leaveReason" class="form-control mb-3 rounded-3" rows="2" placeholder="ระบุเหตุผลสั้นๆ..."></textarea>
+                <label class="small fw-bold text-muted mb-1">เลือกสาเหตุจากเทมเพลต:</label>
+                <select id="leaveTemplate" class="form-select mb-3 rounded-3" onchange="applyLeaveTemplate()">
+                    <!-- เทมเพลตจะเปลี่ยนตามประเภทการลา -->
+                </select>
 
-                <label class="small fw-bold text-muted mb-1">แนบหลักฐาน (รูปภาพ/ใบรับรองแพทย์):</label>
+                <label class="small fw-bold text-muted mb-1">ระบุรายละเอียดเพิ่มเติม:</label>
+                <textarea id="leaveReason" class="form-control mb-3 rounded-3" rows="2" placeholder="พิมพ์รายละเอียดเพิ่มเติม..."></textarea>
+
+                <label class="small fw-bold text-muted mb-1">แนบหลักฐาน (ถ้ามี):</label>
                 <input type="file" id="leaveFile" class="form-control rounded-3" accept="image/*">
-                <p class="text-danger mt-2 mb-0" style="font-size: 0.7rem;">* ข้อมูลจะถูกส่งถึงครูประจำชั้นและอัปเดตสถานะการเข้าเรียนทันที</p>
             </div>
         `,
         showCancelButton: true,
         confirmButtonText: 'ยืนยันการส่งใบลา',
         cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#ffc107', // สีเหลือง Warning
+        confirmButtonColor: '#ffc107',
         customClass: { popup: 'rounded-4' },
-        preConfirm: async () => {
+        didOpen: () => {
+            updateLeaveTemplate(); // โหลดเทมเพลตเริ่มต้น
+        },
+        preConfirm: () => {
             const date = document.getElementById('leaveDate').value;
             const type = document.getElementById('leaveType').value;
             const reason = document.getElementById('leaveReason').value;
             const fileInput = document.getElementById('leaveFile');
             
             if (!date || !reason) return Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
-            
             return { date, type, reason, file: fileInput.files[0] };
         }
-    }).then(async (result) => {
-        if (result.isConfirmed) {
-            processSubmitLeave(studentId, result.value);
-        }
+    }).then((result) => {
+        if (result.isConfirmed) processSubmitLeave(studentId, result.value);
     });
+};
+
+// 💡 ฟังก์ชันจัดการเทมเพลตคำพูด (เลียนแบบของนักเรียน)
+window.updateLeaveTemplate = function() {
+    const type = document.getElementById('leaveType').value;
+    const templateSelect = document.getElementById('leaveTemplate');
+    
+    const templates = {
+        'ลาป่วย': ['ปวดหัว ตัวร้อน', 'เป็นไข้ ไม่สบาย', 'ปวดท้อง ท้องเสีย', 'ประสบอุบัติเหตุ', 'อื่นๆ (ระบุเอง)'],
+        'ลากิจ': ['ไปทำธุระกับครอบครัว', 'เดินทางไปต่างจังหวัด', 'ไปร่วมงานบวช/งานแต่ง', 'ทำธุระเรื่องเอกสาร', 'อื่นๆ (ระบุเอง)']
+    };
+
+    templateSelect.innerHTML = `<option value="">-- เลือกสาเหตุการลา --</option>` + 
+        templates[type].map(t => `<option value="${t}">${t}</option>`).join('');
+};
+
+window.applyLeaveTemplate = function() {
+    const template = document.getElementById('leaveTemplate').value;
+    const reasonInput = document.getElementById('leaveReason');
+    if (template && template !== 'อื่นๆ (ระบุเอง)') {
+        reasonInput.value = template;
+    } else {
+        reasonInput.value = '';
+        reasonInput.focus();
+    }
 };
 
 async function processSubmitLeave(studentId, data) {
@@ -345,11 +374,10 @@ async function processSubmitLeave(studentId, data) {
     try {
         let proofUrl = "";
 
-        // 1. ถ้ามีไฟล์แนบ ให้ส่งขึ้น Supabase Storage (Buckets: 'leaves')
         if (data.file) {
             const fileName = `proof_${studentId}_${Date.now()}.jpg`;
-            const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                .from('leaves')
+            const { error: uploadError } = await supabaseClient.storage
+                .from('leaves') // ⚠️ ต้องสร้าง Bucket นี้ใน Supabase ก่อน!
                 .upload(fileName, data.file);
             
             if (uploadError) throw uploadError;
@@ -357,31 +385,27 @@ async function processSubmitLeave(studentId, data) {
             proofUrl = urlData.publicUrl;
         }
 
-        // 2. บันทึกลงตาราง 'leaves'
-        const { error: leaveError } = await supabaseClient.from('leaves').insert([{
+        await supabaseClient.from('leaves').insert([{
             student_id: studentId,
             leave_date: data.date,
             type: data.type,
             reason: data.reason,
             proof_url: proofUrl,
-            status: 'อนุมัติแล้ว' // อัปเดตอัตโนมัติตามความต้องการของคุณฟลุ๊ค
+            status: 'อนุมัติแล้ว'
         }]);
 
-        if (leaveError) throw leaveError;
-
-        // 3. อัปเดตสถานะในตาราง 'attendance' ให้เป็น "ลา" อัตโนมัติ
-        const { error: attError } = await supabaseClient.from('attendance').upsert({
+        await supabaseClient.from('attendance').upsert({
             student_id: studentId,
             check_date: data.date,
             status: 'ลา'
         }, { onConflict: 'student_id,check_date' });
 
-        if (attError) throw attError;
-
-        await Swal.fire({ icon: 'success', title: 'ส่งใบลาและอัปเดตสถานะเรียบร้อย!', timer: 2000, showConfirmButton: false });
-        loadParentDashboard(localStorage.getItem('parentToken')); // รีโหลดข้อมูล
+        await Swal.fire({ icon: 'success', title: 'ส่งใบลาเรียบร้อย!', timer: 2000, showConfirmButton: false });
+        loadParentDashboard(localStorage.getItem('parentToken'));
 
     } catch (e) {
-        Swal.fire('เกิดข้อผิดพลาด', e.message, 'error');
+        // 🛠️ แจ้งเตือนเรื่อง Bucket ถ้ายังไม่ได้สร้าง
+        const msg = e.message === 'Bucket not found' ? 'กรุณาแจ้งครูให้สร้าง Storage Bucket ชื่อ "leaves" ในระบบก่อนครับ' : e.message;
+        Swal.fire('เกิดข้อผิดพลาด', msg, 'error');
     }
 }
