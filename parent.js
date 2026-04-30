@@ -234,3 +234,29 @@ window.acknowledgeParentMsg = async function(msgId) {
     await supabaseClient.from('parent_communications').delete().eq('id', msgId);
     window.location.reload();
 };
+
+// ฟังก์ชันสำหรับสลับแท็บระหว่างนักเรียนและผู้ปกครองในหน้าแรก
+window.switchSearchTab = function(role) {
+    const studentContext = document.getElementById('student-search-context');
+    const parentContext = document.getElementById('parent-login-context');
+    const studentBtn = document.getElementById('tab-student-role');
+    const parentBtn = document.getElementById('tab-parent-role');
+    const resultBox = document.getElementById('selectResultBox');
+
+    if (role === 'student') {
+        // แสดงส่วนของนักเรียน ซ่อนส่วนผู้ปกครอง
+        studentContext.classList.remove('hidden');
+        parentContext.classList.add('hidden');
+        studentBtn.classList.add('active');
+        parentBtn.classList.remove('active');
+    } else {
+        // แสดงส่วนของผู้ปกครอง ซ่อนส่วนนักเรียน
+        studentContext.classList.add('hidden');
+        parentContext.classList.remove('hidden');
+        studentBtn.classList.remove('active');
+        parentBtn.classList.add('active');
+        
+        // ล้างผลการค้นหาชื่อนักเรียนทิ้งเพื่อความสะอาดตา
+        if(resultBox) resultBox.classList.add('hidden');
+    }
+};
