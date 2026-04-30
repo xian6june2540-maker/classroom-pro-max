@@ -569,13 +569,51 @@
         showAppModal('teacherLeaveModal');
     }
 
-    function approveLeave(idx, d, id, st) {
-        google.script.run.withSuccessHandler(function() {
-            Toast.fire({ icon: 'success', title: st });
-            loadPendingLeaves();
-            loadAttendanceForDate();
-            hideAppModal('teacherLeaveModal');
-        }).approveLeaveRequest(idx, d, id, st);
+    async function approveLeave(idx, dateStr, studentId, statusStr) {
+        Swal.fire({ title: 'กำลังดำเนินการ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+        
+        try {
+            if (!supabaseClient) throw new Error("ฐานข้อมูลไม่พร้อมใช้งาน");
+            
+            // 1. เปลี่ยนสถานะใบลาเป็น อนุมัติ / ไม่อนุมัติ
+            const { error: updateErr } = await supabaseClient
+                .from('leaves')
+                .update({ status: statusStr + 'แล้ว' }) 
+                .eq('id', idx);
+                
+            if (updateErr) throw updateErr;
+    
+            // 2. ถ้าครูกด "อนุมัติ" ให้แกะวันที่ที่มัดรวมไว้ ออกมาเช็คชื่อทีละวัน
+            if (statusStr === 'อนุมัติ') {
+                let parts = dateStr.split(' ถึง ');
+                let d1 = new Date(parts[0]);
+                let d2 = new Date(parts[parts.length - 1]);
+                let dateArray = [];
+                
+                while (d1 <= d2) {
+                    dateArray.push(d1.toISOString().split('T')[0]);
+                    d1.setDate(d1.getDate() + 1);
+                }
+    
+                // วนลูปจับลงตารางเช็คชื่อ (ครูกดคลิกเดียว ระบบรันให้หมด)
+                for (const d of dateArray) {
+                    await supabaseClient.from('attendance').upsert({
+                        student_id: studentId,
+                        room: currentRoom, // ใช้ตัวแปรห้องเรียนปัจจุบัน
+                        check_date: d,
+                        status: 'ลา'
+                    }, { onConflict: 'student_id,check_date' });
+                }
+            }
+    
+            Swal.close();
+            Toast.fire({ icon: 'success', title: statusStr + 'เรียบร้อย' });
+            loadPendingLeaves(); // กล่องเหลืองอัปเดต
+            loadAttendanceForDate(); // ตารางเช็คชื่ออัปเดต
+    
+        } catch (e) {
+            Swal.fire('ผิดพลาด', e.message, 'error');
+        }
     }
     
     function promptGiveExp(studentId, studentName, currentExp) {
