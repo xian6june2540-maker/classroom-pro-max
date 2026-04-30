@@ -546,8 +546,7 @@ async function processSubmitLeave(studentId, data) {
             const { error: insertError } = await supabaseClient.from('leaves').insert([{
                 student_id: studentId,
                 leave_date: date,
-                type: data.type,
-                reason: finalReason, // ส่งข้อความ + ปุ่มรูปลงไปช่องนี้เลย
+                reason: `[${data.type}] ${finalReason}`, // รวมประเภทการลาเข้าไปในข้อความเลย
                 status: 'อนุมัติแล้ว'
             }]);
             
