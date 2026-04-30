@@ -85,6 +85,10 @@ window.loadParentDashboard = async function(token) {
             </div>
 
             <div class="px-2">
+                <!-- 🌟 ปุ่มใหม่: แจ้งลาหยุด -->
+                <button class="btn btn-warning w-100 rounded-pill fw-bold py-2 mb-2 shadow-sm text-dark" onclick="openLeaveRequestModal('${student.id}')">
+                    <i class="bi bi-calendar-check-fill"></i> แจ้งลาหยุดให้ลูก
+                </button>
                 <button class="btn btn-outline-primary w-100 rounded-pill fw-bold py-2 mb-2" onclick="loadParentDashboard('${token}')">
                     <i class="bi bi-arrow-clockwise"></i> อัปเดตข้อมูลล่าสุด
                 </button>
@@ -286,3 +290,98 @@ window.switchSearchTab = function(role) {
         if(resultBox) resultBox.classList.add('hidden');
     }
 };
+
+// =========================================================
+// 📝 SYSTEM: PARENT LEAVE REQUEST (ระบบแจ้งลาโดยผู้ปกครอง)
+// =========================================================
+
+window.openLeaveRequestModal = function(studentId) {
+    Swal.fire({
+        title: '<h5 class="fw-bold m-0 text-warning"><i class="bi bi-pencil-square"></i> แบบฟอร์มแจ้งลาหยุด</h5>',
+        html: `
+            <div class="text-start mt-3">
+                <label class="small fw-bold text-muted mb-1">วันที่ต้องการลา:</label>
+                <input type="date" id="leaveDate" class="form-control mb-3 rounded-3" value="${getLocalTodayStr()}">
+                
+                <label class="small fw-bold text-muted mb-1">ประเภทการลา:</label>
+                <select id="leaveType" class="form-select mb-3 rounded-3">
+                    <option value="ลาป่วย">ลาป่วย</option>
+                    <option value="ลากิจ">ลากิจ</option>
+                </select>
+
+                <label class="small fw-bold text-muted mb-1">เหตุผลการลา:</label>
+                <textarea id="leaveReason" class="form-control mb-3 rounded-3" rows="2" placeholder="ระบุเหตุผลสั้นๆ..."></textarea>
+
+                <label class="small fw-bold text-muted mb-1">แนบหลักฐาน (รูปภาพ/ใบรับรองแพทย์):</label>
+                <input type="file" id="leaveFile" class="form-control rounded-3" accept="image/*">
+                <p class="text-danger mt-2 mb-0" style="font-size: 0.7rem;">* ข้อมูลจะถูกส่งถึงครูประจำชั้นและอัปเดตสถานะการเข้าเรียนทันที</p>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยันการส่งใบลา',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#ffc107', // สีเหลือง Warning
+        customClass: { popup: 'rounded-4' },
+        preConfirm: async () => {
+            const date = document.getElementById('leaveDate').value;
+            const type = document.getElementById('leaveType').value;
+            const reason = document.getElementById('leaveReason').value;
+            const fileInput = document.getElementById('leaveFile');
+            
+            if (!date || !reason) return Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน');
+            
+            return { date, type, reason, file: fileInput.files[0] };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            processSubmitLeave(studentId, result.value);
+        }
+    });
+};
+
+async function processSubmitLeave(studentId, data) {
+    Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+    try {
+        let proofUrl = "";
+
+        // 1. ถ้ามีไฟล์แนบ ให้ส่งขึ้น Supabase Storage (Buckets: 'leaves')
+        if (data.file) {
+            const fileName = `proof_${studentId}_${Date.now()}.jpg`;
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('leaves')
+                .upload(fileName, data.file);
+            
+            if (uploadError) throw uploadError;
+            const { data: urlData } = supabaseClient.storage.from('leaves').getPublicUrl(fileName);
+            proofUrl = urlData.publicUrl;
+        }
+
+        // 2. บันทึกลงตาราง 'leaves'
+        const { error: leaveError } = await supabaseClient.from('leaves').insert([{
+            student_id: studentId,
+            leave_date: data.date,
+            type: data.type,
+            reason: data.reason,
+            proof_url: proofUrl,
+            status: 'อนุมัติแล้ว' // อัปเดตอัตโนมัติตามความต้องการของคุณฟลุ๊ค
+        }]);
+
+        if (leaveError) throw leaveError;
+
+        // 3. อัปเดตสถานะในตาราง 'attendance' ให้เป็น "ลา" อัตโนมัติ
+        const { error: attError } = await supabaseClient.from('attendance').upsert({
+            student_id: studentId,
+            check_date: data.date,
+            status: 'ลา'
+        }, { onConflict: 'student_id,check_date' });
+
+        if (attError) throw attError;
+
+        await Swal.fire({ icon: 'success', title: 'ส่งใบลาและอัปเดตสถานะเรียบร้อย!', timer: 2000, showConfirmButton: false });
+        loadParentDashboard(localStorage.getItem('parentToken')); // รีโหลดข้อมูล
+
+    } catch (e) {
+        Swal.fire('เกิดข้อผิดพลาด', e.message, 'error');
+    }
+}
