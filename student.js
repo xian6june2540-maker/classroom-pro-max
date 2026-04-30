@@ -1445,7 +1445,7 @@
         }
     };
     
-    function submitLeave() {
+    async function submitLeave() {
         const d1 = document.getElementById('studentLeaveDate').value; 
         const d2 = document.getElementById('studentLeaveEndDate').value; 
         const r = document.getElementById('studentLeaveReason').value.trim();
@@ -1454,34 +1454,63 @@
         if (!d1 || !d2 || !r) return Swal.fire('เตือน', 'กรุณาระบุเหตุผลการลาให้ครบถ้วนนะครับ', 'warning');
         if (d1 > d2) return Swal.fire('เตือน', 'วันที่เริ่มลาต้องไม่มากกว่าถึงวันที่นะครับ', 'error');
         
-        let finalDateStr = d1 === d2 ? d1 : d1 + ' ถึง ' + d2;
+        if(btnSubmit) { btnSubmit.disabled = true; btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังตรวจสอบ...'; }
         
-        // 🟢 แปะป้ายบอกครูชัดๆ ว่า "นักเรียน" เป็นคนแจ้งเอง
-        let finalReason = `<b class="text-primary">[นักเรียนแจ้ง]</b><br>${r}`;
+        try {
+            // 1. เช็ควันซ้อนทับ (เหมือนของผู้ปกครอง)
+            let currentDate = new Date(d1);
+            const endDate = new Date(d2);
+            let requestedDates = [];
+            while (currentDate <= endDate) {
+                requestedDates.push(currentDate.toISOString().split('T')[0]);
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
     
-        // ล็อกปุ่มกดกันสแปมรัวๆ
-        if(btnSubmit) {
-            btnSubmit.disabled = true;
-            btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังส่งข้อมูล...';
-        }
-        Swal.fire({ title: 'กำลังส่งคำร้อง...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+            const { data: allLeaves, error: checkError } = await supabaseClient.from('leaves').select('leave_date').eq('student_id', globalPortalStudent.id);
+            if (checkError) throw checkError;
     
-        // ส่งไปหลังบ้าน (เปลี่ยนจากการส่ง r เฉยๆ เป็น finalReason แทน)
-        google.script.run
-            .withSuccessHandler(function() {
-                Swal.close();
-                hideAppModal('studentLeaveModal');
-                Swal.fire('ส่งคำร้องสำเร็จ!', 'ระบบบันทึกแล้ว รอคุณครูอนุมัตินะครับ', 'success');
-            })
-            .withFailureHandler(function(err) {
-                // ถ้าเน็ตหลุด ปลดล็อกปุ่มให้กดใหม่
-                if(btnSubmit) {
-                    btnSubmit.disabled = false;
-                    btnSubmit.innerHTML = '<i class="bi bi-send-fill"></i> ยืนยันการส่งคำร้อง';
+            let existingDates = [];
+            (allLeaves || []).forEach(l => {
+                let parts = l.leave_date.split(' ถึง ');
+                let tempD1 = new Date(parts[0]);
+                let tempD2 = new Date(parts[parts.length - 1]);
+                while (tempD1 <= tempD2) {
+                    existingDates.push(tempD1.toISOString().split('T')[0]);
+                    tempD1.setDate(tempD1.getDate() + 1);
                 }
-                Swal.fire('ส่งไม่สำเร็จ', 'เกิดข้อผิดพลาด: ' + err.message, 'error');
-            })
-            .submitLeaveRequest(globalPortalStudent.id, globalPortalStudent.name, globalPortalStudent.room, finalDateStr, finalReason);
+            });
+    
+            const overlaps = requestedDates.filter(d => existingDates.includes(d));
+            if (overlaps.length > 0) {
+                throw new Error(`ไม่สามารถยื่นซ้ำได้: วันที่ [${overlaps.map(d => formatThaiDate(d)).join(', ')}] มีการยื่นใบลาไปแล้วครับ`);
+            }
+    
+            Swal.fire({ title: 'กำลังส่งคำร้อง...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    
+            let finalDateStr = d1 === d2 ? d1 : d1 + ' ถึง ' + d2;
+            let finalReason = `<b class="text-primary">[นักเรียนแจ้ง]</b><br>${r}`;
+    
+            // 2. บันทึกตรงลง Supabase เลยเป็นบิลเดียว
+            const { error: insertError } = await supabaseClient.from('leaves').insert([{
+                student_id: globalPortalStudent.id,
+                student_name: globalPortalStudent.name,
+                room: globalPortalStudent.room,
+                leave_date: finalDateStr,
+                reason: finalReason, 
+                status: 'รออนุมัติ'
+            }]);
+            
+            if (insertError) throw insertError;
+    
+            Swal.close();
+            hideAppModal('studentLeaveModal');
+            Swal.fire('ส่งคำร้องสำเร็จ!', 'ระบบบันทึกแล้ว รอคุณครูอนุมัตินะครับ', 'success');
+    
+        } catch (err) {
+            Swal.fire('แจ้งเตือน', err.message, 'warning');
+        } finally {
+            if(btnSubmit) { btnSubmit.disabled = false; btnSubmit.innerHTML = '<i class="bi bi-send-fill"></i> ยืนยันการส่งคำร้อง'; }
+        }
     }
 
     function showLevelModal() {
