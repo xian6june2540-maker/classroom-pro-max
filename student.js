@@ -1428,11 +1428,10 @@
         showAppModal('studentLeaveModal');
     }
     
-    // 🌟 ฟังก์ชันนี้รับหน้าที่เติมคำลงในกล่องข้อความทันทีที่เด็กกดปุ่ม
-    function applyLeaveTemplate(type) { 
+    // 🌟 เปลี่ยนชื่อเป็น applyStudentLeaveTemplate เพื่อไม่ให้ซ้ำกับของผู้ปกครอง
+    window.applyStudentLeaveTemplate = function(type) { 
         const reasonBox = document.getElementById('studentLeaveReason');
         
-        // แต่งคำพูดเตรียมไว้ตามประเภทที่กด
         if (type === 'ลาป่วย') {
             reasonBox.value = 'ลาป่วย: มีอาการไข้ ไม่สบาย ไม่สามารถมาเรียนได้ครับ/ค่ะ';
         } else if (type === 'ลากิจ') {
@@ -1442,9 +1441,9 @@
         } else if (type === 'เหตุฉุกเฉิน') {
             reasonBox.value = 'เหตุฉุกเฉิน: เกิดเหตุสุดวิสัยกะทันหันครับ/ค่ะ';
         } else {
-            reasonBox.value = type; // เผื่อกรณีมีการส่งข้อความตรงๆ เข้ามา
+            reasonBox.value = type;
         }
-    }
+    };
     
     function submitLeave() {
         const d1 = document.getElementById('studentLeaveDate').value; 
