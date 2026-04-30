@@ -467,7 +467,7 @@ function togglePetMenu() {
 }
 
 // =====================================
-// จุดแก้ไขที่ 2: ปรับปรุง DOMContentLoaded
+// จุดแก้ไขที่ 2: ปรับปรุง DOMContentLoaded (เวอร์ชันแก้ไข Syntax Error)
 // =====================================
 document.addEventListener('DOMContentLoaded', async function() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -478,40 +478,37 @@ document.addEventListener('DOMContentLoaded', async function() {
     const isTeacherIn = localStorage.getItem('teacherLoggedIn') === 'true'; // สถานะครู
 
     // 1. เชื่อมต่อฐานข้อมูล Supabase ให้พร้อมใช้งาน
-    await initSupabaseAsync();[cite: 5]
+    await initSupabaseAsync();
 
     // 2. [ส่วนของผู้ปกครอง] ตรวจสอบสิทธิ์การเข้าใช้งาน
-    // กรณีที่ 1: เข้าผ่านลิงก์ที่มี Token หรือ กรณีที่ 2: เคยล็อกอินด้วยรหัส Access Code ค้างไว้
     const parentToken = urlToken || savedParentToken;
 
-    if ((page === 'parent' && urlToken) || savedParentToken) {[cite: 5]
-        // จัดการ UI ให้แสดงผลเฉพาะหน้าผู้ปกครองแบบ "เงียบกริบ"
-        if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');[cite: 1, 5]
-        document.getElementById('btnLock').classList.add('hidden');[cite: 1, 5]
-        document.getElementById('student-search-view').classList.add('hidden');[cite: 1, 5]
-        document.getElementById('parent-view').classList.remove('hidden');[cite: 1, 5]
+    if ((page === 'parent' && urlToken) || savedParentToken) {
+        // จัดการ UI ให้แสดงผลเฉพาะหน้าผู้ปกครอง
+        if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
+        document.getElementById('btnLock').classList.add('hidden');
+        document.getElementById('student-search-view').classList.add('hidden');
+        document.getElementById('parent-view').classList.remove('hidden');
         
         // โหลดข้อมูล Dashboard ของผู้ปกครอง
-        loadParentDashboard(parentToken);[cite: 5]
-        return; // จบการทำงาน ไม่ต้องไปเช็คส่วนนักเรียนหรือครูต่อ
+        loadParentDashboard(parentToken);
+        return; // จบการทำงาน
     }
 
-    // 3. [ส่วนของคุณครู] ถ้าเคยล็อกอินค้างไว้ ให้เปิดหน้าจัดการห้องเรียน
-    if (isTeacherIn) {[cite: 4, 5]
-        document.getElementById('btnLock').classList.add('hidden');[cite: 1]
-        document.getElementById('btnTeacherConfig').classList.remove('hidden');[cite: 1]
-        document.getElementById('btnLogout').classList.remove('hidden');[cite: 1]
-        document.getElementById('student-search-view').classList.add('hidden');[cite: 1]
-        document.getElementById('teacher-view').classList.remove('hidden');[cite: 1]
-        document.getElementById('view-rooms').classList.remove('hidden');[cite: 1]
-        loadAllData(); // ดึงข้อมูลห้องเรียนทั้งหมด[cite: 4]
+    // 3. [ส่วนของคุณครู] ถ้าเคยล็อกอินค้างไว้
+    if (isTeacherIn) {
+        document.getElementById('btnLock').classList.add('hidden');
+        document.getElementById('btnTeacherConfig').classList.remove('hidden');
+        document.getElementById('btnLogout').classList.remove('hidden');
+        document.getElementById('student-search-view').classList.add('hidden');
+        document.getElementById('teacher-view').classList.remove('hidden');
+        document.getElementById('view-rooms').classList.remove('hidden');
+        loadAllData(); 
     } 
-    // 4. [ส่วนของนักเรียน] ถ้าเคยล็อกอินค้างไว้ ให้เปิดหน้า Dashboard นักเรียน
-    else if (savedStudentId) {[cite: 2, 5]
-        loadFullDashboard(savedStudentId, true); // โหลดหน้าแดชบอร์ดแบบเงียบ[cite: 2]
+    // 4. [ส่วนของนักเรียน] ถ้าเคยล็อกอินค้างไว้
+    else if (savedStudentId) {
+        loadFullDashboard(savedStudentId, true);
     }
-    
-    // หมายเหตุ: หากไม่มีการล็อกอินค้างไว้ ระบบจะแสดงหน้า student-search-view (หน้าค้นหา) ตามปกติครับ[cite: 1]
 });
 
 window.sendPushNotification = function(title, message) {
