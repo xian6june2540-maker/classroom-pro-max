@@ -2,7 +2,7 @@
 // 👨‍👩‍👧‍👦 PARENT SYSTEM LOGIC (Dedicated File)
 // =========================================================
 
-// ฟังก์ชันโหลด Dashboard ผู้ปกครอง
+// ฟังก์ชันโหลด Dashboard ผู้ปกครอง (อัปเกรดแสดงงานกลุ่ม + สมาชิก)
 window.loadParentDashboard = async function(token) {
     const content = document.getElementById('parent-content');
     content.innerHTML = '<div class="py-5 text-center"><div class="spinner-border text-primary mb-3"></div><h6 class="text-muted">กำลังดึงข้อมูลล่าสุด...</h6></div>';
@@ -23,23 +23,122 @@ window.loadParentDashboard = async function(token) {
             chatHead.classList.remove('hidden');
             chatHead.dataset.studentId = student.id; 
             localStorage.setItem('parentStudentId', student.id);
-            
             if(student.home_lat && student.home_lng) {
                 window.tempHomeLat = student.home_lat;
                 window.tempHomeLng = student.home_lng;
             }
         }
 
-        const [attRes, tasksRes, subRes] = await Promise.all([
+        // 🟢 ดึงข้อมูลทั้งหมดที่จำเป็น (เพิ่มตารางกลุ่มและงานกลุ่ม)
+        const [attRes, tasksRes, subRes, gTasksRes, groupsRes, gSubRes, studentsRes] = await Promise.all([
             supabaseClient.from('attendance').select('*').eq('student_id', student.id).order('check_date', { ascending: false }).limit(20),
-            supabaseClient.from('tasks').select('*').eq('room', student.room).order('due_date', { ascending: false }).limit(20),
-            supabaseClient.from('submissions').select('*').eq('student_id', student.id)
+            supabaseClient.from('tasks').select('*').eq('room', student.room),
+            supabaseClient.from('submissions').select('*').eq('student_id', student.id),
+            supabaseClient.from('group_tasks').select('*').eq('room', student.room),
+            supabaseClient.from('groups').select('*').eq('status', 'อนุมัติแล้ว'),
+            supabaseClient.from('group_submissions').select('*'),
+            supabaseClient.from('students').select('id, name').eq('room', student.room) // ดึงชื่อเพื่อนในห้องมาเทียบ
         ]);
 
         const attData = attRes.data || [];
-        const tasks = tasksRes.data || [];
-        const submissions = subRes.data || [];
         const countAtt = (status) => attData.filter(a => a.status === status).length;
+
+        const roomStudents = studentsRes.data || [];
+        const studentGroups = (groupsRes.data || []).filter(g => g.members && g.members.includes(student.id));
+
+        let combinedTasks = [];
+
+        // 1. จัดการข้อมูลงานเดี่ยว
+        (tasksRes.data || []).forEach(t => {
+            const sub = (subRes.data || []).find(s => s.task_id === t.task_id);
+            combinedTasks.push({
+                id: t.task_id,
+                title: t.title,
+                type: 'เดี่ยว',
+                due_date: t.due_date,
+                status: sub && sub.status === 'ส่งแล้ว' ? 'ส่งแล้ว' : 'ค้างส่ง',
+                groupData: null
+            });
+        });
+
+        // 2. จัดการข้อมูลงานกลุ่ม
+        (gTasksRes.data || []).forEach(t => {
+            const myGroup = studentGroups.find(g => g.task_id === t.task_id);
+            let gStatus = 'ยังไม่มีกลุ่ม';
+            let gData = null;
+
+            if (myGroup) {
+                const gSub = (gSubRes.data || []).find(s => s.task_id === t.task_id && s.group_id === myGroup.group_id);
+                gStatus = gSub && gSub.status === 'ส่งแล้ว' ? 'ส่งแล้ว' : 'ค้างส่ง';
+                
+                // แปลงรหัสนักเรียนเป็นชื่อ-สกุล
+                const memberNames = (myGroup.members || []).map(mid => {
+                    const sFound = roomStudents.find(rs => rs.id === mid);
+                    return sFound ? `${sFound.name}` : mid;
+                });
+
+                gData = {
+                    name: myGroup.group_name,
+                    memberNames: memberNames
+                };
+            }
+
+            combinedTasks.push({
+                id: t.task_id,
+                title: t.title,
+                type: 'กลุ่ม',
+                due_date: t.due_date,
+                status: gStatus,
+                groupData: gData
+            });
+        });
+
+        // 3. เรียงลำดับงานตามวันที่ (ใหม่สุดอยู่บน)
+        combinedTasks.sort((a, b) => new Date(b.due_date) - new Date(a.due_date));
+
+        // 4. สร้าง HTML สำหรับรายการงาน
+        let tasksHtml = '';
+        if (combinedTasks.length > 0) {
+            combinedTasks.forEach((t, i) => {
+                let badgeColor = t.status === 'ส่งแล้ว' ? 'bg-success' : (t.status === 'ค้างส่ง' ? 'bg-danger' : 'bg-secondary');
+                let typeBadge = t.type === 'กลุ่ม' ? '<span class="badge bg-info text-dark me-1">งานกลุ่ม</span>' : '<span class="badge bg-primary me-1">งานเดี่ยว</span>';
+                
+                let toggleBtn = '';
+                let detailsHtml = '';
+
+                // ถ้าเป็นงานกลุ่มและมีกลุ่มแล้ว ให้แสดงปุ่ม Dropdown ดูสมาชิก
+                if (t.type === 'กลุ่ม' && t.groupData) {
+                    const uniqueId = `group-detail-${i}`;
+                    toggleBtn = `<button class="btn btn-sm btn-light border shadow-sm ms-2" onclick="document.getElementById('${uniqueId}').classList.toggle('hidden')"><i class="bi bi-chevron-down"></i></button>`;
+                    detailsHtml = `
+                        <div id="${uniqueId}" class="hidden mt-2 p-2 rounded-3 small border" style="background-color: #f8f9fa;">
+                            <div class="fw-bold text-success mb-1"><i class="bi bi-people-fill"></i> ชื่อกลุ่ม: ${t.groupData.name}</div>
+                            <div class="text-muted ms-3">
+                                ${t.groupData.memberNames.map(m => `• ${m}`).join('<br>')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                tasksHtml += `
+                    <div class="list-group-item py-2 px-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold text-dark mb-1" style="font-size: 0.85rem;">${typeBadge}${t.title}</div>
+                                <small class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-calendar-event"></i> กำหนดส่ง: ${formatThaiDate(t.due_date)}</small>
+                            </div>
+                            <div class="text-end d-flex align-items-center">
+                                <span class="badge ${badgeColor}" style="font-size:0.7rem;">${t.status}</span>
+                                ${toggleBtn}
+                            </div>
+                        </div>
+                        ${detailsHtml}
+                    </div>
+                `;
+            });
+        } else {
+            tasksHtml = '<div class="p-3 text-center text-muted small">ไม่มีงานที่ต้องส่ง</div>';
+        }
 
         content.innerHTML = `
             <div class="text-center mb-4">
@@ -72,20 +171,15 @@ window.loadParentDashboard = async function(token) {
             </div>
 
             <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden text-start">
-                <div class="card-header bg-primary bg-opacity-10 border-0 fw-bold text-primary small">ภารกิจและการส่งงาน</div>
-                <div class="card-body p-0" style="max-height: 180px; overflow-y: auto;">
+                <div class="card-header bg-primary bg-opacity-10 border-0 fw-bold text-primary small">ภารกิจและการส่งงานทั้งหมด</div>
+                <div class="card-body p-0" style="max-height: 250px; overflow-y: auto;">
                     <div class="list-group list-group-flush">
-                        ${tasks.length > 0 ? tasks.map(t => {
-                            const sub = submissions.find(s => s.task_id === t.task_id);
-                            const isDone = sub && sub.status === 'ส่งแล้ว';
-                            return `<div class="list-group-item py-2 px-3"><div class="d-flex justify-content-between align-items-center"><div><div class="fw-bold text-dark" style="font-size: 0.8rem;">${t.title}</div><small class="text-muted" style="font-size: 0.7rem;">กำหนด: ${formatThaiDate(t.due_date)}</small></div><div class="text-end">${isDone ? `<span class="badge bg-success mb-1" style="font-size:0.65rem;">ส่งแล้ว</span>` : `<span class="badge bg-danger" style="font-size:0.65rem;">ค้างส่ง</span>`}</div></div></div>`;
-                        }).join('') : '<div class="p-3 text-center text-muted small">ไม่มีงาน</div>'}
+                        ${tasksHtml}
                     </div>
                 </div>
             </div>
 
             <div class="px-2">
-                <!-- 🌟 ปุ่มใหม่: แจ้งลาหยุด -->
                 <button class="btn btn-warning w-100 rounded-pill fw-bold py-2 mb-2 shadow-sm text-dark" onclick="openLeaveRequestModal('${student.id}')">
                     <i class="bi bi-calendar-check-fill"></i> แจ้งลาหยุดให้ลูก
                 </button>
@@ -392,7 +486,6 @@ async function processSubmitLeave(studentId, data) {
     Swal.fire({ title: 'กำลังตรวจสอบและบันทึกข้อมูล...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     try {
-        // 1. สร้าง Array ของวันที่ทั้งหมดที่ต้องการลา
         let currentDate = new Date(data.start);
         const endDate = new Date(data.end);
         let dateArray = [];
@@ -402,7 +495,6 @@ async function processSubmitLeave(studentId, data) {
             currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        // 2. Cross-Check: ตรวจสอบข้อมูลซ้ำซ้อน
         const { data: existingLeaves, error: checkError } = await supabaseClient
             .from('leaves')
             .select('leave_date')
@@ -416,24 +508,18 @@ async function processSubmitLeave(studentId, data) {
             throw new Error(`ไม่สามารถทำรายการได้: วันที่ [${duplicateDates}] มีการยื่นใบลาไว้ในระบบเรียบร้อยแล้วครับ`);
         }
 
-        // 3. ดึง API KEY ของ ImgBB จากฝั่งเซิร์ฟเวอร์ (GAS) ที่คุณครูตั้งค่าไว้
         let myImgbbKey = await new Promise((resolve) => {
             google.script.run
                 .withSuccessHandler(function(config) {
                     resolve(config && config.IMGBB_API_KEY ? config.IMGBB_API_KEY : "");
                 })
-                .withFailureHandler(function() {
-                    resolve("");
-                })
+                .withFailureHandler(function() { resolve(""); })
                 .getTeacherConfigMasked(); 
         });
 
-        // 4. จัดการอัปโหลดไฟล์ไปที่ ImgBB
         let finalUrl = "";
         if (data.file) {
-            if (!myImgbbKey) {
-                throw new Error('ไม่พบข้อมูล API Key สำหรับอัปโหลดรูปภาพ กรุณาแจ้งครูให้ตั้งค่าระบบครับ');
-            }
+            if (!myImgbbKey) throw new Error('ไม่พบข้อมูล API Key สำหรับอัปโหลดรูปภาพ กรุณาแจ้งครูให้ตั้งค่าระบบครับ');
 
             Swal.fire({ title: 'กำลังอัปโหลดรูปภาพ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
             const formData = new FormData();
@@ -445,22 +531,23 @@ async function processSubmitLeave(studentId, data) {
             });
             const resData = await res.json();
             
-            if (resData.success) {
-                finalUrl = resData.data.url;
-            } else {
-                throw new Error('อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
-            }
+            if (resData.success) finalUrl = resData.data.url;
+            else throw new Error('อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
         }
 
-        // 5. บันทึกข้อมูลลงฐานข้อมูล (ทำทีละวันจนครบ)
+        // 🟢 FIX: เอาลิงก์รูปไปฝังใน "เหตุผล" แทนการใช้ proof_url เพื่อแก้ปัญหา Error
+        let finalReason = data.reason;
+        if (finalUrl) {
+            finalReason += ` <br><a href="${finalUrl}" target="_blank" class="badge bg-info text-dark text-decoration-none mt-1 shadow-sm"><i class="bi bi-image"></i> กดเพื่อดูรูปแนบ/ใบรับรองแพทย์</a>`;
+        }
+
         Swal.fire({ title: 'กำลังอัปเดตระบบตารางเรียน...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
         for (const date of dateArray) {
             const { error: insertError } = await supabaseClient.from('leaves').insert([{
                 student_id: studentId,
                 leave_date: date,
                 type: data.type,
-                reason: data.reason,
-                proof_url: finalUrl,
+                reason: finalReason, // ส่งข้อความ + ปุ่มรูปลงไปช่องนี้เลย
                 status: 'อนุมัติแล้ว'
             }]);
             
