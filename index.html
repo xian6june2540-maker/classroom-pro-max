@@ -151,13 +151,22 @@
     </div>
 
     <div id="student-search-view" class="container pb-5">
-      <div class="student-box border-top border-4 border-primary text-center">
-        <h3 class="text-primary fw-bold mb-3"><i class="bi bi-search"></i> ตรวจสอบสถานะการเรียน</h3>
-        <p class="text-muted mb-4">กรุณากรอกเลขที่/รหัส (พิมพ์แค่บางส่วนก็เจอ) หรือ ชื่อ-นามสกุล ของตนเอง</p>
-        <div class="mb-3"><input type="text" id="portalStudentId" class="form-control form-control-lg search-input text-center fw-bold" placeholder="เลขที่/รหัส หรือ ชื่อ-นามสกุล" onkeypress="if(event.key === 'Enter') searchStudent()"></div>
-        <button class="btn btn-primary btn-lg w-100 fw-bold rounded-pill shadow-sm" onclick="searchStudent()" id="btnSearch"><i class="bi bi-search"></i> ค้นหาข้อมูล</button>
-        <div id="selectResultBox" class="mt-4 text-start hidden"><h6 class="text-muted fw-bold mb-3">คลิกเลือกชื่อของคุณเพื่อเข้าสู่ระบบ:</h6><div id="matchListContainer"></div></div>
-      </div>
+        <div class="student-box border-top border-4 border-primary text-center">
+            <h3 class="text-primary fw-bold mb-3"><i class="bi bi-search"></i> ตรวจสอบสถานะการเรียน</h3>
+            <p class="text-muted mb-4">กรุณากรอกเลขที่/รหัส หรือ ชื่อ-นามสกุล ของตนเอง</p>
+            <div class="mb-3"><input type="text" id="portalStudentId" class="form-control form-control-lg search-input text-center fw-bold" placeholder="เลขที่/รหัส หรือ ชื่อ-นามสกุล" onkeypress="if(event.key === 'Enter') searchStudent()"></div>
+            <button class="btn btn-primary btn-lg w-100 fw-bold rounded-pill shadow-sm mb-3" onclick="searchStudent()" id="btnSearch"><i class="bi bi-search"></i> ค้นหาข้อมูลนักเรียน</button>
+            
+            <!-- ส่วนที่เพิ่มใหม่: ทางเข้าของผู้ปกครอง -->
+            <div class="pt-3 border-top mt-2">
+                <p class="small text-muted mb-2">สำหรับผู้ปกครองที่มีรหัส Access Code</p>
+                <button class="btn btn-outline-danger w-100 rounded-pill fw-bold" onclick="promptParentLogin()">
+                    <i class="bi bi-shield-lock"></i> เข้าใช้งานสำหรับผู้ปกครอง
+                </button>
+            </div>
+    
+            <div id="selectResultBox" class="mt-4 text-start hidden"><h6 class="text-muted fw-bold mb-3">คลิกเลือกชื่อของคุณเพื่อเข้าสู่ระบบ:</h6><div id="matchListContainer"></div></div>
+        </div>
     </div>
 
     <div id="parent-view" class="container mt-4 hidden">
