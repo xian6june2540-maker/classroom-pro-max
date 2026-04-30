@@ -220,13 +220,39 @@ window.promptParentLogin = function() {
     });
 };
 
+// ฟังก์ชันตรวจสอบรหัสและเข้าสู่ระบบ (เวอร์ชันโหลดเข้า Dashboard ทันที ไม่เด้งหน้าแรก)
 window.loginWithParentToken = async function(token) {
-    const { data } = await supabaseClient.from('students').select('parent_token').eq('parent_token', token).single();
-    if (data) {
-        localStorage.setItem('parentToken', token);
-        window.location.reload(); // รีโหลดเพื่อเข้าสู่ระบบ
-    } else {
-        Swal.fire('รหัสไม่ถูกต้อง', '', 'error');
+    Swal.fire({ 
+        title: 'กำลังตรวจสอบรหัส...', 
+        didOpen: () => Swal.showLoading(), 
+        allowOutsideClick: false 
+    });
+
+    try {
+        if (!supabaseClient) await initSupabaseAsync();
+        const { data, error } = await supabaseClient.from('students').select('parent_token').eq('parent_token', token).single();
+        
+        if (data) {
+            localStorage.setItem('parentToken', token); // จำรหัสไว้ในเครื่อง
+            Swal.close();
+            
+            // 🚀 แก้ปัญหาหน้าจอเด้ง: สั่งสลับหน้าทันทีโดยไม่ใช้คำสั่ง Reload
+            // 1. ซ่อนหน้าอื่นๆ ให้หมด
+            document.getElementById('student-search-view').classList.add('hidden');
+            if(document.getElementById('student-dashboard-view')) document.getElementById('student-dashboard-view').classList.add('hidden');
+            if(document.getElementById('teacher-view')) document.getElementById('teacher-view').classList.add('hidden');
+            if(document.querySelector('.header-box')) document.querySelector('.header-box').classList.add('hidden');
+            
+            // 2. แสดงหน้าผู้ปกครอง
+            document.getElementById('parent-view').classList.remove('hidden');
+            
+            // 3. เรียกโหลดข้อมูล Dashboard มาแสดงผลทันที
+            loadParentDashboard(token);
+        } else {
+            Swal.fire('รหัสไม่ถูกต้อง', 'กรุณาตรวจสอบรหัสอีกครั้ง หรือติดต่อคุณครูครับ', 'error');
+        }
+    } catch (e) {
+        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'error');
     }
 };
 
