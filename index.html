@@ -444,10 +444,15 @@
                 <button class="btn btn-primary btn-sm fw-bold shadow-sm rounded-pill px-3 text-nowrap" onclick="showAppModal('sqlCodeModal')"><i class="bi bi-code-slash"></i> ดูโค้ด SQL และวิธีทำ</button>
             </div>
           </div>
+          <!-- 1. SUPABASE_URL -->
           <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
                   <label class="form-label fw-bold text-primary mb-0"><i class="bi bi-database-fill"></i> SUPABASE_URL</label>
                   <button class="btn btn-sm btn-outline-primary fw-bold px-3" id="btnEdit_SUPABASE_URL" onclick="toggleConfigEdit('SUPABASE_URL')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="alert alert-secondary py-2 px-3 small mb-2 border-0 shadow-sm" style="font-size: 0.8rem;">
+                  <i class="bi bi-info-circle-fill text-primary"></i> <b>ความสำคัญ:</b> คือที่อยู่ของฐานข้อมูลออนไลน์<br>
+                  <b>วิธีหา:</b> เข้า Supabase > Project Settings > API > คัดลอกค่าจากช่อง <b>Project URL</b>
               </div>
               <div id="view_SUPABASE_URL" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
               <div id="edit_SUPABASE_URL" class="hidden mt-3 p-3 border border-primary rounded bg-light">
@@ -461,10 +466,16 @@
                   </div>
               </div>
           </div>
+        
+          <!-- 2. SUPABASE_KEY -->
           <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
                   <label class="form-label fw-bold mb-0" style="color: #fd7e14;"><i class="bi bi-key-fill"></i> SUPABASE_KEY (anon public)</label>
                   <button class="btn btn-sm btn-outline-warning text-dark fw-bold px-3" id="btnEdit_SUPABASE_KEY" onclick="toggleConfigEdit('SUPABASE_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="alert alert-secondary py-2 px-3 small mb-2 border-0 shadow-sm" style="font-size: 0.8rem;">
+                  <i class="bi bi-info-circle-fill text-warning"></i> <b>ความสำคัญ:</b> กุญแจสาธารณะสำหรับเข้าถึงข้อมูล[cite: 1, 6]<br>
+                  <b>วิธีหา:</b> เข้า Supabase > Project Settings > API > คัดลอกค่าจากช่อง <b>API Keys (anon public)</b>
               </div>
               <div id="view_SUPABASE_KEY" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
               <div id="edit_SUPABASE_KEY" class="hidden mt-3 p-3 border border-warning rounded bg-light">
@@ -478,10 +489,16 @@
                   </div>
               </div>
           </div>
+        
+          <!-- 3. LINE_ACCESS_TOKEN -->
           <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
                   <label class="form-label fw-bold text-success mb-0"><i class="bi bi-line"></i> LINE_ACCESS_TOKEN</label>
                   <button class="btn btn-sm btn-outline-success fw-bold px-3" id="btnEdit_LINE_ACCESS_TOKEN" onclick="toggleConfigEdit('LINE_ACCESS_TOKEN')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="alert alert-secondary py-2 px-3 small mb-2 border-0 shadow-sm" style="font-size: 0.8rem;">
+                  <i class="bi bi-info-circle-fill text-success"></i> <b>ความสำคัญ:</b> ใช้เพื่อให้บอทส่งประกาศเข้ากลุ่ม LINE ได้<br>
+                  <b>วิธีหา:</b> เข้า LINE Developers > Messaging API > คัดลอกค่าจากช่อง <b>Channel access token</b> (กด Issue เพื่อสร้าง)
               </div>
               <div id="view_LINE_ACCESS_TOKEN" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
               <div id="edit_LINE_ACCESS_TOKEN" class="hidden mt-3 p-3 border border-success rounded bg-light">
@@ -495,10 +512,16 @@
                   </div>
               </div>
           </div>
+        
+          <!-- 4. GROQ_API_KEY (AI) -->
           <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
                   <label class="form-label fw-bold text-info mb-0" style="color: #f51535 !important;"><i class="bi bi-lightning-charge-fill"></i> GROQ_API_KEY (AI ประสิทธิภาพสูง)</label>
                   <button class="btn btn-sm btn-outline-danger fw-bold px-3" id="btnEdit_GEMINI_API_KEY" onclick="toggleConfigEdit('GEMINI_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="alert alert-secondary py-2 px-3 small mb-2 border-0 shadow-sm" style="font-size: 0.8rem;">
+                  <i class="bi bi-info-circle-fill text-danger"></i> <b>ความสำคัญ:</b> สมองกล AI สำหรับช่วยครูตรวจงานและวิเคราะห์พฤติกรรม[cite: 1, 5]<br>
+                  <b>วิธีหา:</b> สมัครเว็บ Groq Cloud > เมนู <b>API Keys</b> > สร้างคีย์ใหม่ (จะขึ้นต้นด้วย gsk_...)
               </div>
               <div id="view_GEMINI_API_KEY" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
               <div id="edit_GEMINI_API_KEY" class="hidden mt-3 p-3 border border-danger rounded bg-light">
@@ -512,10 +535,16 @@
                   </div>
               </div>
           </div>
+        
+          <!-- 5. IMGBB_API_KEY -->
           <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
                   <label class="form-label fw-bold text-info mb-0"><i class="bi bi-image"></i> IMGBB_API_KEY</label>
                   <button class="btn btn-sm btn-outline-info fw-bold px-3" id="btnEdit_IMGBB_API_KEY" onclick="toggleConfigEdit('IMGBB_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="alert alert-secondary py-2 px-3 small mb-2 border-0 shadow-sm" style="font-size: 0.8rem;">
+                  <i class="bi bi-info-circle-fill text-info"></i> <b>ความสำคัญ:</b> ใช้สำหรับฝากรูปภาพผลงานที่นักเรียนส่งมา[cite: 1, 5]<br>
+                  <b>วิธีหา:</b> สมัครเว็บ imgbb.com > เข้าเมนู <b>API</b> > คัดลอกค่า <b>API Key</b> มาใส่
               </div>
               <div id="view_IMGBB_API_KEY" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
               <div id="edit_IMGBB_API_KEY" class="hidden mt-3 p-3 border border-info rounded bg-light">
@@ -529,10 +558,16 @@
                   </div>
               </div>
           </div>
+        
+          <!-- 6. TEACHER_LINE_UID -->
           <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
                   <label class="form-label fw-bold text-danger mb-0"><i class="bi bi-person-badge"></i> TEACHER_LINE_UID</label>
                   <button class="btn btn-sm btn-outline-danger fw-bold px-3" id="btnEdit_TEACHER_LINE_UID" onclick="toggleConfigEdit('TEACHER_LINE_UID')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="alert alert-secondary py-2 px-3 small mb-2 border-0 shadow-sm" style="font-size: 0.8rem;">
+                  <i class="bi bi-info-circle-fill text-danger"></i> <b>ความสำคัญ:</b> ระบุตัวตนครูเพื่อส่งรหัส OTP เข้า LINE ส่วนตัว[cite: 1]<br>
+                  <b>วิธีหา:</b> เชิญบอทเข้ากลุ่มหรือแชทส่วนตัว > พิมพ์ <b>!id</b> > บอทจะตอบกลับเป็นรหัส <b>User ID</b>
               </div>
               <div id="view_TEACHER_LINE_UID" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
               <div id="edit_TEACHER_LINE_UID" class="hidden mt-3 p-3 border border-danger rounded bg-light">
@@ -546,10 +581,16 @@
                   </div>
               </div>
           </div>
+        
+          <!-- 7. TEACHER_PIN -->
           <div class="mb-2 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
                   <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-shield-lock-fill text-dark"></i> TEACHER_PIN</label>
                   <button class="btn btn-sm btn-outline-dark fw-bold px-3" id="btnEdit_TEACHER_PIN" onclick="toggleConfigEdit('TEACHER_PIN')"><i class="bi bi-pencil-square"></i> เปลี่ยนรหัส</button>
+              </div>
+              <div class="alert alert-secondary py-2 px-3 small mb-2 border-0 shadow-sm" style="font-size: 0.8rem;">
+                  <i class="bi bi-info-circle-fill text-dark"></i> <b>ความสำคัญ:</b> รหัสลับสำหรับล็อกอินเข้าหน้าควบคุมสำหรับครู[cite: 1]<br>
+                  <b>คำแนะนำ:</b> รหัสเริ่มต้นคือ <b>1234</b> แนะนำให้เปลี่ยนทันทีเพื่อความปลอดภัยครับ
               </div>
               <div id="view_TEACHER_PIN" class="p-2 bg-light border rounded" style="font-family: monospace; font-size: 0.9em; color: #555;">********</div>
               <div id="edit_TEACHER_PIN" class="hidden mt-3 p-3 border border-dark rounded bg-light">
