@@ -576,9 +576,306 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4 bg-light">
+          <div class="alert alert-warning fw-bold mb-3 border-0 border-start border-4 border-warning shadow-sm">
+            <i class="bi bi-info-circle-fill"></i> วิธีใช้งาน (อ่านก่อนรัน):
+            <ol class="mb-0 mt-2 px-3 text-dark">
+              <li>เข้าสู่ระบบ <a href="https://supabase.com" target="_blank" class="text-primary text-decoration-none">Supabase</a> แล้วเข้าโปรเจกต์ของคุณ</li>
+              <li>ไปที่เมนู <b>SQL Editor</b> (ไอคอนรูป 📝 &lt; &gt; แถบซ้ายมือ) > กดปุ่ม <b>New query</b></li>
+              <li>กดปุ่ม <span class="badge bg-success">คัดลอกโค้ด</span> ด้านล่าง แล้วนำไปวางในช่องว่างของ SQL Editor</li>
+              <li>กดปุ่ม <b>Run</b> (ปุ่มสีเขียวมุมขวาล่าง) รอจนขึ้นคำว่า <span class="text-success">Success</span></li>
+              <li class="text-danger mt-1"><b>สำคัญมาก!</b> หลังจากรันเสร็จ ให้ไปที่เมนู <b>Authentication > Policies</b> แล้วไล่กด <b>Disable RLS</b> ให้ครบทั้ง 10 ตาราง</li>
+            </ol>
+          </div>
           <div class="position-relative">
             <button class="btn btn-sm btn-success position-absolute top-0 end-0 m-2 fw-bold shadow" onclick="copySqlCode()" id="btnCopySql" style="z-index: 10;"><i class="bi bi-clipboard"></i> คัดลอกโค้ด</button>
-            <textarea id="sqlCodeArea" class="form-control text-light bg-dark p-3 rounded-3 shadow-sm border-0" style="font-family: monospace; font-size: 0.85rem; height: 400px; resize: none;" readonly>-- SQL CODE --</textarea>
+            <textarea id="sqlCodeArea" class="form-control text-light bg-dark p-3 rounded-3 shadow-sm border-0" style="font-family: monospace; font-size: 0.85rem; height: 400px; resize: none;" readonly>-- ========================================================
+-- ========================================================
+-- ส่วนที่ 0: ล้างกระดาน (ลบตารางเก่าทิ้งเพื่อป้องกัน Error ทับซ้อน)
+-- ========================================================
+DROP TABLE IF EXISTS live_quiz_responses CASCADE;
+DROP TABLE IF EXISTS live_quiz_sessions CASCADE;
+DROP TABLE IF EXISTS parent_communications CASCADE;
+DROP TABLE IF EXISTS boss_logs CASCADE;
+DROP TABLE IF EXISTS boss_quizzes CASCADE;
+DROP TABLE IF EXISTS group_submissions CASCADE;
+DROP TABLE IF EXISTS groups CASCADE;
+DROP TABLE IF EXISTS group_tasks CASCADE;
+DROP TABLE IF EXISTS submissions CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS attendance CASCADE;
+DROP TABLE IF EXISTS leaves CASCADE;
+DROP TABLE IF EXISTS announcements CASCADE;
+DROP TABLE IF EXISTS students CASCADE;
+DROP TABLE IF EXISTS rooms CASCADE;
+
+-- ========================================================
+-- ส่วนที่ 1: สร้างตารางทั้งหมดใหม่
+-- ========================================================
+
+-- 1. ตารางห้องเรียน
+CREATE TABLE rooms (
+    room_name TEXT PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 2. ตารางนักเรียน (เพิ่มพื้นที่เก็บพิกัดบ้านนักเรียน)
+CREATE TABLE students (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    nickname TEXT DEFAULT '',
+    gender TEXT DEFAULT '',
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
+    accumulated_score NUMERIC DEFAULT 0,
+    pin TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
+    disease TEXT DEFAULT '',
+    dob TEXT DEFAULT '',
+    sport TEXT DEFAULT '',
+    talent TEXT DEFAULT '',
+    hobby TEXT DEFAULT '',
+    father TEXT DEFAULT '',
+    mother TEXT DEFAULT '',
+    house_no TEXT DEFAULT '',
+    moo TEXT DEFAULT '',
+    sub_district TEXT DEFAULT '',
+    district TEXT DEFAULT '',
+    province TEXT DEFAULT '',
+    zipcode TEXT DEFAULT '',
+    avatar TEXT DEFAULT '1',
+    exp NUMERIC DEFAULT 0,
+    last_check_in TEXT DEFAULT '',
+    dm JSONB DEFAULT '[]'::jsonb,
+    inventory JSONB DEFAULT '[]'::jsonb,
+    equipped_bg TEXT DEFAULT 'bg0',
+    last_passive_update BIGINT DEFAULT (extract(epoch from now()) * 1000),
+    buff_multiplier NUMERIC DEFAULT 1.0,
+    buff_end_at BIGINT DEFAULT 0,
+    parent_token TEXT DEFAULT NULL,
+    home_lat NUMERIC DEFAULT NULL, -- 🌟 [เพิ่มใหม่: พิกัดบ้านละติจูด]
+    home_lng NUMERIC DEFAULT NULL  -- 🌟 [เพิ่มใหม่: พิกัดบ้านลองจิจูด]
+);
+
+-- 3. ตารางเช็คชื่อ
+CREATE TABLE attendance (
+    id SERIAL PRIMARY KEY,
+    check_date TEXT NOT NULL,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    student_name TEXT,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
+    status TEXT,
+    timestamp TEXT,
+    UNIQUE(check_date, student_id)
+);
+
+-- 4. ตารางสั่งงาน (เดี่ยว)
+CREATE TABLE tasks (
+    task_id TEXT PRIMARY KEY,
+    title TEXT,
+    description TEXT,
+    due_date TEXT,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
+    max_score NUMERIC
+);
+
+-- 5. ตารางส่งงาน (เดี่ยว)
+CREATE TABLE submissions (
+    id SERIAL PRIMARY KEY,
+    task_id TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
+    task_title TEXT,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    student_name TEXT,
+    status TEXT,
+    score NUMERIC,
+    url TEXT,
+    screenshot_url TEXT,
+    timestamp TEXT,
+    UNIQUE(task_id, student_id)
+);
+
+-- 6. ตารางประกาศ
+CREATE TABLE announcements (
+    id SERIAL PRIMARY KEY,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
+    message TEXT,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 7. คำร้องขอลา
+CREATE TABLE leaves (
+    id SERIAL PRIMARY KEY,
+    date_req TEXT,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    student_name TEXT,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
+    leave_date TEXT,
+    reason TEXT,
+    status TEXT DEFAULT 'รออนุมัติ'
+);
+
+-- 8. ตารางสั่งงานกลุ่ม
+CREATE TABLE group_tasks (
+    task_id TEXT PRIMARY KEY,
+    title TEXT,
+    max_members INT,
+    due_date TEXT,
+    room TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
+    max_score NUMERIC
+);
+
+-- 9. ตารางข้อมูลกลุ่ม
+CREATE TABLE groups (
+    group_id TEXT PRIMARY KEY,
+    task_id TEXT REFERENCES group_tasks(task_id) ON DELETE CASCADE,
+    group_name TEXT,
+    members JSONB DEFAULT '[]'::jsonb,
+    status TEXT DEFAULT 'รออนุมัติ'
+);
+
+-- 10. ตารางส่งงานกลุ่ม
+CREATE TABLE group_submissions (
+    id SERIAL PRIMARY KEY,
+    task_id TEXT REFERENCES group_tasks(task_id) ON DELETE CASCADE,
+    group_id TEXT REFERENCES groups(group_id) ON DELETE CASCADE,
+    status TEXT,
+    score NUMERIC,
+    url TEXT,
+    screenshot_url TEXT,
+    timestamp TEXT,
+    UNIQUE(task_id, group_id)
+);
+
+-- 11. ตารางเก็บข้อมูลบอส
+CREATE TABLE boss_quizzes (
+    id SERIAL PRIMARY KEY,
+    room_name TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
+    topic TEXT,
+    boss_name TEXT,
+    boss_hp INT,
+    boss_max_hp INT,
+    questions_json JSONB,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 12. ตารางเก็บประวัติการตีบอส
+CREATE TABLE boss_logs (
+    id SERIAL PRIMARY KEY,
+    boss_id INT REFERENCES boss_quizzes(id) ON DELETE CASCADE,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    damage_dealt INT,
+    exp_earned INT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 13. ตารางเก็บเซสชันของ Live Quiz
+CREATE TABLE live_quiz_sessions (
+    id TEXT PRIMARY KEY,
+    room_name TEXT REFERENCES rooms(room_name) ON UPDATE CASCADE ON DELETE CASCADE,
+    status TEXT DEFAULT 'setup',
+    questions_json JSONB,
+    current_q_index INT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 14. ตารางเก็บคำตอบ Live Quiz
+CREATE TABLE live_quiz_responses (
+    id SERIAL PRIMARY KEY,
+    session_id TEXT REFERENCES live_quiz_sessions(id) ON DELETE CASCADE,
+    q_index INT,
+    student_id TEXT,
+    answer TEXT,
+    response_time INT,
+    is_correct BOOLEAN,
+    UNIQUE(session_id, q_index, student_id)
+);
+
+-- 15. ตารางสื่อสาร (Messenger/Line/Phone/GPS ถูกคุมด้วย Logic ฝั่ง JavaScript)
+CREATE TABLE parent_communications (
+    id SERIAL PRIMARY KEY,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+    target TEXT, 
+    type TEXT,   
+    message TEXT,
+    parent_contact TEXT, 
+    is_resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- สร้าง INDEX เพิ่มความเร็ว
+CREATE INDEX idx_students_room ON students(room);
+CREATE INDEX idx_attendance_student ON attendance(student_id);
+CREATE INDEX idx_submissions_student ON submissions(student_id);
+CREATE INDEX idx_groups_members ON groups USING gin (members);
+CREATE INDEX idx_live_quiz_responses_session_q ON live_quiz_responses(session_id, q_index);
+CREATE INDEX idx_boss_logs_boss_id ON boss_logs(boss_id);
+CREATE INDEX idx_parent_comm_student ON parent_communications(student_id);
+
+-- ========================================================
+-- ส่วนที่ 2: ระบบ VIEWS
+-- ========================================================
+CREATE OR REPLACE FUNCTION manage_room_student_views()
+RETURNS TRIGGER AS $$
+DECLARE
+    old_view_name TEXT;
+    new_view_name TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        new_view_name := 'room_students_' || NEW.room_name;
+        EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT * FROM students WHERE room = %L', new_view_name, NEW.room_name);
+        RETURN NEW;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF OLD.room_name <> NEW.room_name THEN
+            old_view_name := 'room_students_' || OLD.room_name;
+            new_view_name := 'room_students_' || NEW.room_name;
+            EXECUTE format('DROP VIEW IF EXISTS %I', old_view_name);
+            EXECUTE format('CREATE OR REPLACE VIEW %I AS SELECT * FROM students WHERE room = %L', new_view_name, NEW.room_name);
+        END IF;
+        RETURN NEW;
+    ELSIF TG_OP = 'DELETE' THEN
+        old_view_name := 'room_students_' || OLD.room_name;
+        EXECUTE format('DROP VIEW IF EXISTS %I', old_view_name);
+        RETURN OLD;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trigger_room_views ON rooms;
+CREATE TRIGGER trigger_room_views
+AFTER INSERT OR UPDATE OR DELETE ON rooms
+FOR EACH ROW
+EXECUTE FUNCTION manage_room_student_views();
+
+-- ========================================================
+-- ส่วนที่ 3: เปิดใช้งานระบบ Real-time
+-- ========================================================
+ALTER TABLE students REPLICA IDENTITY FULL;
+ALTER TABLE live_quiz_responses REPLICA IDENTITY FULL;
+ALTER TABLE boss_quizzes REPLICA IDENTITY FULL;
+ALTER TABLE parent_communications REPLICA IDENTITY FULL;
+
+DROP PUBLICATION IF EXISTS supabase_realtime;
+CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
+
+-- ========================================================
+-- ส่วนที่ 4: ปิดระบบความปลอดภัย RLS
+-- ========================================================
+ALTER TABLE rooms DISABLE ROW LEVEL SECURITY;
+ALTER TABLE students DISABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE announcements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE leaves DISABLE ROW LEVEL SECURITY;
+ALTER TABLE group_tasks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE groups DISABLE ROW LEVEL SECURITY;
+ALTER TABLE group_submissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE boss_quizzes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE boss_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE live_quiz_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE live_quiz_responses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE parent_communications DISABLE ROW LEVEL SECURITY;
+</textarea>
           </div>
         </div>
       </div>
