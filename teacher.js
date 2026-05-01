@@ -2315,7 +2315,6 @@
         });
     };
 
-    // --- [อัปเกรด: ฟังก์ชันเปิดดูรายละเอียด พร้อมปุ่มโทร/แอดไลน์ อัตโนมัติ] ---
     window.openConsultDetail = function(studentId, studentName) {
         const consults = (window.tempConsults || []).filter(c => c.student_id === studentId);
         
@@ -2331,20 +2330,23 @@
             if (rawContact.startsWith("LINE:")) {
                 contactHtml = `<a href="https://line.me/ti/p/~${rawContact.replace("LINE:","")}" target="_blank" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill mb-2"><i class="bi bi-line"></i> แอด LINE</a>`;
             } else if (rawContact.startsWith("FB:")) {
-                // 🔵 ลิงก์ Facebook Messenger
                 contactHtml = `<a href="https://m.me/${rawContact.replace("FB:","")}" target="_blank" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill mb-2" style="background:#0084ff;"><i class="bi bi-messenger"></i> ทัก Messenger</a>`;
             } else {
                 contactHtml = `<a href="tel:${rawContact.replace(/\D/g,"")}" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill mb-2"><i class="bi bi-telephone-fill"></i> โทร: ${rawContact}</a>`;
             }
     
-            // 🚗 ปุ่มนำทาง (ถ้ามีพิกัด)
             let navHtml = (hLat && hLng) 
                 ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${hLat},${hLng}" target="_blank" class="btn btn-danger w-100 fw-bold shadow-sm rounded-pill py-2 mt-2"><i class="bi bi-car-front-fill"></i> นำทางไปบ้านนักเรียน</a>`
                 : `<div class="alert alert-secondary small p-2 mt-2 mb-0 text-center">ยังไม่ได้ระบุพิกัดบ้าน</div>`;
     
             return `
-                <div class="card border-0 shadow-sm mb-3 rounded-4 overflow-hidden text-start">
-                    <div class="card-header bg-danger text-white small py-1"><i class="bi bi-clock"></i> ส่งเมื่อ: ${formatThaiDate(c.created_at.split('T')[0])}</div>
+                <div class="card border-0 shadow-sm mb-3 rounded-4 overflow-hidden text-start" id="consult-card-${c.id}">
+                    <div class="card-header bg-danger text-white small py-2 d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-clock"></i> ส่งเมื่อ: ${formatThaiDate(c.created_at.split('T')[0])}</span>
+                        <button class="btn btn-sm btn-light text-danger fw-bold py-0 px-2 rounded-pill shadow-sm" onclick="resolveConsultMsg(${c.id}, '${studentId}')">
+                            <i class="bi bi-check2-circle"></i> เคลียร์ปัญหานี้
+                        </button>
+                    </div>
                     <div class="card-body bg-white">
                         <div class="mb-3"><small class="text-muted fw-bold d-block mb-1">เรื่องที่ต้องการปรึกษา:</small><div class="p-2 bg-light rounded border">${c.message}</div></div>
                         <div class="p-3 rounded-4" style="background:#f8f9fa; border: 1px solid #eee;">
@@ -2359,18 +2361,31 @@
         Swal.fire({
             title: `<div class="fw-bold text-primary">การติดต่อจากผู้ปกครอง</div><div class="small text-muted fs-6">${studentName}</div>`,
             html: `<div style="max-height:450px; overflow-y:auto; padding: 5px;">${html}</div>`,
-            showCancelButton: true,
-            confirmButtonText: '<i class="bi bi-check-circle"></i> รับทราบและล้างแจ้งเตือน',
-            cancelButtonText: 'ปิด',
-            confirmButtonColor: '#198754',
+            showConfirmButton: false, // เอาปุ่มยืนยันทั้งหมดออก
+            showCloseButton: true,
             customClass: { popup: 'rounded-4' }
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                await supabaseClient.from('parent_communications').delete().eq('student_id', studentId).eq('target', 'teacher');
-                loadStudents(); 
-                Swal.fire({ icon: 'success', title: 'ล้างข้อมูลแล้ว', timer: 1000, showConfirmButton: false });
-            }
         });
+    };
+    
+    // ฟังก์ชันลบปัญหาแยกทีละรายการ
+    window.resolveConsultMsg = async function(msgId, studentId) {
+        // 1. ลบจากฐานข้อมูลเฉพาะ ID นี้
+        await supabaseClient.from('parent_communications').delete().eq('id', msgId);
+        
+        // 2. ซ่อนการ์ดใบนี้ออกจากหน้าจอทันที
+        const card = document.getElementById('consult-card-' + msgId);
+        if(card) card.remove();
+        
+        // 3. เอาออกจากตัวแปรชั่วคราว
+        window.tempConsults = window.tempConsults.filter(c => c.id !== msgId);
+        
+        // 4. เช็คว่าถ้าลบหมดแล้ว ให้ปิดหน้าต่างและโหลดรายชื่อใหม่
+        const remaining = window.tempConsults.filter(c => c.student_id === studentId);
+        if(remaining.length === 0) {
+            Swal.close();
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'เคลียร์ปัญหาครบแล้ว', showConfirmButton: false, timer: 1500 });
+        }
+        loadStudents(); // อัปเดตไอคอนกระพริบหน้าตาราง
     };
     
     // 📍 ฟังก์ชันนำทางสากล (ใช้ได้ทั้งคอมและมือถือ)
