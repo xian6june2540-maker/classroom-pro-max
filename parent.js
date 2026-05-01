@@ -37,7 +37,7 @@ window.loadParentDashboard = async function(token) {
             supabaseClient.from('group_tasks').select('*').eq('room', student.room),
             supabaseClient.from('groups').select('*').eq('status', 'อนุมัติแล้ว'),
             supabaseClient.from('group_submissions').select('*'),
-            supabaseClient.from('students').select('id, name').eq('room', student.room) // ดึงชื่อเพื่อนในห้องมาเทียบ
+            supabaseClient.from('students').select('id, name, nickname, avatar').eq('room', student.room) // ดึงชื่อเพื่อนและรูปมาแสดงผล
         ]);
 
         const attData = attRes.data || [];
@@ -106,7 +106,7 @@ window.loadParentDashboard = async function(token) {
                 let toggleBtn = '';
                 let detailsHtml = '';
 
-                // ถ้าเป็นงานกลุ่มและมีกลุ่มแล้ว ให้แสดงปุ่ม Dropdown ดูสมาชิก
+                // ถ้าเป็นงานกลุ่มและมีกลุ่มแล้ว ให้แสดงปุ่ม Dropdown ดูสมาชิก (คงของเดิมไว้เป๊ะๆ)
                 if (t.type === 'กลุ่ม' && t.groupData) {
                     const uniqueId = `group-detail-${i}`;
                     toggleBtn = `<button class="btn btn-sm btn-light border shadow-sm ms-2" onclick="document.getElementById('${uniqueId}').classList.toggle('hidden')"><i class="bi bi-chevron-down"></i></button>`;
@@ -140,6 +140,55 @@ window.loadParentDashboard = async function(token) {
             tasksHtml = '<div class="p-3 text-center text-muted small">ไม่มีงานที่ต้องส่ง</div>';
         }
 
+        // ----------------------------------------------------
+        // 🌟 เพิ่มลอจิก: วิเคราะห์เครือข่ายสังคมของลูก
+        // ----------------------------------------------------
+        let teammatesCount = {};
+        studentGroups.forEach(g => {
+            (g.members || []).forEach(mid => {
+                if (mid !== student.id) {
+                    teammatesCount[mid] = (teammatesCount[mid] || 0) + 1;
+                }
+            });
+        });
+        
+        let topTeammates = Object.keys(teammatesCount).sort((a, b) => teammatesCount[b] - teammatesCount[a]).slice(0, 3);
+        let topTeammatesHtml = '';
+        if (topTeammates.length > 0) {
+            topTeammates.forEach(mid => {
+                let f = roomStudents.find(rs => rs.id === mid);
+                if (f) {
+                    let fName = f.name; 
+                    let fNick = f.nickname ? ` (${f.nickname})` : '';
+                    let fAvatar = f.avatar || '1';
+                    topTeammatesHtml += `
+                        <div class="d-flex align-items-center mb-2 p-2 bg-white rounded border shadow-sm">
+                            <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${fAvatar}&backgroundColor=transparent" style="width:40px; height:40px; border-radius:50%; border:2px solid #0d6efd;" class="me-3 bg-light">
+                            <div>
+                                <div class="fw-bold text-dark mb-0" style="font-size:0.9rem;">${fName}${fNick}</div>
+                                <small class="text-muted" style="font-size:0.75rem;">ทำงานด้วยกัน ${teammatesCount[mid]} ครั้ง</small>
+                            </div>
+                        </div>`;
+                }
+            });
+        } else {
+            topTeammatesHtml = '<div class="text-center text-muted small py-2">ยังไม่มีประวัติการทำงานกลุ่ม</div>';
+        }
+
+        let totalGroupTasks = (gTasksRes.data || []).length;
+        let joinedGroups = studentGroups.length;
+        let teamworkStatusHtml = '';
+        if (totalGroupTasks === 0) {
+            teamworkStatusHtml = '<span class="text-muted small">ยังไม่มีการสั่งงานกลุ่มในห้องนี้</span>';
+        } else if (joinedGroups >= totalGroupTasks * 0.5) {
+            teamworkStatusHtml = '<span class="text-success small fw-bold"><i class="bi bi-check-circle-fill"></i> น้องปรับตัวได้เยี่ยม มักมีกลุ่มทำงานพร้อมลุยเสมอ</span>';
+        } else {
+            teamworkStatusHtml = '<span class="text-warning text-dark small fw-bold"><i class="bi bi-exclamation-circle-fill"></i> น้องอาจต้องการความช่วยเหลือในการหาเพื่อนเข้ากลุ่ม</span>';
+        }
+
+        // ----------------------------------------------------
+        // 🌟 สร้าง HTML หลัก (แบบ Accordion ยืดหดได้)
+        // ----------------------------------------------------
         content.innerHTML = `
             <div class="text-center mb-4">
                 <img src="https://api.dicebear.com/9.x/adventurer/svg?seed=${student.avatar}" style="width: 90px; height: 90px; border-radius: 50%; border: 4px solid #0d6efd;" class="shadow-sm mb-2 bg-white">
@@ -152,32 +201,68 @@ window.loadParentDashboard = async function(token) {
                 <div class="col-6"><div class="p-3 bg-white rounded-4 shadow-sm border-start border-4 border-warning text-start"><small class="text-muted d-block fw-bold">แต้ม EXP</small><span class="h4 fw-bold text-warning">${Math.floor(student.exp || 0).toLocaleString()}</span></div></div>
             </div>
 
-            <div class="card border-0 shadow-sm rounded-4 mb-3 overflow-hidden text-start">
-                <div class="card-header bg-success bg-opacity-10 border-0 fw-bold text-success small">ประวัติการเข้าเรียน</div>
-                <div class="card-body p-0">
-                    <div class="row g-0 text-center py-2 bg-light border-bottom">
-                        <div class="col-4"><div class="fw-bold text-success">${countAtt('มา')}</div><small class="text-muted">มา</small></div>
-                        <div class="col-4"><div class="fw-bold text-warning text-dark">${countAtt('ลา')}</div><small class="text-muted">ลา</small></div>
-                        <div class="col-4"><div class="fw-bold text-danger">${countAtt('ขาด')}</div><small class="text-muted">ขาด</small></div>
-                    </div>
-                    <div style="max-height: 150px; overflow-y: auto;">
-                        <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
-                            <tbody>
-                                ${attData.length > 0 ? attData.map(a => `<tr><td class="ps-3 py-2">${formatThaiDate(a.check_date)}</td><td class="pe-3 text-end py-2"><span class="badge ${a.status==='มา'?'bg-success':a.status==='ลา'?'bg-warning text-dark':'bg-danger'}">${a.status}</span></td></tr>`).join('') : '<tr><td class="text-center py-3">ไม่มีประวัติ</td></tr>'}
-                            </tbody>
-                        </table>
+            <!-- เริ่ม Accordion -->
+            <div class="accordion mb-4 text-start shadow-sm" id="parentAccordion" style="border-radius: 15px; overflow: hidden; border: 1px solid #dee2e6;">
+                
+                <!-- กล่อง 1: ประวัติการเข้าเรียน -->
+                <div class="accordion-item border-0 border-bottom">
+                    <h2 class="accordion-header" id="headingAtt">
+                        <button class="accordion-button collapsed fw-bold text-success bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAtt">
+                            <i class="bi bi-calendar-check-fill me-2 fs-5"></i> ประวัติการเข้าเรียน (มา ${countAtt('มา')} | ลา ${countAtt('ลา')} | ขาด ${countAtt('ขาด')})
+                        </button>
+                    </h2>
+                    <div id="collapseAtt" class="accordion-collapse collapse" data-bs-parent="#parentAccordion">
+                        <div class="accordion-body p-0">
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+                                    <tbody>
+                                        ${attData.length > 0 ? attData.map(a => `<tr><td class="ps-3 py-2">${formatThaiDate(a.check_date)}</td><td class="pe-3 text-end py-2"><span class="badge ${a.status==='มา'?'bg-success':a.status==='ลา'?'bg-warning text-dark':'bg-danger'}">${a.status}</span></td></tr>`).join('') : '<tr><td class="text-center py-3">ไม่มีประวัติ</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden text-start">
-                <div class="card-header bg-primary bg-opacity-10 border-0 fw-bold text-primary small">ภารกิจและการส่งงานทั้งหมด</div>
-                <div class="card-body p-0" style="max-height: 250px; overflow-y: auto;">
-                    <div class="list-group list-group-flush">
-                        ${tasksHtml}
+                <!-- กล่อง 2: ภารกิจและการส่งงาน -->
+                <div class="accordion-item border-0 border-bottom">
+                    <h2 class="accordion-header" id="headingTask">
+                        <button class="accordion-button collapsed fw-bold text-primary bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTask">
+                            <i class="bi bi-journal-text me-2 fs-5"></i> ภารกิจและการส่งงานทั้งหมด
+                        </button>
+                    </h2>
+                    <div id="collapseTask" class="accordion-collapse collapse" data-bs-parent="#parentAccordion">
+                        <div class="accordion-body p-0" style="max-height: 300px; overflow-y: auto;">
+                            <div class="list-group list-group-flush">
+                                ${tasksHtml}
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- กล่อง 3: เครือข่ายสังคมของลูก -->
+                <div class="accordion-item border-0">
+                    <h2 class="accordion-header" id="headingSocial">
+                        <button class="accordion-button collapsed fw-bold bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSocial" style="color: #6f42c1;">
+                            <i class="bi bi-people-fill me-2 fs-5"></i> เครือข่ายสังคมของลูก
+                        </button>
+                    </h2>
+                    <div id="collapseSocial" class="accordion-collapse collapse" data-bs-parent="#parentAccordion">
+                        <div class="accordion-body" style="background-color: #f8f9fa;">
+                            <h6 class="fw-bold text-secondary small mb-2"><i class="bi bi-person-hearts text-danger"></i> ก๊วนเพื่อนสนิท (ทำกลุ่มด้วยบ่อยสุด)</h6>
+                            <div class="mb-3">
+                                ${topTeammatesHtml}
+                            </div>
+                            <h6 class="fw-bold text-secondary small mb-2"><i class="bi bi-puzzle-fill text-primary"></i> สถานะการทำงานเป็นทีม</h6>
+                            <div class="p-2 bg-white rounded border shadow-sm text-center">
+                                ${teamworkStatusHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
+            <!-- จบ Accordion -->
 
             <div class="px-2">
                 <button class="btn btn-warning w-100 rounded-pill fw-bold py-2 mb-2 shadow-sm text-dark" onclick="openLeaveRequestModal('${student.id}')">
