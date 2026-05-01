@@ -657,9 +657,6 @@ window.processSendToTeacher = async function(id, btn) {
         
         Swal.fire({ icon: 'success', title: 'ส่งเรื่องถึงคุณครูแล้ว!', timer: 2500, showConfirmButton: false });
         
-        // ส่งเสร็จแล้วให้ล้างกล่องข้อความ
-        document.getElementById('hubMsgToTeacher').value = '';
-        document.getElementById('hubParentContact').value = '';
     } catch(e) {
         Swal.fire('ผิดพลาด', e.message, 'error');
     } finally {
