@@ -235,8 +235,17 @@ window.openCommunicationHub = function(studentId) {
                 <div id="sectionTeacher" class="hidden">
                     <label class="small fw-bold text-muted mb-2">เรื่องที่ต้องการปรึกษาคุณครู:</label>
                     <textarea id="hubMsgToTeacher" class="form-control mb-3" rows="2" placeholder="พิมพ์ข้อความที่ต้องการแจ้งคุณครู..."></textarea>
-                    <input type="text" id="hubParentContact" class="form-control mb-1 fw-bold text-center" placeholder="ข้อมูลติดต่อกลับ">
-                    <button class="btn btn-primary w-100 fw-bold rounded-pill shadow-lg py-2" onclick="processSendToTeacher('${studentId}')">ยืนยันและส่งข้อความหาครู</button>
+                    
+                    <label class="small fw-bold text-muted mb-2">ช่องทางให้ครูติดต่อกลับ:</label>
+                    <div class="d-flex gap-2 mb-2">
+                        <button class="btn btn-sm flex-grow-1 rounded-pill active" id="btnContactPhone" onclick="setContactType('PHONE')" style="background-color: #0d6efd; color: white;">📞 เบอร์โทร</button>
+                        <button class="btn btn-sm flex-grow-1 rounded-pill btn-outline-success" id="btnContactLine" onclick="setContactType('LINE')"><i class="bi bi-line"></i> LINE</button>
+                        <button class="btn btn-sm flex-grow-1 rounded-pill btn-outline-primary" id="btnContactFB" onclick="setContactType('FB')"><i class="bi bi-facebook"></i> Messenger</button>
+                    </div>
+                    <input type="hidden" id="hubContactType" value="PHONE">
+                    <input type="text" id="hubParentContact" class="form-control mb-3 fw-bold text-center" placeholder="ใส่เบอร์โทรศัพท์ของคุณ">
+                    
+                    <button class="btn btn-primary w-100 fw-bold rounded-pill shadow-lg py-2" onclick="processSendToTeacher('${studentId}', this)">ยืนยันและส่งข้อความหาครู</button>
                 </div>
             </div>
         `,
@@ -584,3 +593,80 @@ async function processSubmitLeave(studentId, data) {
         Swal.fire('แจ้งเตือน', e.message, 'warning');
     }
 }
+
+// ฟังก์ชันสำหรับสลับสีปุ่มและเปลี่ยนข้อความแนะนำ (Placeholder)
+window.setContactType = function(type) {
+    document.getElementById('hubContactType').value = type;
+    const input = document.getElementById('hubParentContact');
+    
+    const btnPhone = document.getElementById('btnContactPhone');
+    const btnLine = document.getElementById('btnContactLine');
+    const btnFB = document.getElementById('btnContactFB');
+    
+    // ล้างสถานะปุ่มทั้งหมดก่อน
+    btnPhone.className = 'btn btn-sm flex-grow-1 rounded-pill btn-outline-primary';
+    btnPhone.style = '';
+    btnLine.className = 'btn btn-sm flex-grow-1 rounded-pill btn-outline-success';
+    btnFB.className = 'btn btn-sm flex-grow-1 rounded-pill btn-outline-primary';
+    
+    // เช็คว่าผู้ปกครองเลือกช่องทางไหน
+    if (type === 'PHONE') {
+        btnPhone.className = 'btn btn-sm flex-grow-1 rounded-pill active';
+        btnPhone.style = 'background-color: #0d6efd; color: white;';
+        input.placeholder = 'ใส่เบอร์โทรศัพท์ของคุณ';
+    } else if (type === 'LINE') {
+        btnLine.className = 'btn btn-sm flex-grow-1 rounded-pill active btn-success text-white';
+        input.placeholder = 'ใส่ไอดี LINE ของคุณ';
+    } else if (type === 'FB') {
+        btnFB.className = 'btn btn-sm flex-grow-1 rounded-pill active text-white';
+        btnFB.style = 'background-color: #1877f2; border-color: #1877f2;';
+        input.placeholder = 'ใส่ชื่อ Facebook (หรือลิงก์ m.me)';
+    }
+};
+
+// ฟังก์ชันส่งเรื่องปรึกษาครู (มีระบบ Lock ปุ่มกันสแปม)
+window.processSendToTeacher = async function(id, btn) {
+    const msg = document.getElementById('hubMsgToTeacher').value.trim();
+    let contact = document.getElementById('hubParentContact').value.trim();
+    const contactType = document.getElementById('hubContactType').value;
+    
+    if(!msg) return Swal.fire('เตือน', 'กรุณาพิมพ์เรื่องที่ต้องการปรึกษาครูครับ', 'warning');
+    if(!contact) return Swal.fire('เตือน', 'กรุณาระบุข้อมูลติดต่อกลับครับ', 'warning');
+
+    // ใส่ Prefix (LINE: / FB:) เพื่อให้ระบบฝั่งครูรู้ว่าต้องสร้างเป็นปุ่มแอปไหน
+    if (contactType === 'LINE') {
+        contact = 'LINE:' + contact;
+    } else if (contactType === 'FB') {
+        contact = 'FB:' + contact;
+    }
+
+    // ล็อกปุ่มกันผู้ปกครองกดเบิ้ล
+    if(btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังส่ง...';
+    }
+
+    try {
+        await supabaseClient.from('parent_communications').insert([{ 
+            student_id: id, 
+            target: 'teacher', 
+            type: 'consult', 
+            message: msg,
+            parent_contact: contact 
+        }]);
+        
+        Swal.fire({ icon: 'success', title: 'ส่งเรื่องถึงคุณครูแล้ว!', timer: 2500, showConfirmButton: false });
+        
+        // ส่งเสร็จแล้วให้ล้างกล่องข้อความ
+        document.getElementById('hubMsgToTeacher').value = '';
+        document.getElementById('hubParentContact').value = '';
+    } catch(e) {
+        Swal.fire('ผิดพลาด', e.message, 'error');
+    } finally {
+        // คืนชีพปุ่มให้กลับมากดได้เหมือนเดิม
+        if(btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'ยืนยันและส่งข้อความหาครู';
+        }
+    }
+};
