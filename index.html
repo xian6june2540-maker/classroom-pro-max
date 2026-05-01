@@ -444,162 +444,139 @@
                 <button class="btn btn-primary btn-sm fw-bold shadow-sm rounded-pill px-3 text-nowrap" onclick="showAppModal('sqlCodeModal')"><i class="bi bi-code-slash"></i> ดูโค้ด SQL และวิธีทำ</button>
             </div>
           </div>
-          
-          <div class="modal-body p-4 bg-light" style="max-height: 75vh; overflow-y: auto;">
-            
-            <!-- ส่วนนำทาง -->
-            <div class="alert alert-info mb-4 border-0 shadow-sm rounded-4">
-                <h6 class="fw-bold mb-1"><i class="bi bi-info-circle-fill"></i> คู่มือการเชื่อมต่อระบบ</h6>
-                <p class="small mb-0 opacity-75">กรุณากดปุ่มสีฟ้าในแต่ละหัวข้อ เพื่อลิงก์ไปยังหน้าตั้งค่าของบริการนั้นๆ และคัดลอกรหัสมาวางครับ</p>
-            </div>
-          
-            <!-- 1. SUPABASE (ฐานข้อมูล) -->
-            <div class="card mb-4 border-0 shadow-sm rounded-4 overflow-hidden">
-                <div class="card-header bg-primary text-white py-3 border-0">
-                    <h6 class="fw-bold mb-0"><i class="bi bi-database-fill"></i> 1. ตั้งค่าฐานข้อมูลออนไลน์ (Supabase)</h6>
-                </div>
-                <div class="card-body p-4">
-                    <p class="small text-muted mb-3"><b>ความสำคัญ:</b> ใช้เก็บข้อมูลนักเรียน คะแนน และประวัติการเข้าเรียนทั้งหมดของห้องเรียนคุณ</p>
-                    <a href="https://supabase.com/dashboard/projects" target="_blank" class="btn btn-primary btn-sm w-100 mb-4 rounded-pill fw-bold shadow-sm">
-                        <i class="bi bi-box-arrow-up-right"></i> คลิกเพื่อไปหน้า Dashboard ของ Supabase
-                    </a>
-                    
-                    <!-- URL -->
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="small fw-bold text-dark">SUPABASE_URL (Project URL)</label>
-                            <button class="btn btn-sm btn-outline-primary border-0 fw-bold" onclick="toggleConfigEdit('SUPABASE_URL')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
-                        </div>
-                        <div id="view_SUPABASE_URL" class="p-2 bg-light border rounded small text-break" style="font-family: monospace; color: #666;">กำลังโหลด...</div>
-                        <div id="edit_SUPABASE_URL" class="hidden mt-2 p-3 bg-white border border-primary rounded-3">
-                            <input type="text" id="input_SUPABASE_URL" class="form-control form-control-sm mb-2" placeholder="ตัวอย่าง: https://xxx.supabase.co">
-                            <input type="password" id="pin_SUPABASE_URL" class="form-control form-control-sm mb-2" placeholder="ระบุ PIN ครูเพื่อยืนยัน">
-                            <button class="btn btn-primary btn-sm w-100 fw-bold" onclick="saveSingleConfig('SUPABASE_URL')">บันทึก URL</button>
-                        </div>
-                    </div>
-          
-                    <!-- KEY -->
-                    <div class="mb-0">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="small fw-bold text-dark">SUPABASE_KEY (anon public)</label>
-                            <button class="btn btn-sm btn-outline-primary border-0 fw-bold" onclick="toggleConfigEdit('SUPABASE_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
-                        </div>
-                        <div id="view_SUPABASE_KEY" class="p-2 bg-light border rounded small text-break" style="font-family: monospace; color: #666;">กำลังโหลด...</div>
-                        <div id="edit_SUPABASE_KEY" class="hidden mt-2 p-3 bg-white border border-primary rounded-3">
-                            <input type="text" id="input_SUPABASE_KEY" class="form-control form-control-sm mb-2" placeholder="คัดลอกจากช่อง anon public">
-                            <input type="password" id="pin_SUPABASE_KEY" class="form-control form-control-sm mb-2" placeholder="ระบุ PIN ครูเพื่อยืนยัน">
-                            <button class="btn btn-primary btn-sm w-100 fw-bold" onclick="saveSingleConfig('SUPABASE_KEY')">บันทึก Key</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-          
-            <!-- 2. GROQ AI (สมองกล) -->
-            <div class="card mb-4 border-0 shadow-sm rounded-4 overflow-hidden">
-                <div class="card-header bg-danger text-white py-3 border-0">
-                    <h6 class="fw-bold mb-0"><i class="bi bi-robot"></i> 2. ตั้งค่าระบบ AI ตรวจงาน (Groq Cloud)</h6>
-                </div>
-                <div class="card-body p-4">
-                    <p class="small text-muted mb-3"><b>ความสำคัญ:</b> เป็นสมองกลที่ช่วยคุณตรวจงานจากรูปภาพและวิเคราะห์พฤติกรรมนักเรียนแบบอัตโนมัติ</p>
-                    <a href="https://console.groq.com/keys" target="_blank" class="btn btn-danger btn-sm w-100 mb-4 rounded-pill fw-bold shadow-sm">
-                        <i class="bi bi-key-fill"></i> คลิกเพื่อสร้าง API Key (กดปุ่ม Create API Key)
-                    </a>
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <label class="small fw-bold text-dark">GROQ_API_KEY (รหัส gsk_...)</label>
-                        <button class="btn btn-sm btn-outline-danger border-0 fw-bold" onclick="toggleConfigEdit('GEMINI_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
-                    </div>
-                    <div id="view_GEMINI_API_KEY" class="p-2 bg-light border rounded small text-break" style="font-family: monospace; color: #666;">กำลังโหลด...</div>
-                    <div id="edit_GEMINI_API_KEY" class="hidden mt-2 p-3 bg-white border border-danger rounded-3">
-                        <input type="text" id="input_GEMINI_API_KEY" class="form-control form-control-sm mb-2" placeholder="วางรหัสที่ขึ้นต้นด้วย gsk_">
-                        <input type="password" id="pin_GEMINI_API_KEY" class="form-control form-control-sm mb-2" placeholder="ระบุ PIN ครูเพื่อยืนยัน">
-                        <button class="btn btn-danger btn-sm w-100 fw-bold" onclick="saveSingleConfig('GEMINI_API_KEY')">บันทึก API Key</button>
-                    </div>
-                </div>
-            </div>
-          
-            <!-- 3. IMGBB (ที่เก็บรูป) -->
-            <div class="card mb-4 border-0 shadow-sm rounded-4 overflow-hidden">
-                <div class="card-header bg-info text-white py-3 border-0">
-                    <h6 class="fw-bold mb-0"><i class="bi bi-image"></i> 3. ตั้งค่าคลังเก็บรูปภาพผลงาน (ImgBB)</h6>
-                </div>
-                <div class="card-body p-4">
-                    <p class="small text-muted mb-3"><b>ความสำคัญ:</b> พื้นที่สำหรับให้นักเรียนอัปโหลดรูปภาพงาน เพื่อส่งให้คุณครูและ AI ตรวจสอบ</p>
-                    <a href="https://api.imgbb.com/" target="_blank" class="btn btn-info text-white btn-sm w-100 mb-4 rounded-pill fw-bold shadow-sm">
-                        <i class="bi bi-cloud-arrow-up-fill"></i> คลิกเพื่อเอา API Key ของ ImgBB
-                    </a>
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <label class="small fw-bold text-dark">IMGBB_API_KEY</label>
-                        <button class="btn btn-sm btn-outline-info border-0 fw-bold" onclick="toggleConfigEdit('IMGBB_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
-                    </div>
-                    <div id="view_IMGBB_API_KEY" class="p-2 bg-light border rounded small text-break" style="font-family: monospace; color: #666;">กำลังโหลด...</div>
-                    <div id="edit_IMGBB_API_KEY" class="hidden mt-2 p-3 bg-white border border-info rounded-3">
-                        <input type="text" id="input_IMGBB_API_KEY" class="form-control form-control-sm mb-2" placeholder="ระบุ API Key จากเว็บ ImgBB">
-                        <input type="password" id="pin_IMGBB_API_KEY" class="form-control form-control-sm mb-2" placeholder="ระบุ PIN ครูเพื่อยืนยัน">
-                        <button class="btn btn-info text-white btn-sm w-100 fw-bold" onclick="saveSingleConfig('IMGBB_API_KEY')">บันทึก API Key</button>
-                    </div>
-                </div>
-            </div>
-          
-            <!-- 4. LINE (แจ้งเตือน) -->
-            <div class="card mb-4 border-0 shadow-sm rounded-4 overflow-hidden">
-                <div class="card-header bg-success text-white py-3 border-0">
-                    <h6 class="fw-bold mb-0"><i class="bi bi-line"></i> 4. ตั้งค่าระบบแจ้งเตือนและรหัสผ่าน (LINE)</h6>
-                </div>
-                <div class="card-body p-4">
-                    <p class="small text-muted mb-3"><b>ความสำคัญ:</b> ใช้ส่งประกาศหาผู้ปกครอง และส่งรหัสผ่าน OTP เพื่อเข้าเครื่องครูอย่างปลอดภัย</p>
-                    <a href="https://developers.line.biz/console/" target="_blank" class="btn btn-success btn-sm w-100 mb-4 rounded-pill fw-bold shadow-sm">
-                        <i class="bi bi-chat-dots-fill"></i> คลิกเพื่อไปหน้า LINE Developer Console
-                    </a>
-                    
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="small fw-bold text-dark">LINE_ACCESS_TOKEN (ใช้ส่งประกาศ)</label>
-                            <button class="btn btn-sm btn-outline-success border-0 fw-bold" onclick="toggleConfigEdit('LINE_ACCESS_TOKEN')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
-                        </div>
-                        <div id="view_LINE_ACCESS_TOKEN" class="p-2 bg-light border rounded small text-break" style="font-family: monospace; color: #666;">กำลังโหลด...</div>
-                        <div id="edit_LINE_ACCESS_TOKEN" class="hidden mt-2 p-3 bg-white border border-success rounded-3">
-                            <input type="text" id="input_LINE_ACCESS_TOKEN" class="form-control form-control-sm mb-2">
-                            <input type="password" id="pin_LINE_ACCESS_TOKEN" class="form-control form-control-sm mb-2" placeholder="ระบุ PIN ครูเพื่อยืนยัน">
-                            <button class="btn btn-success btn-sm w-100 fw-bold" onclick="saveSingleConfig('LINE_ACCESS_TOKEN')">บันทึก Token</button>
-                        </div>
-                    </div>
-          
-                    <div class="mb-0">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="small fw-bold text-dark">TEACHER_LINE_UID (รับ OTP ส่วนตัว)</label>
-                            <button class="btn btn-sm btn-outline-success border-0 fw-bold" onclick="toggleConfigEdit('TEACHER_LINE_UID')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
-                        </div>
-                        <div class="alert alert-warning py-2 px-3 small border-0 mb-2" style="font-size: 0.75rem;">
-                            <i class="bi bi-exclamation-triangle-fill"></i> <b>วิธีหา:</b> พิมพ์คำว่า <b>!id</b> ในแชทบอท LINE แล้วเอารหัส User ID มาใส่ช่องนี้ครับ
-                        </div>
-                        <div id="view_TEACHER_LINE_UID" class="p-2 bg-light border rounded small text-break" style="font-family: monospace; color: #666;">ยังไม่มีข้อมูล</div>
-                        <div id="edit_TEACHER_LINE_UID" class="hidden mt-2 p-3 bg-white border border-success rounded-3">
-                            <input type="text" id="input_TEACHER_LINE_UID" class="form-control form-control-sm mb-2" placeholder="รหัส User ID ของครู">
-                            <input type="password" id="pin_TEACHER_LINE_UID" class="form-control form-control-sm mb-2" placeholder="ระบุ PIN ครูเพื่อยืนยัน">
-                            <button class="btn btn-success btn-sm w-100 fw-bold" onclick="saveSingleConfig('TEACHER_LINE_UID')">บันทึก User ID</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-          
-            <!-- 5. TEACHER PIN (รหัสผ่านหลัก) -->
-            <div class="card mb-2 border-0 shadow-sm rounded-4 overflow-hidden border-start border-5 border-dark">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-shield-lock-fill"></i> 5. เปลี่ยนรหัสเข้าใช้งานครู (Teacher PIN)</h6>
-                        <button class="btn btn-dark btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="toggleConfigEdit('TEACHER_PIN')">เปลี่ยนรหัส</button>
-                    </div>
-                    <p class="small text-muted mb-3">รหัสเริ่มต้นคือ <b class="text-danger">1234</b> แนะนำให้เปลี่ยนเป็นรหัสของคุณเองเพื่อป้องกันนักเรียนเข้ามาแก้ไขข้อมูลครับ</p>
-                    <div id="view_TEACHER_PIN" class="p-2 bg-white border rounded text-center fw-bold letter-spacing-lg">********</div>
-                    <div id="edit_TEACHER_PIN" class="hidden mt-2 p-3 bg-light border border-dark rounded-3">
-                        <label class="small fw-bold mb-1">ระบุรหัส PIN ใหม่ (ตัวเลข 4 หลักขึ้นไป):</label>
-                        <input type="password" id="input_TEACHER_PIN" class="form-control form-control-sm mb-2" placeholder="เช่น 9999">
-                        <label class="small fw-bold mb-1 text-danger">ระบุรหัส PIN เดิม เพื่อยืนยัน:</label>
-                        <input type="password" id="pin_TEACHER_PIN" class="form-control form-control-sm mb-3">
-                        <button class="btn btn-dark btn-sm w-100 fw-bold shadow" onclick="saveSingleConfig('TEACHER_PIN')">ยืนยันการเปลี่ยนรหัส PIN ใหม่</button>
-                    </div>
-                </div>
-            </div>
+<!-- 🌟 [เริ่มส่วนที่วางทับ] 🌟 -->
+          <!-- 1. SUPABASE_URL -->
+          <div class="mb-4 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-primary mb-0"><i class="bi bi-database-fill"></i> 1. SUPABASE_URL</label>
+                  <button class="btn btn-sm btn-outline-primary fw-bold px-3" onclick="toggleConfigEdit('SUPABASE_URL')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-primary">
+                  <b>ความสำคัญ:</b> คือที่อยู่ฐานข้อมูลหลัก ถ้าไม่มีส่วนนี้ระบบจะไม่สามารถบันทึกหรือดึงข้อมูลใดๆ ได้เลย<br>
+                  <b>วิธีหาแบบจับมือทำ:</b> 
+                  <a href="https://supabase.com/dashboard/projects" target="_blank" class="fw-bold text-decoration-none">คลิกที่นี่เพื่อไปหน้า Project</a> 
+                  > เลือกโปรเจกต์ของคุณ > กดไอคอนฟันเฟือง ⚙️ (Settings) ด้านซ้ายล่าง > เลือกเมนู <b>API</b> > คัดลอกค่าจากช่อง <b>Project URL</b> มาวาง
+              </div>
+              <div id="view_SUPABASE_URL" class="p-2 bg-white border rounded text-break small" style="font-family: monospace;">กำลังโหลด...</div>
+              <div id="edit_SUPABASE_URL" class="hidden mt-3 p-3 border border-primary rounded bg-light shadow-sm">
+                  <input type="text" id="input_SUPABASE_URL" class="form-control mb-2" placeholder="วาง URL ที่นี่ (https://...)">
+                  <input type="password" id="pin_SUPABASE_URL" class="form-control mb-2" placeholder="ใส่รหัส PIN ครูเพื่อยืนยัน">
+                  <button class="btn btn-primary btn-sm w-100 fw-bold" onclick="saveSingleConfig('SUPABASE_URL')">อัปเดตข้อมูล</button>
+              </div>
+          </div>
+
+          <!-- 2. SUPABASE_KEY -->
+          <div class="mb-4 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold mb-0" style="color: #fd7e14;"><i class="bi bi-key-fill"></i> 2. SUPABASE_KEY (anon public)</label>
+                  <button class="btn btn-sm btn-outline-warning text-dark fw-bold px-3" onclick="toggleConfigEdit('SUPABASE_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-warning">
+                  <b>ความสำคัญ:</b> คือกุญแจที่ใช้เปิดประตูเข้าบ้านข้อมูล ถ้าใส่ผิดระบบจะแจ้งว่า "สิทธิ์ไม่เพียงพอ"<br>
+                  <b>วิธีหาแบบจับมือทำ:</b> อยู่ในหน้าเดียวกับ URL ด้านบน (Settings > API) > คัดลอกค่าในช่อง <b>anon (public)</b> ในแถว API Keys มาวาง
+              </div>
+              <div id="view_SUPABASE_KEY" class="p-2 bg-white border rounded text-break small" style="font-family: monospace;">กำลังโหลด...</div>
+              <div id="edit_SUPABASE_KEY" class="hidden mt-3 p-3 border border-warning rounded bg-light shadow-sm">
+                  <input type="text" id="input_SUPABASE_KEY" class="form-control mb-2" placeholder="วาง Key ที่นี่">
+                  <input type="password" id="pin_SUPABASE_KEY" class="form-control mb-2" placeholder="ใส่รหัส PIN ครูเพื่อยืนยัน">
+                  <button class="btn btn-warning btn-dark btn-sm w-100 fw-bold" onclick="saveSingleConfig('SUPABASE_KEY')">อัปเดตข้อมูล</button>
+              </div>
+          </div>
+
+          <!-- 3. LINE_ACCESS_TOKEN -->
+          <div class="mb-4 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-success mb-0"><i class="bi bi-line"></i> 3. LINE_ACCESS_TOKEN</label>
+                  <button class="btn btn-sm btn-outline-success fw-bold px-3" onclick="toggleConfigEdit('LINE_ACCESS_TOKEN')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-success">
+                  <b>ความสำคัญ:</b> ใช้สำหรับ "ส่งประกาศ" เข้ากลุ่ม LINE นักเรียน/ผู้ปกครอง โดยกดส่งเพียงครั้งเดียวจากในระบบนี้<br>
+                  <b>วิธีหาแบบจับมือทำ:</b> 
+                  <a href="https://developers.line.biz/console/" target="_blank" class="fw-bold text-success text-decoration-none">คลิกที่นี่เพื่อไป LINE Developers</a> 
+                  > เลือก Messaging API Channel > แท็บ <b>Messaging API</b> > เลื่อนลงล่างสุด กดปุ่ม <b>Issue</b> ในช่อง Channel access token แล้วคัดลอกมาวาง
+              </div>
+              <div id="view_LINE_ACCESS_TOKEN" class="p-2 bg-white border rounded text-break small" style="font-family: monospace;">กำลังโหลด...</div>
+              <div id="edit_LINE_ACCESS_TOKEN" class="hidden mt-3 p-3 border border-success rounded bg-light shadow-sm">
+                  <input type="text" id="input_LINE_ACCESS_TOKEN" class="form-control mb-2" placeholder="วาง Token ยาวๆ ที่นี่">
+                  <input type="password" id="pin_LINE_ACCESS_TOKEN" class="form-control mb-2" placeholder="ใส่รหัส PIN ครูเพื่อยืนยัน">
+                  <button class="btn btn-success btn-sm w-100 fw-bold" onclick="saveSingleConfig('LINE_ACCESS_TOKEN')">อัปเดตข้อมูล</button>
+              </div>
+          </div>
+
+          <!-- 4. GROQ_API_KEY -->
+          <div class="mb-4 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-danger mb-0"><i class="bi bi-robot"></i> 4. GROQ_API_KEY (AI ตรวจงาน)</label>
+                  <button class="btn btn-sm btn-outline-danger fw-bold px-3" onclick="toggleConfigEdit('GEMINI_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-danger">
+                  <b>ความสำคัญ:</b> เป็นสมองของระบบ ใช้ในฟีเจอร์ "AI ตรวจผลงาน" และ "สแกนพฤติกรรมเรดาร์" ถ้าไม่มีส่วนนี้ AI จะไม่ทำงาน<br>
+                  <b>วิธีหาแบบจับมือทำ:</b> 
+                  <a href="https://console.groq.com/keys" target="_blank" class="fw-bold text-danger text-decoration-none">คลิกที่นี่เพื่อไปสร้างคีย์ AI</a> 
+                  > กดปุ่ม <b>Create API Key</b> > ตั้งชื่ออะไรก็ได้ > คัดลอกรหัสที่ขึ้นด้วย <b>gsk_...</b> มาวางทันที (รหัสจะโชว์แค่ครั้งเดียว)
+              </div>
+              <div id="view_GEMINI_API_KEY" class="p-2 bg-white border rounded text-break small" style="font-family: monospace;">กำลังโหลด...</div>
+              <div id="edit_GEMINI_API_KEY" class="hidden mt-3 p-3 border border-danger rounded bg-light shadow-sm">
+                  <input type="text" id="input_GEMINI_API_KEY" class="form-control mb-2" placeholder="รหัสที่ขึ้นต้นด้วย gsk_">
+                  <input type="password" id="pin_GEMINI_API_KEY" class="form-control mb-2" placeholder="ใส่รหัส PIN ครูเพื่อยืนยัน">
+                  <button class="btn btn-danger btn-sm w-100 fw-bold" onclick="saveSingleConfig('GEMINI_API_KEY')">อัปเดตคีย์ AI</button>
+              </div>
+          </div>
+
+          <!-- 5. IMGBB_API_KEY -->
+          <div class="mb-4 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-info mb-0"><i class="bi bi-image"></i> 5. IMGBB_API_KEY (ที่เก็บรูปภาพ)</label>
+                  <button class="btn btn-sm btn-outline-info fw-bold px-3" onclick="toggleConfigEdit('IMGBB_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-info">
+                  <b>ความสำคัญ:</b> คือคลังฝากรูปภาพงานที่นักเรียนส่งเข้ามา เพื่อให้ครูและ AI สามารถมองเห็นรูปภาพเหล่านั้นได้<br>
+                  <b>วิธีหาแบบจับมือทำ:</b> 
+                  <a href="https://api.imgbb.com/" target="_blank" class="fw-bold text-info text-decoration-none">คลิกที่นี่เพื่อขอคีย์ฝากรูป</a> 
+                  > ล็อกอินเข้าใช้งาน > กดปุ่ม <b>Get API Key</b> > คัดลอกรหัสมาวาง
+              </div>
+              <div id="view_IMGBB_API_KEY" class="p-2 bg-white border rounded text-break small" style="font-family: monospace;">กำลังโหลด...</div>
+              <div id="edit_IMGBB_API_KEY" class="hidden mt-3 p-3 border border-info rounded bg-light shadow-sm">
+                  <input type="text" id="input_IMGBB_API_KEY" class="form-control mb-2" placeholder="วาง API Key จาก ImgBB">
+                  <input type="password" id="pin_IMGBB_API_KEY" class="form-control mb-2" placeholder="ใส่รหัส PIN ครูเพื่อยืนยัน">
+                  <button class="btn btn-info text-white btn-sm w-100 fw-bold" onclick="saveSingleConfig('IMGBB_API_KEY')">อัปเดตข้อมูล</button>
+              </div>
+          </div>
+
+          <!-- 6. TEACHER_LINE_UID -->
+          <div class="mb-4 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-person-badge"></i> 6. TEACHER_LINE_UID (รับ OTP)</label>
+                  <button class="btn btn-sm btn-outline-dark fw-bold px-3" onclick="toggleConfigEdit('TEACHER_LINE_UID')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-dark">
+                  <b>ความสำคัญ:</b> ใช้ระบุตัวตนของคุณครู เพื่อให้ระบบส่งรหัสผ่านชั่วคราว (OTP) เข้า LINE ส่วนตัวก่อนเข้าใช้งานเครื่องครู<br>
+                  <b>วิธีหาแบบจับมือทำ:</b> เปิดแอป LINE > เข้าไปในแชทที่มีบอทตัวนี้อยู่ (หรือแชทส่วนตัวกับบอท) > พิมพ์คำว่า <b>!id</b> ส่งไป > บอทจะตอบกลับรหัส User ID มาให้ ให้นำรหัสนั้นมาใส่
+              </div>
+              <div id="view_TEACHER_LINE_UID" class="p-2 bg-white border rounded text-break small" style="font-family: monospace;">ยังไม่มีข้อมูล</div>
+              <div id="edit_TEACHER_LINE_UID" class="hidden mt-3 p-3 border border-dark rounded bg-light shadow-sm">
+                  <input type="text" id="input_TEACHER_LINE_UID" class="form-control mb-2" placeholder="วางรหัส User ID จาก LINE">
+                  <input type="password" id="pin_TEACHER_LINE_UID" class="form-control mb-2" placeholder="ใส่รหัส PIN ครูเพื่อยืนยัน">
+                  <button class="btn btn-dark btn-sm w-100 fw-bold" onclick="saveSingleConfig('TEACHER_LINE_UID')">อัปเดตข้อมูล</button>
+              </div>
+          </div>
+
+          <!-- 7. TEACHER_PIN -->
+          <div class="mb-2 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-shield-lock-fill text-dark"></i> 7. TEACHER_PIN (รหัสผ่านครู)</label>
+                  <button class="btn btn-sm btn-outline-dark fw-bold px-3" onclick="toggleConfigEdit('TEACHER_PIN')"><i class="bi bi-pencil-square"></i> เปลี่ยนรหัส</button>
+              </div>
+              <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-secondary">
+                  <b>ความสำคัญ:</b> เป็นรหัสผ่านหลักสำหรับเข้าเครื่องครูและใช้ยืนยันการตั้งค่าระบบทั้งหมด<br>
+                  <b>คำแนะนำ:</b> รหัสเริ่มต้นคือ <b class="text-danger">1234</b> ควรเปลี่ยนทันทีเพื่อความปลอดภัยสูงสุดของข้อมูลนักเรียน
+              </div>
+              <div id="view_TEACHER_PIN" class="p-2 bg-white border rounded text-center fw-bold">********</div>
+              <div id="edit_TEACHER_PIN" class="hidden mt-3 p-3 border border-dark rounded bg-light shadow-sm">
+                  <input type="password" id="input_TEACHER_PIN" class="form-control mb-2" placeholder="ตั้งรหัส PIN ใหม่ (ตัวเลข)">
+                  <input type="password" id="pin_TEACHER_PIN" class="form-control mb-2" placeholder="ใส่รหัส PIN เดิมเพื่อยืนยัน">
+                  <button class="btn btn-dark btn-sm w-100 fw-bold" onclick="saveSingleConfig('TEACHER_PIN')">ยืนยันการเปลี่ยนรหัส</button>
+              </div>
           </div>
       </div>
     </div>
