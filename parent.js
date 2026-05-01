@@ -284,13 +284,40 @@ window.openMapPicker = function(studentId) {
     });
 };
 
-window.processSendToStudent = async function(id) {
-    const msg = document.getElementById('hubMsgToStudent').value.trim();
-    if(!msg) return;
-    await supabaseClient.from('parent_communications').insert([{ student_id: id, target: 'student', type: 'praise', message: msg }]);
-    Swal.fire({ icon: 'success', title: 'ส่งเรียบร้อย!', timer: 2000, showConfirmButton: false });
+// 1. เพิ่มฟังก์ชันสำหรับพิมพ์สติกเกอร์ลงกล่องข้อความ
+window.selectCommSticker = function(emoji, text) {
+    const input = document.getElementById('hubMsgToStudent');
+    if (input) {
+        input.value = input.value ? input.value + ' ' + emoji + ' ' + text : emoji + ' ' + text;
+    }
 };
 
+// 2. แก้ไขฟังก์ชันส่งข้อความเพื่อป้องกันกดรัว (Spam)
+window.processSendToStudent = async function(id, btn) {
+    const msgInput = document.getElementById('hubMsgToStudent');
+    const msg = msgInput.value.trim();
+    if(!msg) return;
+    
+    // ล็อกปุ่มกันกดเบิ้ล
+    if(btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังส่ง...';
+    }
+
+    try {
+        await supabaseClient.from('parent_communications').insert([{ student_id: id, target: 'student', type: 'praise', message: msg }]);
+        Swal.fire({ icon: 'success', title: 'ส่งเรียบร้อย!', timer: 2000, showConfirmButton: false });
+        msgInput.value = ''; // เคลียร์ช่องแชทหลังส่งเสร็จ
+    } catch(e) {
+        Swal.fire('ผิดพลาด', e.message, 'error');
+    } finally {
+        // ส่งเสร็จแล้วปลดล็อกปุ่ม
+        if(btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'ส่งพลังใจให้ลูก';
+        }
+    }
+};
 window.logoutParent = function() {
     Swal.fire({
         title: 'ออกจากระบบผู้ปกครอง?',
@@ -352,11 +379,6 @@ window.loginWithParentToken = async function(token) {
     } catch (e) {
         Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'error');
     }
-};
-
-window.acknowledgeParentMsg = async function(msgId) {
-    await supabaseClient.from('parent_communications').delete().eq('id', msgId);
-    window.location.reload();
 };
 
 // ฟังก์ชันสำหรับสลับแท็บระหว่างนักเรียนและผู้ปกครองในหน้าแรก
