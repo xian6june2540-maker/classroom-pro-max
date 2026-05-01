@@ -2328,13 +2328,27 @@
             let contactHtml = "";
     
             if (rawContact.startsWith("LINE:")) {
-                contactHtml = `<a href="https://line.me/ti/p/~${rawContact.replace("LINE:","")}" target="_blank" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill mb-2"><i class="bi bi-line"></i> แอด LINE</a>`;
+                let lineId = rawContact.replace("LINE:", "").trim().replace(/\s+/g, ""); // ลบช่องว่างทิ้ง
+                // ถ้าแนบเป็นลิงก์มาให้ใช้เลย ถ้าเป็นแค่ ID ให้จับเติม URL
+                let link = lineId.startsWith("http") ? lineId : `https://line.me/ti/p/~${lineId}`;
+                
+                contactHtml = `<a href="${link}" target="_blank" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill mb-2"><i class="bi bi-line"></i> แอด LINE: ${lineId.replace("https://", "")}</a>`;
+            
             } else if (rawContact.startsWith("FB:")) {
-                contactHtml = `<a href="https://m.me/${rawContact.replace("FB:","")}" target="_blank" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill mb-2" style="background:#0084ff;"><i class="bi bi-messenger"></i> ทัก Messenger</a>`;
+                let fbId = rawContact.replace("FB:", "").trim();
+                // ถ้ามีคำว่า http ก็เข้าลิงก์ตรงเลย ถ้าไม่มีก็เติม m.me/ นำหน้า
+                let link = fbId.startsWith("http") ? fbId : `https://m.me/${fbId}`;
+                
+                contactHtml = `<a href="${link}" target="_blank" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill mb-2" style="background:#0084ff;"><i class="bi bi-messenger"></i> ทัก Messenger</a>`;
+            
             } else {
-                contactHtml = `<a href="tel:${rawContact.replace(/\D/g,"")}" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill mb-2"><i class="bi bi-telephone-fill"></i> โทร: ${rawContact}</a>`;
+                let phoneNum = rawContact.replace("PHONE:", "").replace(/\D/g, ""); // ดึงมาเฉพาะตัวเลขเท่านั้น
+                let displayPhone = rawContact.replace("PHONE:", "").trim();
+                
+                contactHtml = `<a href="tel:${phoneNum}" class="btn btn-primary w-100 fw-bold shadow-sm rounded-pill mb-2"><i class="bi bi-telephone-fill"></i> โทร: ${displayPhone}</a>`;
             }
     
+            // 🚗 ปุ่มนำทาง (ถ้ามีพิกัด)
             let navHtml = (hLat && hLng) 
                 ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${hLat},${hLng}" target="_blank" class="btn btn-danger w-100 fw-bold shadow-sm rounded-pill py-2 mt-2"><i class="bi bi-car-front-fill"></i> นำทางไปบ้านนักเรียน</a>`
                 : `<div class="alert alert-secondary small p-2 mt-2 mb-0 text-center">ยังไม่ได้ระบุพิกัดบ้าน</div>`;
