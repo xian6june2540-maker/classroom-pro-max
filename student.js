@@ -1374,6 +1374,8 @@
                 localStorage.removeItem('studentId');
                 if (typeof currentStudentId !== 'undefined') currentStudentId = null;
 
+                globalPortalStudent = null; // <--- เพิ่มบรรทัดนี้ เพื่อเคลียร์สมองระบบ ป้องกัน Realtime ดึงกลับเข้าหน้าแดชบอร์ด!
+                
                 document.getElementById('student-dashboard-view').classList.add('hidden');
                 let avatarEl = document.getElementById('draggable-avatar'); if (avatarEl) avatarEl.classList.add('hidden');
 
