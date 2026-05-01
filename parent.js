@@ -295,7 +295,12 @@ window.openMapPicker = function(studentId) {
     let defaultLng = window.tempHomeLng || 100.5018;
     Swal.fire({
         title: 'ปักหมุดบ้านนักเรียน',
-        html: `<div id="map-wrapper"><div id="map-canvas"></div></div>`,
+        html: `
+            <button id="btnGetCurrentLoc" class="btn btn-sm btn-primary w-100 mb-3 fw-bold shadow-sm py-2">
+                <i class="bi bi-crosshair"></i> ดึงตำแหน่งปัจจุบัน (GPS)
+            </button>
+            <div id="map-wrapper"><div id="map-canvas"></div></div>
+        `,
         customClass: { popup: 'map-popup-square rounded-4' },
         showCancelButton: true,
         confirmButtonText: 'ยืนยันและส่งพิกัดให้ครู',
@@ -305,13 +310,46 @@ window.openMapPicker = function(studentId) {
                 window.myLeafletMap = L.map('map-canvas').setView([defaultLat, defaultLng], 18);
                 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(window.myLeafletMap);
                 window.myMarker = L.marker([defaultLat, defaultLng], { draggable: true }).addTo(window.myLeafletMap);
+                
+                // ให้กดจิ้มแผนที่เพื่อย้ายหมุดได้
                 window.myLeafletMap.on('click', (e) => { window.myMarker.setLatLng(e.latlng); });
+
+                // ทำงานเมื่อกดปุ่มดึงพิกัด GPS
+                document.getElementById('btnGetCurrentLoc').onclick = () => {
+                    const btn = document.getElementById('btnGetCurrentLoc');
+                    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังค้นหาตำแหน่ง...';
+                    btn.disabled = true;
+
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                const lat = position.coords.latitude;
+                                const lng = position.coords.longitude;
+                                window.myLeafletMap.flyTo([lat, lng], 18); // บินไปหาพิกัด
+                                window.myMarker.setLatLng([lat, lng]); // ย้ายหมุดไปวาง
+                                
+                                btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> ดึงตำแหน่งสำเร็จ (เลื่อนปรับหมุดได้เลย)';
+                                btn.classList.replace('btn-primary', 'btn-success');
+                            },
+                            (error) => {
+                                btn.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> ไม่สามารถดึงตำแหน่งได้ (โปรดเปิด GPS)';
+                                btn.classList.replace('btn-primary', 'btn-danger');
+                                btn.disabled = false;
+                            },
+                            { enableHighAccuracy: true, timeout: 10000 } // เน้นความแม่นยำ
+                        );
+                    } else {
+                        btn.innerHTML = 'เบราว์เซอร์ไม่รองรับ GPS';
+                    }
+                };
             }, 500);
         }
     }).then(async (result) => {
         if (result.isConfirmed) {
             const pos = window.myMarker.getLatLng();
             await supabaseClient.from('students').update({ home_lat: pos.lat, home_lng: pos.lng }).eq('id', studentId);
+            window.tempHomeLat = pos.lat;
+            window.tempHomeLng = pos.lng;
             Swal.fire({ icon: 'success', title: 'ส่งพิกัดเรียบร้อย!', timer: 1500, showConfirmButton: false });
         }
     });
