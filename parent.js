@@ -201,7 +201,29 @@ window.openCommunicationHubFromHead = function() {
     if(studentId) { window.openCommunicationHub(studentId); } 
 };
 
-window.openCommunicationHub = function(studentId) {
+window.openCommunicationHub = async function(studentId) { // เติม async
+    Swal.fire({ title: 'กำลังโหลดศูนย์สื่อสาร...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+    // ดึงเรื่องที่ส่งหาครูแล้วครูยังไม่ลบ
+    let pendingHtml = '';
+    try {
+        let { data: myConsults } = await supabaseClient.from('parent_communications')
+            .select('*')
+            .eq('student_id', studentId)
+            .eq('target', 'teacher')
+            .order('created_at', { ascending: false });
+
+        if (myConsults && myConsults.length > 0) {
+            pendingHtml = '<div class="mt-4 border-top pt-3 text-start"><h6 class="fw-bold text-secondary small"><i class="bi bi-hourglass-split"></i> เรื่องที่รอคุณครูติดต่อกลับ:</h6><div style="max-height: 120px; overflow-y: auto;">';
+            myConsults.forEach(c => {
+                pendingHtml += `<div class="alert alert-warning py-2 px-3 small mb-2 shadow-sm border-0 border-start border-4 border-warning">
+                    <strong>ส่งเมื่อ: ${formatThaiDate(c.created_at.split('T')[0])}</strong><br>${c.message}
+                </div>`;
+            });
+            pendingHtml += '</div></div>';
+        }
+    } catch(e) { console.error("Fetch pending consults error:", e); }
+
     let hasLocation = window.tempHomeLat !== null;
     let locationStatusHtml = hasLocation 
         ? `<div class="badge bg-success px-3 py-2 rounded-pill w-100 mb-3 shadow-sm border-0"><i class="bi bi-check-circle-fill"></i> ส่งพิกัดบ้านล่าสุดเรียบร้อยแล้ว</div>`
@@ -225,7 +247,7 @@ window.openCommunicationHub = function(studentId) {
                         <button class="btn btn-outline-light border shadow-sm p-2" onclick="selectCommSticker('🏆','สุดยอด')">🏆</button>
                     </div>
                     <textarea id="hubMsgToStudent" class="form-control mb-3" rows="2" placeholder="พิมพ์ข้อความให้กำลังใจลูก..."></textarea>
-                    <button class="btn btn-danger w-100 fw-bold rounded-pill shadow" onclick="processSendToStudent('${studentId}')">ส่งพลังใจให้ลูก</button>
+                    <button class="btn btn-danger w-100 fw-bold rounded-pill shadow" onclick="processSendToStudent('${studentId}', this)">ส่งพลังใจให้ลูก</button>
                 </div>
                 <div id="sectionLocation" class="hidden text-center py-3">
                     <div class="mb-4"><i class="bi bi-geo-alt-fill text-danger" style="font-size: 3.5rem;"></i><h6 class="fw-bold mt-2">ระบุตำแหน่งบ้านนักเรียน</h6></div>
@@ -246,6 +268,8 @@ window.openCommunicationHub = function(studentId) {
                     <input type="text" id="hubParentContact" class="form-control mb-3 fw-bold text-center" placeholder="ใส่เบอร์โทรศัพท์ของคุณ">
                     
                     <button class="btn btn-primary w-100 fw-bold rounded-pill shadow-lg py-2" onclick="processSendToTeacher('${studentId}', this)">ยืนยันและส่งข้อความหาครู</button>
+                    
+                    ${pendingHtml} <!-- แทรกส่วนที่โชว์เรื่องที่ค้างอยู่ตรงนี้ -->
                 </div>
             </div>
         `,
