@@ -10,7 +10,11 @@
 
     function showAppModal(id) {
         var el = document.getElementById(id);
-        if (el) bootstrap.Modal.getOrCreateInstance(el).show();
+        if (el) {
+            // เพิ่มบรรทัดนี้: ย้าย Modal ออกมาที่ body ป้องกันปัญหาฉากดำซ้อนทับและกดไม่ได้
+            document.body.appendChild(el); 
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        }
     }
 
     function hideAppModal(id) {
