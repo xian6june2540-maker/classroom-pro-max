@@ -1380,6 +1380,10 @@
 
                 globalPortalStudent = null; // <--- เพิ่มบรรทัดนี้ เพื่อเคลียร์สมองระบบ ป้องกัน Realtime ดึงกลับเข้าหน้าแดชบอร์ด!
                 
+                // ✨ [เพิ่ม 2 บรรทัดนี้] เพื่อล้างภาพฉากหลังเวทมนตร์ออกตอนกดยืนยันออกจากระบบ
+                document.body.style.background = ''; 
+                window.isEquipping = false; 
+
                 document.getElementById('student-dashboard-view').classList.add('hidden');
                 let avatarEl = document.getElementById('draggable-avatar'); if (avatarEl) avatarEl.classList.add('hidden');
 
