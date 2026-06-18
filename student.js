@@ -1390,8 +1390,12 @@
                 localStorage.removeItem('studentId');
                 if (typeof currentStudentId !== 'undefined') currentStudentId = null;
 
-                globalPortalStudent = null; // <--- เพิ่มบรรทัดนี้ เพื่อเคลียร์สมองระบบ ป้องกัน Realtime ดึงกลับเข้าหน้าแดชบอร์ด!
+                globalPortalStudent = null; 
                 
+                // ✨ เพิ่ม 2 บรรทัดนี้ เพื่อล้างฉากเวทมนตร์ออกจากหน้าจอ (ไม่มีผลกับแต้มแน่นอนครับ)
+                document.body.style.background = ''; 
+                window.isEquipping = false; 
+
                 document.getElementById('student-dashboard-view').classList.add('hidden');
                 let avatarEl = document.getElementById('draggable-avatar'); if (avatarEl) avatarEl.classList.add('hidden');
 
