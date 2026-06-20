@@ -2477,3 +2477,143 @@ window.processGenerateWheel = function(mode) {
         }
     }).generateWheelOfNamesLink(currentRoom, mode, dateStr);
 };
+
+// =========================================================
+// 🎁 ระบบจัดการผู้โชคดีวงล้อ & AI CUSTOM WHEEL
+// =========================================================
+window.openWinnerManagement = function(roomName) {
+    Swal.fire({
+        title: '⏳ กำลังดึงรายชื่อ...',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+    });
+
+    google.script.run.withSuccessHandler(function(students) {
+        // ดึงเฉพาะนักเรียนในห้องปัจจุบัน
+        let roomStudents = students.filter(s => s[4] === roomName);
+        let optionsHtml = '<option value="">-- คลิกเลือกชื่อผู้โชคดี --</option>';
+        roomStudents.forEach(s => {
+            let sName = s[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
+            let sNick = s[2] ? ` (${s[2]})` : '';
+            optionsHtml += `<option value="${s[0]}">${s[0]} - ${sName}${sNick}</option>`;
+        });
+
+        Swal.fire({
+            title: '🎁 จัดการผู้โชคดี',
+            html: `
+                <div class="text-start" style="font-family: 'Prompt', sans-serif;">
+                    <label class="form-label fw-bold text-dark">1. ยืนยันผู้โชคดีที่สุ่มได้</label>
+                    <select id="wmStudentId" class="form-select mb-4 border-primary shadow-sm" style="font-size: 1.1rem;">
+                        ${optionsHtml}
+                    </select>
+                    
+                    <div class="p-3 bg-light rounded-3 border mb-3 shadow-sm">
+                        <label class="form-label fw-bold text-success"><i class="bi bi-star-fill"></i> แจกแต้ม EXP ทันที</label>
+                        <div class="input-group">
+                            <input type="number" id="wmExpAmount" class="form-control fw-bold text-center text-success" value="500">
+                            <span class="input-group-text bg-success text-white border-success">EXP</span>
+                            <button class="btn btn-success fw-bold px-4" onclick="executeGiveWinnerExp()">มอบรางวัล</button>
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-3 border border-primary shadow-sm" style="background: #eef5ff;">
+                        <label class="form-label fw-bold text-primary"><i class="bi bi-robot"></i> สุ่มคำถามให้ผู้โชคดีด้วย AI</label>
+                        <input type="text" id="wmAiTopic" class="form-control mb-2" placeholder="พิมพ์หัวข้อ... เช่น ประวัติศาสตร์, โค้ดดิ้ง, วิทยาศาสตร์">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white">จำนวน</span>
+                            <input type="number" id="wmAiCount" class="form-control text-center fw-bold text-primary" value="5">
+                            <span class="input-group-text bg-white">ข้อ</span>
+                            <button class="btn btn-primary fw-bold" onclick="executeGenerateAiWheel('${roomName}')">สร้างวงล้อคำถาม</button>
+                        </div>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            showConfirmButton: false,
+            cancelButtonText: 'ปิดหน้าต่าง',
+            width: '600px'
+        });
+    }).getStudents();
+};
+
+// สั่งเซิร์ฟเวอร์แจกแต้ม (แบบวงล้อธรรมดา)
+window.executeGiveWinnerExp = function() {
+    const sid = document.getElementById('wmStudentId').value;
+    const exp = parseInt(document.getElementById('wmExpAmount').value);
+    
+    if(!sid) return Swal.fire('เตือน', 'กรุณาเลือกชื่อนักเรียนด้านบนก่อนครับ', 'warning');
+    if(!exp || exp <= 0) return Swal.fire('เตือน', 'กรุณาระบุ EXP ให้ถูกต้อง', 'warning');
+
+    let btn = event.target;
+    let oldHtml = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    google.script.run.withSuccessHandler(function(res) {
+        btn.disabled = false; btn.innerHTML = oldHtml;
+        if(res.success) {
+            Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: `แจก ${exp} EXP ให้ผู้โชคดีเรียบร้อย!`, timer: 2500, showConfirmButton: false });
+        } else { Swal.fire('ผิดพลาด', res.message, 'error'); }
+    }).giveBulkExp([sid], exp, 'รางวัลผู้โชคดีจากวงล้อเวทมนตร์ 🎡');
+};
+
+// สั่งให้ AI สร้างวงล้อคำถามใหม่
+window.executeGenerateAiWheel = function(roomName) {
+    const sid = document.getElementById('wmStudentId').value;
+    const topic = document.getElementById('wmAiTopic').value.trim();
+    const count = parseInt(document.getElementById('wmAiCount').value);
+
+    if(!sid) return Swal.fire('เตือน', 'กรุณาเลือกชื่อนักเรียนก่อนครับ', 'warning');
+    if(!topic) return Swal.fire('เตือน', 'กรุณาพิมพ์หัวข้อคำถามให้ AI คิดครับ', 'warning');
+    if(!count || count < 1 || count > 20) return Swal.fire('เตือน', 'กรุณาระบุจำนวน 1-20 ข้อ', 'warning');
+
+    Swal.fire({
+        title: '🤖 AI กำลังใช้เวทมนตร์...',
+        html: '<b class="text-primary">กำลังแต่งคำถามเกี่ยวกับ:</b><br>' + topic + '<br><br><small class="text-muted">อาจใช้เวลา 5-10 วินาที...</small>',
+        allowOutsideClick: false, didOpen: () => Swal.showLoading()
+    });
+
+    google.script.run.withSuccessHandler(function(res) {
+        if(res.success) {
+            Swal.fire({
+                title: `
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                        <span class="text-primary fw-bold"><i class="bi bi-patch-question-fill"></i> วงล้อคำถาม: ${topic}</span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('aiWheelIframe').requestFullscreen().catch(err => alert('เบราว์เซอร์ไม่รองรับ'));">
+                            <i class="bi bi-arrows-fullscreen"></i> ขยายเต็มจอ
+                        </button>
+                    </div>
+                `,
+                html: `
+                    <div id="aiWheelIframe" style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #0d6efd; background-color: #fff;">
+                        <iframe src="${res.url}" style="width: 100%; height: 100%; border: none;"></iframe>
+                    </div>
+                    <div class="mt-4 text-center p-3 bg-light rounded-3 border">
+                        <label class="form-label fw-bold text-success">นักเรียนตอบถูก ให้รางวัลโบนัส</label>
+                        <div class="input-group justify-content-center" style="max-width: 400px; margin: 0 auto;">
+                            <input type="number" id="aiExpReward" class="form-control text-center fw-bold" value="1000">
+                            <span class="input-group-text bg-warning text-dark border-warning">EXP</span>
+                            <button class="btn btn-success fw-bold px-4" onclick="executeGiveRewardForAiQuestion('${sid}')">มอบให้เลย!</button>
+                        </div>
+                    </div>
+                `,
+                showConfirmButton: false, showCancelButton: true, cancelButtonText: 'ปิดหน้าต่าง', width: '80%', customClass: { popup: 'rounded-4 bg-light' }
+            });
+        } else { Swal.fire('ผิดพลาด', res.message, 'error'); }
+    }).generateCustomWheelWithAi(topic, count);
+};
+
+// สั่งเซิร์ฟเวอร์แจกแต้ม (แบบวงล้อ AI)
+window.executeGiveRewardForAiQuestion = function(sid) {
+    const exp = parseInt(document.getElementById('aiExpReward').value);
+    if(!exp || exp <= 0) return Swal.fire('เตือน', 'EXP ต้องมากกว่า 0', 'warning');
+    
+    let btn = event.target; let oldHtml = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    
+    google.script.run.withSuccessHandler(function(res) {
+        btn.disabled = false; btn.innerHTML = oldHtml;
+        if(res.success) {
+            Swal.fire({ icon: 'success', title: 'สุดยอด!', text: `แจกโบนัสพิเศษ ${exp} EXP สำเร็จ!`, timer: 2500, showConfirmButton: false });
+        } else { Swal.fire('ผิดพลาด', res.message, 'error'); }
+    }).giveBulkExp([sid], exp, 'ตอบโจทย์จากวงล้อ AI ได้อย่างยอดเยี่ยม! 💡');
+};
