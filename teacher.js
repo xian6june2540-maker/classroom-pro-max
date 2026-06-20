@@ -2445,25 +2445,35 @@ window.processGenerateWheel = function(mode) {
         hideAppModal('randomWheelModal');
         
         if (res.success) {
-            // ✨ [แก้ไขใหม่] ดึงหน้าเว็บวงล้อมาฝังไว้ข้างในแอปของเราเลย! (iframe)
             Swal.fire({
-                title: `<span class="text-primary fw-bold"><i class="bi bi-pie-chart-fill"></i> วงล้อเวทมนตร์ ห้อง ${currentRoom}</span>`,
+                // เพิ่มปุ่มขยายเต็มจอไว้ที่ Title (มุมขวา)
+                title: `
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                        <span class="text-primary fw-bold"><i class="bi bi-pie-chart-fill"></i> วงล้อเวทมนตร์ ห้อง ${currentRoom}</span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('wheelIframeContainer').requestFullscreen().catch(err => alert('เบราว์เซอร์ไม่รองรับโหมดเต็มจอ'));">
+                            <i class="bi bi-arrows-fullscreen"></i> ขยายเต็มจอ
+                        </button>
+                    </div>
+                `,
                 html: `
-                    <div style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #6f42c1;">
+                    <div id="wheelIframeContainer" style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #6f42c1; background-color: #ffffff;">
                         <iframe src="${res.url}" style="width: 100%; height: 100%; border: none;"></iframe>
+                    </div>
+                    
+                    <div class="mt-4 text-center">
+                        <button class="btn btn-warning btn-lg fw-bold rounded-pill shadow-sm px-5 py-2" onclick="openWinnerManagement('${currentRoom}')">
+                            <i class="bi bi-stars"></i> จัดการผู้โชคดี (แจกแต้ม/สุ่มคำถาม)
+                        </button>
                     </div>
                 `,
                 showConfirmButton: false, 
                 showCancelButton: true,
                 cancelButtonText: 'ปิดหน้าต่างวงล้อ',
-                width: '80%', // ขยายป๊อปอัปให้กว้างขึ้นเพื่อโชว์วงล้อชัดๆ
+                width: '80%', 
                 customClass: { popup: 'rounded-4 bg-light' }
             });
         } else {
             Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
         }
-    }).withFailureHandler(function(err) {
-        hideAppModal('randomWheelModal');
-        Swal.fire('เกิดข้อผิดพลาด', 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ: ' + err.message, 'error');
     }).generateWheelOfNamesLink(currentRoom, mode, dateStr);
 };
