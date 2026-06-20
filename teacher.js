@@ -2443,8 +2443,6 @@ window.processGenerateWheel = function(mode) {
     // สั่ง Google Script รันระบบ
     google.script.run.withSuccessHandler(function(res) {
         hideAppModal('randomWheelModal');
-
-        console.log("ข้อมูลที่ได้รับจาก Server:", res);
         
         if (res.success) {
             // ✨ [แก้ไขใหม่] ดึงหน้าเว็บวงล้อมาฝังไว้ข้างในแอปของเราเลย! (iframe)
@@ -2452,7 +2450,7 @@ window.processGenerateWheel = function(mode) {
                 title: `<span class="text-primary fw-bold"><i class="bi bi-pie-chart-fill"></i> วงล้อเวทมนตร์ ห้อง ${currentRoom}</span>`,
                 html: `
                     <div style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #6f42c1;">
-                        <iframe src="${res.data}" style="width: 100%; height: 100%; border: none;"></iframe>
+                        <iframe src="${res.url}" style="width: 100%; height: 100%; border: none;"></iframe>
                     </div>
                 `,
                 showConfirmButton: false, 
