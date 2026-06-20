@@ -2540,7 +2540,8 @@ window.generateAndShowAiWheel = function(topic, count) {
                             </button>
                         </div>`,
                 html: `
-                    <div id="aiWheelContainer" style="width: 100%; height: 50vh; min-height: 400px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #0d6efd; background-color: #fff;">
+                    <!-- 🌟 แก้ไขจุดที่แบน: ปรับความสูงกลับมาเป็น 60vh / min-height 450px เท่ากับวงล้อปกติแล้วครับ -->
+                    <div id="aiWheelContainer" style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #0d6efd; background-color: #fff;">
                         <iframe src="${res.url}" style="width: 100%; height: 100%; border: none;"></iframe>
                     </div>
                     
