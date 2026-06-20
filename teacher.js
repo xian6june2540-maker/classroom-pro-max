@@ -2445,18 +2445,17 @@ window.processGenerateWheel = function(mode) {
         hideAppModal('randomWheelModal');
         
         if (res.success) {
+            // ✨ [แก้ไขใหม่] เปลี่ยนเป็นปุ่ม Link ของจริง เบราว์เซอร์จะไม่บล็อกเด็ดขาด!
             Swal.fire({
                 title: 'เสร็จสมบูรณ์! 🎡',
-                html: `สร้างวงล้อเวทมนตร์สำหรับ <b>ห้อง ${currentRoom}</b> เรียบร้อยแล้ว`,
+                html: `สร้างวงล้อเวทมนตร์สำหรับ <b>ห้อง ${currentRoom}</b> เรียบร้อยแล้ว<br><br>
+                       <a href="${res.url}" target="_blank" class="btn btn-lg fw-bold text-white shadow-sm mt-2" style="background-color: #6f42c1; border-radius: 50px; text-decoration: none;" onclick="Swal.close()">
+                          <i class="bi bi-box-arrow-up-right"></i> เปิดหน้าต่างวงล้อ
+                       </a>`,
                 icon: 'success',
-                confirmButtonText: 'เปิดหน้าต่างวงล้อ',
-                confirmButtonColor: '#6f42c1',
+                showConfirmButton: false, // ซ่อนปุ่มเดิมทิ้งไป
                 showCancelButton: true,
-                cancelButtonText: 'ยกเลิก'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.open(res.url, '_blank'); // เปิดแท็บใหม่ไปที่วงล้อ
-                }
+                cancelButtonText: 'ปิดหน้าต่าง'
             });
         } else {
             Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
