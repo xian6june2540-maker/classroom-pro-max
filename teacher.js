@@ -2417,6 +2417,31 @@ window.openRandomWheelModal = function() {
     // เช็คก่อนว่าครูกดเข้าห้องหรือยัง ถ้ายังให้เตือน
     if (!currentRoom) return Swal.fire('เตือน', 'กรุณาเลือกระดับชั้น/ห้องก่อนใช้งานวงล้อครับ', 'warning');
     
+    // 🌟 1. คำนวณจำนวนนักเรียนทั้งหมดในห้องปัจจุบัน
+    const studentsInRoom = studentsData.filter(s => s[4] === currentRoom);
+    const totalCount = studentsInRoom.length;
+    
+    // 🌟 2. คำนวณจำนวนเฉพาะคนที่ "มาเรียน" ในวันนี้
+    let presentCount = 0;
+    studentsInRoom.forEach(s => {
+        if (attendanceData[s[0]] === 'มา') {
+            presentCount++;
+        }
+    });
+
+    // 🌟 3. ค้นหาปุ่มแล้วแทรกตัวเลข Live Count เข้าไปตรงๆ
+    // หาปุ่ม "สุ่มทุกคน" และอัปเดตข้อความ
+    const btnAll = document.querySelector('button[onclick*="processGenerateWheel(\'all\')"]');
+    if (btnAll) {
+        btnAll.innerHTML = `<i class="bi bi-people-fill fs-4 d-block mb-2"></i> สุ่มจากทุกคนในห้อง <br><small class="badge bg-white text-primary mt-1">(${totalCount} คน)</small>`;
+    }
+
+    // หาปุ่ม "เฉพาะคนที่มา" และอัปเดตข้อความ
+    const btnPresent = document.querySelector('button[onclick*="processGenerateWheel(\'present\')"]');
+    if (btnPresent) {
+        btnPresent.innerHTML = `<i class="bi bi-person-check-fill fs-4 d-block mb-2"></i> สุ่มเฉพาะคนที่มาเรียน <br><small class="badge bg-white text-success mt-1">(${presentCount} คน)</small>`;
+    }
+
     // โชว์ปุ่ม ซ่อนสถานะโหลด
     document.getElementById('wheelActionArea').classList.remove('hidden');
     document.getElementById('wheelLoadingArea').classList.add('hidden');
