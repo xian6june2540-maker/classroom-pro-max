@@ -125,7 +125,7 @@
             currentTeacherConfig = config;
             
             // 🌟 เพิ่ม GEMINI_API_KEY เข้ามาใน List
-            const keys = ['SUPABASE_URL', 'SUPABASE_KEY', 'LINE_ACCESS_TOKEN', 'IMGBB_API_KEY', 'GEMINI_API_KEY', 'TEACHER_LINE_UID', 'TEACHER_PIN'];
+            const keys = ['SUPABASE_URL', 'SUPABASE_KEY', 'LINE_ACCESS_TOKEN', 'IMGBB_API_KEY', 'GEMINI_API_KEY', 'WHEEL_API_KEY', 'TEACHER_LINE_UID', 'TEACHER_PIN'];
             keys.forEach(k => {
                 if(k !== 'TEACHER_PIN') {
                     document.getElementById('view_' + k).innerText = config[k] || 'ไม่มีข้อมูล';
