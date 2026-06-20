@@ -512,11 +512,18 @@
             let now = Date.now();
             let currentBuffMultiplier = 1.0;
             let buffEnd = parseInt(s.buff_end_at) || 0;
+            let isBuffExpired = false;
 
             // ตรวจสอบว่าปัจจุบันอยู่ในช่วงเวลาบัฟหรือไม่
             if (now < buffEnd) {
                 currentBuffMultiplier = parseFloat(s.buff_multiplier) || 1.0;
+            } else if (buffEnd !== 0) {
+                // ถ้าเวลาปัจจุบันเลยเวลาหมดบัฟแล้ว และในฐานข้อมูลยังเคลียร์ค่าไม่เสร็จ
+                isBuffExpired = true; 
             }
+
+            let updatePayload = {};
+            let needsUpdate = false;
 
             if (totalExpPerMs > 0) {
                 let msPassed = now - lastPass;
@@ -525,17 +532,27 @@
                 
                 if (gained > 0) {
                     exp += gained;
-                    // 🌟 แก้ไข: ใช้ .then() แทน .catch()
-                    supabaseClient.from('students').update({
-                        exp: exp,
-                        last_passive_update: now
-                    }).eq('id', studentId).then(({ error }) => {
-                        if (error) console.error("Sync EXP Error:", error);
-                    });
+                    updatePayload.exp = exp;
+                    updatePayload.last_passive_update = now;
+                    needsUpdate = true;
                 }
             } else if (lastPass !== now) {
-                // 🌟 แก้ไข: ใส่ .then() เพื่อให้คำสั่งยิงไปที่ฐานข้อมูลสมบูรณ์
-                supabaseClient.from('students').update({ last_passive_update: now }).eq('id', studentId).then();
+                updatePayload.last_passive_update = now;
+                needsUpdate = true;
+            }
+
+            // 🌟 พระเอกอยู่ตรงนี้: ถ้าบัฟหมดอายุ ให้สั่งล้างข้อมูลบัฟในฐานข้อมูลด้วยเลย
+            if (isBuffExpired) {
+                updatePayload.buff_multiplier = 1.0;
+                updatePayload.buff_end_at = 0;
+                needsUpdate = true;
+            }
+
+            // ยิงคำสั่งอัปเดตทีเดียวจบ (ทั้งเพิ่มแต้มและล้างบัฟ)
+            if (needsUpdate) {
+                supabaseClient.from('students').update(updatePayload).eq('id', studentId).then(({ error }) => {
+                    if (error) console.error("Sync EXP Error:", error);
+                });
             }
             // --- จบระบบคำนวณ ---
             
