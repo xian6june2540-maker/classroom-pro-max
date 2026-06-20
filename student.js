@@ -416,27 +416,25 @@
     function getExpPerMs(id) {
         if (!id || id === 'bg0') return 0;
         let num = parseInt(id.replace(/\D/g, '')) || 0;
-        
-        // เพิ่ม 2 บรรทัดนี้เพื่อประกาศตัวแปรให้ชัดเจน
         let rate = 0;
-        let unitMs = 3600000; // ค่าเริ่มต้น 1 ชั่วโมง (3600000 ms)
-
+        let unitMs = 3600000; // 1 ชั่วโมง
+        
         if (id.startsWith('bg')) {
-            const bgRates = [0, 5, 10, 15, 20, 25, 30, 40, 50, 100, 200, 300, 400, 500, 1000, 1, 2, 3, 4, 5, 10];
-            const bgUnits = ['', 'hr','hr','hr','hr','hr','hr','hr','hr','day','day','day','day','day','week','min','min','min','min','min','min'];
-            if(num <= 20) { 
-                rate = bgRates[num]; 
-                let u = bgUnits[num]; 
-                if(u === 'min') unitMs = 60000;
-                else if(u === 'day') unitMs = 86400000; 
-                else if(u === 'week') unitMs = 604800000; 
-                else if(u === 'hr') unitMs = 3600000; // รองรับหน่วยชั่วโมง
-            }
+            // อิงตามร้านค้า: bg1=5, bg2=7, bg3=9, bg4=11 ...
+            const bgRates = [0, 5, 7, 9, 11, 13, 15, 18, 21, 25, 30, 35, 40, 50, 60, 75, 100, 150, 200, 300, 500];
+            if (num < bgRates.length) rate = bgRates[num];
         } else if (id.startsWith('i')) { 
-            if(num <= 20) { rate = num * 2; unitMs = 3600000; } else if(num <= 40) { rate = (num-20) * 20; unitMs = 86400000; } else { rate = (num-40) * 1; unitMs = 60000; } 
+            // อิงตามร้านค้า: i1,2=1 | i3,4=2 | i5,6=3 ...
+            if (num <= 20) {
+                rate = Math.ceil(num / 2);
+            } else if (num <= 30) {
+                rate = 10 + Math.ceil((num - 20) / 2) * 2;
+            }
         } else if (id.startsWith('m') || id.startsWith('w')) { 
-            if(num <= 20) { rate = num * 5; unitMs = 3600000; } else if(num <= 40) { rate = (num-20) * 50; unitMs = 86400000; } else { rate = (num-40) * 2; unitMs = 60000; } 
+            // อิงตามร้านค้าเสื้อผ้า: m1=2, m2=3, m3=4 ...
+            rate = num + 1;
         } 
+        
         return rate / unitMs;
     }
 
