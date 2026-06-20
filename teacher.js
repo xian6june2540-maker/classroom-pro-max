@@ -2408,3 +2408,61 @@
         // ใช้ Google Maps Direction API
         window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
     };
+
+// =========================================================
+// 🎡 WHEEL OF NAMES LOGIC (ระบบควบคุมการสุ่มชื่อหน้าจอครู)
+// =========================================================
+
+window.openRandomWheelModal = function() {
+    // เช็คก่อนว่าครูกดเข้าห้องหรือยัง ถ้ายังให้เตือน
+    if (!currentRoom) return Swal.fire('เตือน', 'กรุณาเลือกระดับชั้น/ห้องก่อนใช้งานวงล้อครับ', 'warning');
+    
+    // โชว์ปุ่ม ซ่อนสถานะโหลด
+    document.getElementById('wheelActionArea').classList.remove('hidden');
+    document.getElementById('wheelLoadingArea').classList.add('hidden');
+    
+    showAppModal('randomWheelModal');
+};
+
+window.processGenerateWheel = function(mode) {
+    // เปลี่ยนหน้าจอเป็นโหมดโหลด
+    document.getElementById('wheelActionArea').classList.add('hidden');
+    document.getElementById('wheelLoadingArea').classList.remove('hidden');
+    
+    // เช็คว่าครูเลือกเช็คชื่อของวันไหน (เผื่อใช้โหมด present)
+    let dateStr = '';
+    if (mode === 'present') {
+        const dateInput = document.getElementById('attDate');
+        if (dateInput && dateInput.value) {
+            dateStr = dateInput.value;
+        } else {
+            dateStr = getLocalTodayStr(); // ถ้าไม่ได้เลือกให้ถือว่าเป็นวันนี้
+        }
+    }
+    
+    // สั่ง Google Script รันระบบ
+    google.script.run.withSuccessHandler(function(res) {
+        hideAppModal('randomWheelModal');
+        
+        if (res.success) {
+            Swal.fire({
+                title: 'เสร็จสมบูรณ์! 🎡',
+                html: `สร้างวงล้อเวทมนตร์สำหรับ <b>ห้อง ${currentRoom}</b> เรียบร้อยแล้ว`,
+                icon: 'success',
+                confirmButtonText: 'เปิดหน้าต่างวงล้อ',
+                confirmButtonColor: '#6f42c1',
+                showCancelButton: true,
+                cancelButtonText: 'ยกเลิก'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.open(res.url, '_blank'); // เปิดแท็บใหม่ไปที่วงล้อ
+                }
+            });
+        } else {
+            Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
+        }
+    }).withFailureHandler(function(err) {
+        hideAppModal('randomWheelModal');
+        Swal.fire('เกิดข้อผิดพลาด', 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ: ' + err.message, 'error');
+    }).generateWheelOfNamesLink(currentRoom, mode, dateStr);
+};
