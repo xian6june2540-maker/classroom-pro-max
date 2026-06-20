@@ -2445,17 +2445,19 @@ window.processGenerateWheel = function(mode) {
         hideAppModal('randomWheelModal');
         
         if (res.success) {
-            // ✨ [แก้ไขใหม่] เปลี่ยนเป็นปุ่ม Link ของจริง เบราว์เซอร์จะไม่บล็อกเด็ดขาด!
+            // ✨ [แก้ไขใหม่] ดึงหน้าเว็บวงล้อมาฝังไว้ข้างในแอปของเราเลย! (iframe)
             Swal.fire({
-                title: 'เสร็จสมบูรณ์! 🎡',
-                html: `สร้างวงล้อเวทมนตร์สำหรับ <b>ห้อง ${currentRoom}</b> เรียบร้อยแล้ว<br><br>
-                       <a href="${res.url}" target="_blank" class="btn btn-lg fw-bold text-white shadow-sm mt-2" style="background-color: #6f42c1; border-radius: 50px; text-decoration: none;" onclick="Swal.close()">
-                          <i class="bi bi-box-arrow-up-right"></i> เปิดหน้าต่างวงล้อ
-                       </a>`,
-                icon: 'success',
-                showConfirmButton: false, // ซ่อนปุ่มเดิมทิ้งไป
+                title: `<span class="text-primary fw-bold"><i class="bi bi-pie-chart-fill"></i> วงล้อเวทมนตร์ ห้อง ${currentRoom}</span>`,
+                html: `
+                    <div style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #6f42c1;">
+                        <iframe src="${res.url}" style="width: 100%; height: 100%; border: none;"></iframe>
+                    </div>
+                `,
+                showConfirmButton: false, 
                 showCancelButton: true,
-                cancelButtonText: 'ปิดหน้าต่าง'
+                cancelButtonText: 'ปิดหน้าต่างวงล้อ',
+                width: '80%', // ขยายป๊อปอัปให้กว้างขึ้นเพื่อโชว์วงล้อชัดๆ
+                customClass: { popup: 'rounded-4 bg-light' }
             });
         } else {
             Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
