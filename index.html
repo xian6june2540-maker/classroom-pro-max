@@ -544,10 +544,34 @@
               </div>
           </div>
 
+          <div class="mb-3 p-3 bg-white border rounded shadow-sm config-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold mb-0" style="color: #6f42c1;"><i class="bi bi-pie-chart-fill"></i> 7. WHEEL_API_KEY (สุ่มชื่อนักเรียน)</label>
+                  <button class="btn btn-sm btn-outline-primary fw-bold px-3" id="btnEdit_WHEEL_API_KEY" onclick="toggleConfigEdit('WHEEL_API_KEY')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
+              </div>
+              <div class="alert alert-light border border-secondary small mb-2 p-2 shadow-sm rounded-3">
+                 <i class="bi bi-info-circle-fill text-primary"></i> <b>วิธีหา API Key:</b><br>
+                 1. ไปที่เว็บ <a href="https://wheelofnames.com/th/faq.html#api" target="_blank" class="text-primary fw-bold">wheelofnames.com</a> และล็อคอินเข้าสู่ระบบ<br>
+                 2. ไปที่รูปโปรไฟล์มุมขวาบน เลือก <b>หน้า API (API Page)</b><br>
+                 3. กดปุ่ม <b>Create API Key</b> แล้วก๊อปปี้คีย์มาใส่ในช่องนี้ได้เลย
+              </div>
+              <div id="view_WHEEL_API_KEY" class="p-2 bg-light border rounded text-break" style="font-family: monospace; font-size: 0.9em; color: #555;">กำลังโหลด...</div>
+              <div id="edit_WHEEL_API_KEY" class="hidden mt-3 p-3 border rounded bg-light" style="border-color: #6f42c1 !important;">
+                  <label class="small fw-bold mb-1">ระบุคีย์ใหม่:</label>
+                  <input type="text" id="input_WHEEL_API_KEY" class="form-control mb-2">
+                  <label class="small fw-bold text-danger mb-1">ใส่ PIN ของครูเพื่อยืนยันการบันทึก:</label>
+                  <input type="password" id="pin_WHEEL_API_KEY" class="form-control mb-3" placeholder="รหัส PIN ปัจจุบัน">
+                  <div class="d-flex gap-2">
+                      <button class="btn text-white btn-sm w-50 fw-bold" style="background-color: #6f42c1;" onclick="saveSingleConfig('WHEEL_API_KEY')"><i class="bi bi-save"></i> อัปเดตข้อมูล</button>
+                      <button class="btn btn-secondary btn-sm w-50 fw-bold" onclick="toggleConfigEdit('WHEEL_API_KEY')"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                  </div>
+              </div>
+          </div>
+
           <!-- 6. TEACHER_LINE_UID -->
           <div class="mb-4 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
-                  <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-person-badge"></i> 6. TEACHER_LINE_UID (รับ OTP)</label>
+                  <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-person-badge"></i> 7. TEACHER_LINE_UID (รับ OTP)</label>
                   <button class="btn btn-sm btn-outline-dark fw-bold px-3" onclick="toggleConfigEdit('TEACHER_LINE_UID')"><i class="bi bi-pencil-square"></i> แก้ไข</button>
               </div>
               <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-dark">
@@ -565,7 +589,7 @@
           <!-- 7. TEACHER_PIN -->
           <div class="mb-2 p-3 bg-white border rounded shadow-sm config-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
-                  <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-shield-lock-fill text-dark"></i> 7. TEACHER_PIN (รหัสผ่านครู)</label>
+                  <label class="form-label fw-bold text-dark mb-0"><i class="bi bi-shield-lock-fill text-dark"></i> 8. TEACHER_PIN (รหัสผ่านครู)</label>
                   <button class="btn btn-sm btn-outline-dark fw-bold px-3" onclick="toggleConfigEdit('TEACHER_PIN')"><i class="bi bi-pencil-square"></i> เปลี่ยนรหัส</button>
               </div>
               <div class="small text-dark mb-2 p-2 bg-light rounded border-start border-3 border-secondary">
@@ -1403,6 +1427,38 @@ ALTER TABLE parent_communications DISABLE ROW LEVEL SECURITY;
     </div>
 </div>
 
+<div class="modal fade" id="randomWheelModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 20px; overflow: hidden; border: 3px solid #6f42c1;">
+            <div class="modal-header text-white border-0" style="background: linear-gradient(135deg, #6f42c1, #0dcaf0);">
+                <h5 class="modal-title fw-bold"><i class="bi bi-pie-chart-fill"></i> สุ่มชื่อนักเรียน (Wheel of Names)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 text-center bg-light">
+                <div class="mb-4">
+                    <h5 class="fw-bold text-dark mb-2">เลือกรูปแบบรายชื่อที่จะใส่ในวงล้อ</h5>
+                    <p class="text-muted small">ระบบจะดึงรายชื่อและนำไปสร้างวงล้ออัตโนมัติ</p>
+                </div>
+                
+                <div id="wheelActionArea" class="d-grid gap-3">
+                    <button class="btn btn-outline-primary btn-lg fw-bold shadow-sm rounded-pill py-3" onclick="processGenerateWheel('all')">
+                        <i class="bi bi-people-fill"></i> สุ่มจากนักเรียน "ทุกคนในห้อง"
+                    </button>
+                    <button class="btn btn-outline-success btn-lg fw-bold shadow-sm rounded-pill py-3" onclick="processGenerateWheel('present')">
+                        <i class="bi bi-person-check-fill"></i> สุ่มเฉพาะคนที่ "มาเรียนวันนี้"
+                    </button>
+                </div>
+                
+                <div id="wheelLoadingArea" class="hidden mt-3 py-3">
+                    <div class="spinner-border" style="color: #6f42c1;" role="status"></div>
+                    <h6 class="mt-3 text-dark fw-bold">กำลังอัญเชิญวงล้อเวทมนตร์...</h6>
+                    <small class="text-muted">กรุณารอสักครู่นะครับ 🎡</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <script src="global.js"></script>
