@@ -2414,33 +2414,27 @@
 // =========================================================
 
 window.openRandomWheelModal = function() {
-    // เช็คก่อนว่าครูกดเข้าห้องหรือยัง ถ้ายังให้เตือน
     if (!currentRoom) return Swal.fire('เตือน', 'กรุณาเลือกระดับชั้น/ห้องก่อนใช้งานวงล้อครับ', 'warning');
     
-    // 1. คำนวณจำนวนนักเรียนทั้งหมดในห้องปัจจุบัน
     const studentsInRoom = studentsData.filter(s => s[4] === currentRoom);
     const totalCount = studentsInRoom.length;
     
-    // 2. คำนวณจำนวนเฉพาะคนที่ "มาเรียน" ในวันนี้
     let presentCount = 0;
     studentsInRoom.forEach(s => {
-        if (attendanceData[s[0]] === 'มา') {
-            presentCount++;
-        }
+        if (attendanceData[s[0]] === 'มา') presentCount++;
     });
 
-    // 3. ค้นหาปุ่มแล้วแทรกตัวเลข Live Count เข้าไปตรงๆ
-    const btnAll = document.querySelector('button[onclick*="processGenerateWheel(\\'all\\')"]');
+    // 🌟 แก้ไขจุดที่พัง: เปลี่ยนมาใช้ Backtick ป้องกัน Syntax Error 100%
+    const btnAll = document.querySelector(`button[onclick*="processGenerateWheel('all')"]`);
     if (btnAll) {
         btnAll.innerHTML = `<i class="bi bi-people-fill fs-4 d-block mb-2"></i> สุ่มจากทุกคนในห้อง <br><small class="badge bg-white text-primary mt-1">(${totalCount} คน)</small>`;
     }
 
-    const btnPresent = document.querySelector('button[onclick*="processGenerateWheel(\\'present\\')"]');
+    const btnPresent = document.querySelector(`button[onclick*="processGenerateWheel('present')"]`);
     if (btnPresent) {
         btnPresent.innerHTML = `<i class="bi bi-person-check-fill fs-4 d-block mb-2"></i> สุ่มเฉพาะคนที่มาเรียน <br><small class="badge bg-white text-success mt-1">(${presentCount} คน)</small>`;
     }
 
-    // 🌟 4. แทรกปุ่ม "โหมดวงล้อคำถาม AI" เข้าไปในหน้าต่างเลือกโหมด
     const actionArea = document.getElementById('wheelActionArea');
     if (actionArea && !document.getElementById('btnAiQuestionWheel')) {
         const aiBtnHtml = `
@@ -2453,15 +2447,12 @@ window.openRandomWheelModal = function() {
         actionArea.insertAdjacentHTML('beforeend', aiBtnHtml);
     }
 
-    // โชว์ปุ่ม ซ่อนสถานะโหลด
     document.getElementById('wheelActionArea').classList.remove('hidden');
     document.getElementById('wheelLoadingArea').classList.add('hidden');
-    
     showAppModal('randomWheelModal');
 };
 
 window.processGenerateWheel = function(mode) {
-    // โหมดสุ่มชื่อธรรมดา (ตัดปุ่มจัดการผู้โชคดีออกไปแล้ว เพราะไม่จำเป็น)
     document.getElementById('wheelActionArea').classList.add('hidden');
     document.getElementById('wheelLoadingArea').classList.remove('hidden');
     
@@ -2505,7 +2496,7 @@ window.processGenerateWheel = function(mode) {
 // =========================================================
 
 window.promptAiQuestionWheel = function() {
-    hideAppModal('randomWheelModal'); // ปิดหน้าเลือกโหมดเดิม
+    hideAppModal('randomWheelModal'); 
 
     Swal.fire({
         title: '🤖 สร้างวงล้อคำถาม AI',
@@ -2566,7 +2557,7 @@ window.generateAndShowAiWheel = function(topic, count) {
                                 <input type="number" id="luckyStudentExp" class="form-control text-center fw-bold text-success fs-5" value="500">
                                 <span class="input-group-text bg-success text-white border-success">EXP</span>
                             </div>
-                            <button class="btn btn-success fw-bold px-4 shadow-sm" onclick="giveExpToLuckyStudent()"><i class="bi bi-gift-fill"></i> มอบรางวัล</button>
+                            <button class="btn btn-success fw-bold px-4 shadow-sm" onclick="giveExpToLuckyStudent(this)"><i class="bi bi-gift-fill"></i> มอบรางวัล</button>
                             <button class="btn btn-danger fw-bold shadow-sm" onclick="resetSpinStudent()"><i class="bi bi-x-circle"></i> ยกเลิก/เปลี่ยนคน</button>
                         </div>
                         <input type="hidden" id="luckyStudentId">
@@ -2583,7 +2574,6 @@ window.generateAndShowAiWheel = function(topic, count) {
 };
 
 window.spinStudentForQuestion = function() {
-    // ดึงข้อมูลเช็คชื่อและหานักเรียนที่มาเรียนในวันนี้
     const dateInput = document.getElementById('attDate');
     const dateStr = dateInput ? dateInput.value : getLocalTodayStr();
     
@@ -2591,17 +2581,14 @@ window.spinStudentForQuestion = function() {
     const presentStudents = studentsInRoom.filter(s => attendanceData[s[0]] === 'มา');
 
     if (presentStudents.length === 0) {
-        // ใช้ Toast แจ้งเตือนเล็กๆ มุมจอ วงล้อจะได้ไม่ถูกรีเซ็ต
         return Swal.fire({ toast: true, position: 'top', icon: 'warning', title: 'ไม่มีเด็กที่เช็คชื่อว่า "มาเรียน" เลยครับ', showConfirmButton: false, timer: 3000 });
     }
 
-    // สุ่มนักเรียน 1 คน
     const randomIndex = Math.floor(Math.random() * presentStudents.length);
     const lucky = presentStudents[randomIndex];
     let shortName = lucky[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
     if (lucky[2]) shortName += ` (${lucky[2]})`;
 
-    // สลับซ่อนปุ่มสุ่ม และโชว์กล่องรางวัล (วงล้อด้านบนยังหมุนและแสดงข้อความเดิมปกติ)
     document.getElementById('spinStudentBtnArea').style.display = 'none';
     document.getElementById('luckyStudentName').innerText = `${lucky[0]} - ${shortName}`;
     document.getElementById('luckyStudentId').value = lucky[0];
@@ -2609,18 +2596,16 @@ window.spinStudentForQuestion = function() {
 };
 
 window.resetSpinStudent = function() {
-    // เมื่อกดยกเลิก ก็แค่สลับกล่องกลับไปเป็นปุ่มสุ่มตามเดิม
     document.getElementById('studentResultArea').style.display = 'none';
     document.getElementById('spinStudentBtnArea').style.display = 'block';
 };
 
-window.giveExpToLuckyStudent = function() {
+window.giveExpToLuckyStudent = function(btn) {
     const sid = document.getElementById('luckyStudentId').value;
     const exp = parseInt(document.getElementById('luckyStudentExp').value);
     
     if(!sid || !exp || exp <= 0) return Swal.fire({ toast: true, position: 'top', icon: 'warning', title: 'ข้อมูลแต้มไม่ถูกต้อง', showConfirmButton: false, timer: 2000 });
 
-    const btn = event.target; 
     const oldHtml = btn.innerHTML;
     btn.innerHTML = 'กำลังแจก...'; 
     btn.disabled = true;
@@ -2629,9 +2614,7 @@ window.giveExpToLuckyStudent = function() {
         btn.innerHTML = oldHtml; 
         btn.disabled = false;
         if(res.success) {
-            // แจ้งเตือนสำเร็จมุมขวาบนแบบไม่รบกวนวงล้อ
             Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `แจก ${exp} EXP ให้ ${sid} สำเร็จ!`, showConfirmButton: false, timer: 2500 });
-            // รีเซ็ตปุ่มกลับไปรอสุ่มคนใหม่
             resetSpinStudent();
         } else {
             Swal.fire({ toast: true, position: 'top', icon: 'error', title: res.message, showConfirmButton: false, timer: 3000 });
