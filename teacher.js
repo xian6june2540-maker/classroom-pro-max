@@ -2424,7 +2424,6 @@ window.openRandomWheelModal = function() {
         if (attendanceData[s[0]] === 'มา') presentCount++;
     });
 
-    // 🌟 แก้ไขจุดที่พัง: เปลี่ยนมาใช้ Backtick ป้องกัน Syntax Error 100%
     const btnAll = document.querySelector(`button[onclick*="processGenerateWheel('all')"]`);
     if (btnAll) {
         btnAll.innerHTML = `<i class="bi bi-people-fill fs-4 d-block mb-2"></i> สุ่มจากทุกคนในห้อง <br><small class="badge bg-white text-primary mt-1">(${totalCount} คน)</small>`;
@@ -2436,15 +2435,20 @@ window.openRandomWheelModal = function() {
     }
 
     const actionArea = document.getElementById('wheelActionArea');
-    if (actionArea && !document.getElementById('btnAiQuestionWheel')) {
-        const aiBtnHtml = `
+    if (actionArea && !document.getElementById('btnGroupWheel')) {
+        const extraBtnsHtml = `
+            <div class="col-12 mt-3">
+                <button id="btnGroupWheel" class="btn btn-info w-100 py-3 shadow-sm rounded-4 border-2 fw-bold text-dark" style="border-color: #17a2b8;" onclick="promptGroupWheel()">
+                    <i class="bi bi-diagram-3-fill fs-3 d-block mb-2"></i> สุ่มแบบจับกลุ่ม (ตั้งค่าคน/กลุ่มได้)
+                </button>
+            </div>
             <div class="col-12 mt-3">
                 <button id="btnAiQuestionWheel" class="btn btn-primary w-100 py-3 shadow-sm rounded-4 border-2" style="border-color: #0dcaf0; background: linear-gradient(135deg, #0d6efd, #6f42c1);" onclick="promptAiQuestionWheel()">
                     <i class="bi bi-robot fs-3 d-block mb-2 text-white"></i> <span class="fw-bold fs-5 text-white">โหมดวงล้อคำถาม AI + สุ่มคนตอบ</span>
                 </button>
             </div>
         `;
-        actionArea.insertAdjacentHTML('beforeend', aiBtnHtml);
+        actionArea.insertAdjacentHTML('beforeend', extraBtnsHtml);
     }
 
     document.getElementById('wheelActionArea').classList.remove('hidden');
@@ -2492,8 +2496,91 @@ window.processGenerateWheel = function(mode) {
 };
 
 // =========================================================
-// 🤖 โหมดวงล้อคำถาม AI + สุ่มเด็กตอบ (Looop เดียวจบไม่มีรีเซ็ต)
+// 👥 โหมดวงล้อจับกลุ่ม
 // =========================================================
+window.promptGroupWheel = function() {
+    const studentsInRoom = studentsData.filter(s => s[4] === currentRoom);
+    const presentStudents = studentsInRoom.filter(s => attendanceData[s[0]] === 'มา');
+
+    Swal.fire({
+        title: '⚙️ ตั้งค่าการจับกลุ่ม',
+        html: `
+            <div class="text-start mb-3" style="font-family:'Prompt', sans-serif;">
+                <label class="form-label fw-bold text-primary">1. เลือกเป้าหมายนักเรียน:</label>
+                <select id="gwTarget" class="form-select border-primary mb-3">
+                    <option value="all">ทุกคนในห้อง (${studentsInRoom.length} คน)</option>
+                    <option value="present">เฉพาะคนที่มาเรียน (${presentStudents.length} คน)</option>
+                </select>
+                <label class="form-label fw-bold text-success">2. จำนวนนักเรียนต่อ 1 กลุ่ม:</label>
+                <input type="number" id="gwSize" class="form-control border-success text-center fw-bold" value="2" min="1" max="10">
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'สร้างวงล้อกลุ่ม',
+        cancelButtonText: 'ยกเลิก',
+        preConfirm: () => {
+            const target = document.getElementById('gwTarget').value;
+            const size = parseInt(document.getElementById('gwSize').value);
+            if (!size || size < 1) { Swal.showValidationMessage('กรุณาระบุจำนวนสมาชิก'); return false; }
+            return { target, size };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            generateGroupWheel(result.value.target, result.value.size);
+        }
+    });
+};
+
+window.generateGroupWheel = function(targetMode, groupSize) {
+    const studentsInRoom = studentsData.filter(s => s[4] === currentRoom);
+    let targetList = targetMode === 'present' ? studentsInRoom.filter(s => attendanceData[s[0]] === 'มา') : studentsInRoom;
+
+    if (targetList.length === 0) return Swal.fire('เตือน', 'ไม่มีรายชื่อนักเรียนในหมวดหมู่ที่เลือก', 'warning');
+
+    // สุ่มสลับชื่อนักเรียนก่อนแบ่งกลุ่ม
+    let shuffled = [...targetList].sort(() => 0.5 - Math.random());
+    let groups = [];
+    let groupNum = 1;
+    
+    for (let i = 0; i < shuffled.length; i += groupSize) {
+        let chunk = shuffled.slice(i, i + groupSize);
+        let names = chunk.map(s => {
+            let shortName = s[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
+            if(s[2]) shortName += `(${s[2]})`;
+            return shortName;
+        });
+        groups.push(`กลุ่ม ${groupNum}: ` + names.join(' / '));
+        groupNum++;
+    }
+
+    const entriesStr = encodeURIComponent(groups.join(','));
+    const finalUrl = `https://wheelofnames.com/view?entries=${entriesStr}`;
+
+    hideAppModal('randomWheelModal');
+    Swal.fire({
+        title: `<div class="d-flex justify-content-between align-items-center w-100">
+                    <span class="text-primary fw-bold"><i class="bi bi-people-fill"></i> วงล้อจับกลุ่ม (กลุ่มละ ${groupSize} คน)</span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('wheelIframeContainer').requestFullscreen().catch(e=>console.log(e))">
+                        <i class="bi bi-arrows-fullscreen"></i> ขยายเต็มจอ
+                    </button>
+                </div>`,
+        html: `
+            <div id="wheelIframeContainer" style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #17a2b8; background-color: #ffffff;">
+                <iframe src="${finalUrl}" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        `,
+        showConfirmButton: false, 
+        showCancelButton: true,
+        cancelButtonText: 'ปิดหน้าต่างวงล้อ',
+        width: '80%', 
+        customClass: { popup: 'rounded-4 bg-light' }
+    });
+};
+
+// =========================================================
+// 🤖 โหมดวงล้อคำถาม AI + พรีวิวคำถามก่อนเริ่ม + สุ่มเด็กตอบ
+// =========================================================
+window.wheelAvailableStudents = []; // เก็บตัวแปรสเตทของนักเรียนที่รันวงล้ออยู่
 
 window.promptAiQuestionWheel = function() {
     hideAppModal('randomWheelModal'); 
@@ -2504,96 +2591,202 @@ window.promptAiQuestionWheel = function() {
             <div class="text-start" style="font-family:'Prompt', sans-serif;">
                 <label class="form-label fw-bold text-primary"><i class="bi bi-journal-text"></i> หัวข้อคำถาม:</label>
                 <input type="text" id="aiQTopic" class="form-control border-primary mb-3" placeholder="เช่น วิทยาศาสตร์, โค้ดดิ้ง, ประวัติศาสตร์">
-                <label class="form-label fw-bold text-success"><i class="bi bi-123"></i> จำนวนคำถาม (ข้อ):</label>
-                <input type="number" id="aiQCount" class="form-control border-success text-center fw-bold" value="5" min="1" max="20">
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold text-success"><i class="bi bi-123"></i> จำนวน (ข้อ):</label>
+                        <input type="number" id="aiQCount" class="form-control border-success text-center fw-bold" value="5" min="1" max="20">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold text-warning"><i class="bi bi-bar-chart"></i> ระดับความยาก:</label>
+                        <select id="aiQDifficulty" class="form-select border-warning fw-bold">
+                            <option value="ปานกลาง">ปานกลาง</option>
+                            <option value="ง่าย">ง่าย</option>
+                            <option value="ยาก">ยาก</option>
+                            <option value="กวนๆ">กวนๆ</option>
+                        </select>
+                    </div>
+                </div>
             </div>
         `,
         showCancelButton: true,
-        confirmButtonText: '<i class="bi bi-magic"></i> สร้างคำถาม',
+        confirmButtonText: '<i class="bi bi-magic"></i> ให้ AI คิดคำถาม',
         cancelButtonText: 'ยกเลิก',
         preConfirm: () => {
             const topic = document.getElementById('aiQTopic').value.trim();
             const count = document.getElementById('aiQCount').value;
+            const difficulty = document.getElementById('aiQDifficulty').value;
             if (!topic) { Swal.showValidationMessage('กรุณากรอกหัวข้อคำถามด้วยครับ'); return false; }
-            return { topic, count };
+            return { topic, count, difficulty };
         }
     }).then((result) => {
-        if (result.isConfirmed) generateAndShowAiWheel(result.value.topic, result.value.count);
+        if (result.isConfirmed) generateAiQuestionsForPreview(result.value.topic, result.value.count, result.value.difficulty);
     });
 };
 
-window.generateAndShowAiWheel = function(topic, count) {
+window.generateAiQuestionsForPreview = function(topic, count, difficulty) {
     Swal.fire({
         title: 'จีมินกำลังร่ายเวทมนตร์...',
-        html: `กำลังคิดคำถาม <b>${count} ข้อ</b> เกี่ยวกับ <b>${topic}</b><br>โปรดรอสักครู่...`,
+        html: `กำลังคิดคำถาม <b>${count} ข้อ</b> เกี่ยวกับ <b>${topic}</b><br>(ระดับ: ${difficulty}) โปรดรอสักครู่...`,
         allowOutsideClick: false,
         didOpen: () => Swal.showLoading()
     });
 
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
-            Swal.fire({
-                title: `<div class="d-flex justify-content-between align-items-center w-100">
-                            <span class="text-primary fw-bold"><i class="bi bi-patch-question-fill"></i> คำถาม: ${topic}</span>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('aiWheelContainer').requestFullscreen().catch(e=>console.log(e))">
-                                <i class="bi bi-arrows-fullscreen"></i> ขยายเต็มจอ
-                            </button>
-                        </div>`,
-                html: `
-                    <!-- 🌟 แก้ไขจุดที่แบน: ปรับความสูงกลับมาเป็น 60vh / min-height 450px เท่ากับวงล้อปกติแล้วครับ -->
-                    <div id="aiWheelContainer" style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #0d6efd; background-color: #fff;">
-                        <iframe src="${res.url}" style="width: 100%; height: 100%; border: none;"></iframe>
-                    </div>
-                    
-                    <div id="spinStudentBtnArea" class="mt-4 text-center">
-                        <button class="btn btn-warning btn-lg fw-bold rounded-pill shadow px-5 py-3 border-2 border-white" style="font-size:1.2rem;" onclick="spinStudentForQuestion()">
-                            <i class="bi bi-dice-5-fill"></i> สุ่มหานักเรียนมาตอบคำถามนี้!
-                        </button>
-                    </div>
-
-                    <div id="studentResultArea" class="mt-3 p-3 bg-light rounded-4 border border-2 border-warning shadow-sm" style="display: none;">
-                        <h5 class="fw-bold text-dark mb-2">🎉 ผู้โชคดีคือ: <span id="luckyStudentName" class="text-primary fs-4 ms-2"></span></h5>
-                        <div class="d-flex justify-content-center align-items-center gap-2 mt-3 flex-wrap">
-                            <div class="input-group shadow-sm" style="max-width: 150px;">
-                                <input type="number" id="luckyStudentExp" class="form-control text-center fw-bold text-success fs-5" value="500">
-                                <span class="input-group-text bg-success text-white border-success">EXP</span>
-                            </div>
-                            <button class="btn btn-success fw-bold px-4 shadow-sm" onclick="giveExpToLuckyStudent(this)"><i class="bi bi-gift-fill"></i> มอบรางวัล</button>
-                            <button class="btn btn-danger fw-bold shadow-sm" onclick="resetSpinStudent()"><i class="bi bi-x-circle"></i> ยกเลิก/เปลี่ยนคน</button>
-                        </div>
-                        <input type="hidden" id="luckyStudentId">
-                    </div>
-                `,
-                showConfirmButton: false, 
-                showCancelButton: true,
-                cancelButtonText: 'ปิดหน้าต่างวงล้อ',
-                width: '80%',
-                customClass: { popup: 'rounded-4 bg-white' }
-            });
+            showAiQuestionPreview(topic, res.questions);
         } else { Swal.fire('ผิดพลาด', res.message, 'error'); }
-    }).generateCustomWheelWithAi(topic, count);
+    }).generateCustomWheelWithAi(topic, count, difficulty);
 };
 
-window.spinStudentForQuestion = function() {
-    const dateInput = document.getElementById('attDate');
-    const dateStr = dateInput ? dateInput.value : getLocalTodayStr();
-    
-    const studentsInRoom = studentsData.filter(s => s[4] === currentRoom);
-    const presentStudents = studentsInRoom.filter(s => attendanceData[s[0]] === 'มา');
+window.showAiQuestionPreview = function(topic, questions) {
+    let html = '<div style="max-height: 400px; overflow-y: auto; text-align: left;" class="px-2" id="aiQPreviewList">';
+    questions.forEach((q, i) => {
+        html += `
+            <div class="mb-3">
+                <label class="small fw-bold text-primary">ข้อที่ ${i+1}</label>
+                <textarea class="form-control ai-q-edit shadow-sm border-primary" rows="2">${q}</textarea>
+            </div>
+        `;
+    });
+    html += '</div>';
 
-    if (presentStudents.length === 0) {
-        return Swal.fire({ toast: true, position: 'top', icon: 'warning', title: 'ไม่มีเด็กที่เช็คชื่อว่า "มาเรียน" เลยครับ', showConfirmButton: false, timer: 3000 });
+    Swal.fire({
+        title: '<i class="bi bi-eye"></i> ตรวจสอบคำถามก่อนขึ้นวงล้อ',
+        html: html,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: '<i class="bi bi-check-circle"></i> เอาขึ้นวงล้อเลย',
+        denyButtonText: '<i class="bi bi-arrow-clockwise"></i> สร้างใหม่ทั้งหมด',
+        cancelButtonText: 'ยกเลิก',
+        width: '600px',
+        preConfirm: () => {
+            let inputs = document.querySelectorAll('.ai-q-edit');
+            let finalQ = [];
+            inputs.forEach(inp => { if(inp.value.trim() !== '') finalQ.push(inp.value.trim()); });
+            return finalQ;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            if(result.value.length === 0) return Swal.fire('เตือน', 'คำถามห้ามว่างเปล่าครับ', 'warning');
+            launchAiWheelFinal(topic, result.value);
+        } else if (result.isDenied) {
+            // ถ้ากดปุ่มสีแดงให้สุ่มใหม่ทั้งหมด (ใช้ค่าเดิมส่งไป)
+            generateAiQuestionsForPreview(topic, questions.length, "ปานกลาง"); 
+        }
+    });
+};
+
+window.launchAiWheelFinal = function(topic, questions) {
+    const entriesStr = encodeURIComponent(questions.join(','));
+    const finalUrl = `https://wheelofnames.com/view?entries=${entriesStr}`;
+
+    const studentsInRoom = studentsData.filter(s => s[4] === currentRoom);
+    window.wheelAvailableStudents = studentsInRoom.filter(s => attendanceData[s[0]] === 'มา');
+    let presentCount = window.wheelAvailableStudents.length;
+
+    Swal.fire({
+        title: `<div class="d-flex justify-content-between align-items-center w-100">
+                    <span class="text-primary fw-bold"><i class="bi bi-patch-question-fill"></i> คำถาม: ${topic}</span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('aiWheelContainer').requestFullscreen().catch(e=>console.log(e))">
+                        <i class="bi bi-arrows-fullscreen"></i> ขยายเต็มจอ
+                    </button>
+                </div>`,
+        html: `
+            <div id="aiWheelContainer" style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #0d6efd; background-color: #fff;">
+                <iframe src="${finalUrl}" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+            
+            <div id="spinStudentBtnArea" class="mt-4">
+                <div class="d-flex flex-wrap justify-content-center gap-3">
+                    <button class="btn btn-warning btn-lg fw-bold rounded-pill shadow px-4 py-2 border-2 border-white" onclick="spinStudentForQuestion('single')">
+                        <i class="bi bi-person-fill"></i> สุ่มเดี่ยว <small id="wheelCountText1">(${presentCount} คน)</small>
+                    </button>
+                    <button class="btn btn-info btn-lg fw-bold rounded-pill shadow px-4 py-2 border-2 border-white text-white" onclick="spinStudentForQuestion('duo')">
+                        <i class="bi bi-people-fill"></i> สุ่มแพ็คคู่ <small id="wheelCountText2">(${presentCount} คน)</small>
+                    </button>
+                </div>
+            </div>
+
+            <div id="studentResultArea" class="mt-3 p-3 bg-light rounded-4 border border-2 border-warning shadow-sm" style="display: none;">
+                <h5 class="fw-bold text-dark mb-2">🎉 ผู้โชคดีคือ: <span id="luckyStudentName" class="text-primary fs-4 ms-2 d-block mt-2"></span></h5>
+                
+                <div class="d-flex justify-content-center align-items-center gap-2 mt-3 flex-wrap">
+                    <div class="input-group shadow-sm" style="max-width: 150px;">
+                        <input type="number" id="luckyStudentExp" class="form-control text-center fw-bold text-success fs-5" value="500">
+                        <span class="input-group-text bg-success text-white border-success">EXP</span>
+                    </div>
+                    <button class="btn btn-success fw-bold px-3 shadow-sm" onclick="giveExpToLuckyStudent(this)"><i class="bi bi-gift-fill"></i> มอบรางวัล</button>
+                    <button class="btn btn-danger fw-bold px-3 shadow-sm" onclick="removeDrawnStudents()"><i class="bi bi-person-x-fill"></i> เอาชื่อเหล่านี้ออก</button>
+                    <button class="btn btn-secondary fw-bold shadow-sm px-3" onclick="resetSpinStudent()"><i class="bi bi-arrow-clockwise"></i> ปิด</button>
+                </div>
+                <input type="hidden" id="luckyStudentId"> 
+            </div>
+        `,
+        showConfirmButton: false, 
+        showCancelButton: true,
+        cancelButtonText: 'ปิดหน้าต่างวงล้อ',
+        width: '80%',
+        customClass: { popup: 'rounded-4 bg-white' }
+    });
+};
+
+window.spinStudentForQuestion = function(mode) {
+    if (window.wheelAvailableStudents.length === 0) {
+        return Swal.fire({ toast: true, position: 'top', icon: 'warning', title: 'ไม่มีนักเรียนเหลือให้สุ่มแล้วครับ', showConfirmButton: false, timer: 3000 });
     }
 
-    const randomIndex = Math.floor(Math.random() * presentStudents.length);
-    const lucky = presentStudents[randomIndex];
-    let shortName = lucky[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
-    if (lucky[2]) shortName += ` (${lucky[2]})`;
+    let drawnIds = [];
+    let drawnNames = [];
+
+    // สลับตำแหน่งชื่อแบบสุ่ม
+    let shuffled = [...window.wheelAvailableStudents].sort(() => 0.5 - Math.random());
+
+    // ถ้ากดสุ่มแพ็คคู่แต่เหลือคนเดียว ก็ให้สุ่มแบบเดี่ยวไปเลย
+    if (mode === 'single' || shuffled.length === 1) {
+        let lucky = shuffled[0];
+        drawnIds.push(lucky[0]);
+        let sName = lucky[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
+        if(lucky[2]) sName += ` (${lucky[2]})`;
+        drawnNames.push(sName);
+    } else if (mode === 'duo') {
+        let lucky1 = shuffled[0];
+        let lucky2 = shuffled[1];
+        drawnIds.push(lucky1[0], lucky2[0]);
+        
+        let sName1 = lucky1[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
+        if(lucky1[2]) sName1 += ` (${lucky1[2]})`;
+        
+        let sName2 = lucky2[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
+        if(lucky2[2]) sName2 += ` (${lucky2[2]})`;
+        
+        drawnNames.push(sName1 + " <b class='text-danger'>&</b> " + sName2);
+    }
 
     document.getElementById('spinStudentBtnArea').style.display = 'none';
-    document.getElementById('luckyStudentName').innerText = `${lucky[0]} - ${shortName}`;
-    document.getElementById('luckyStudentId').value = lucky[0];
+    document.getElementById('luckyStudentName').innerHTML = drawnNames.join(', ');
+    document.getElementById('luckyStudentId').value = drawnIds.join(','); 
     document.getElementById('studentResultArea').style.display = 'block';
+};
+
+window.removeDrawnStudents = function() {
+    let drawnIdsStr = document.getElementById('luckyStudentId').value;
+    if (!drawnIdsStr) return;
+    
+    let idsToRemove = drawnIdsStr.split(',');
+    
+    // คัดชื่อที่ถูกเรียกแล้วออกจากกองสุ่ม
+    window.wheelAvailableStudents = window.wheelAvailableStudents.filter(s => !idsToRemove.includes(s[0]));
+    
+    // อัปเดตตัวเลขแสดงจำนวนบนปุ่มทันที
+    let count = window.wheelAvailableStudents.length;
+    let c1 = document.getElementById('wheelCountText1');
+    let c2 = document.getElementById('wheelCountText2');
+    if(c1) c1.innerText = `(${count} คน)`;
+    if(c2) c2.innerText = `(${count} คน)`;
+    
+    Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'คัดชื่อออกจากการสุ่มรอบหน้าแล้ว', showConfirmButton: false, timer: 2000 });
+    resetSpinStudent();
 };
 
 window.resetSpinStudent = function() {
@@ -2602,10 +2795,13 @@ window.resetSpinStudent = function() {
 };
 
 window.giveExpToLuckyStudent = function(btn) {
-    const sid = document.getElementById('luckyStudentId').value;
+    const sidStr = document.getElementById('luckyStudentId').value;
     const exp = parseInt(document.getElementById('luckyStudentExp').value);
     
-    if(!sid || !exp || exp <= 0) return Swal.fire({ toast: true, position: 'top', icon: 'warning', title: 'ข้อมูลแต้มไม่ถูกต้อง', showConfirmButton: false, timer: 2000 });
+    if(!sidStr || !exp || exp <= 0) return Swal.fire({ toast: true, position: 'top', icon: 'warning', title: 'ข้อมูลแต้มไม่ถูกต้อง', showConfirmButton: false, timer: 2000 });
+
+    // รองรับการแจกแต้มทีละหลายคนถ้าสุ่มแบบแพ็คคู่
+    let idsToReward = sidStr.split(',');
 
     const oldHtml = btn.innerHTML;
     btn.innerHTML = 'กำลังแจก...'; 
@@ -2615,10 +2811,10 @@ window.giveExpToLuckyStudent = function(btn) {
         btn.innerHTML = oldHtml; 
         btn.disabled = false;
         if(res.success) {
-            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `แจก ${exp} EXP ให้ ${sid} สำเร็จ!`, showConfirmButton: false, timer: 2500 });
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `แจก ${exp} EXP สำเร็จ!`, showConfirmButton: false, timer: 2500 });
             resetSpinStudent();
         } else {
             Swal.fire({ toast: true, position: 'top', icon: 'error', title: res.message, showConfirmButton: false, timer: 3000 });
         }
-    }).giveBulkExp([sid], exp, 'ตอบคำถามจากวงล้อ AI ได้อย่างยอดเยี่ยม! 💡');
+    }).giveBulkExp(idsToReward, exp, 'ตอบคำถามจากวงล้อ AI ได้อย่างยอดเยี่ยม! 💡');
 };
