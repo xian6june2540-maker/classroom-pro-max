@@ -2640,19 +2640,23 @@ window.generateAiQuestionsForPreview = function(topic, count, difficulty) {
 };
 
 window.showAiQuestionPreview = function(topic, questions) {
-    let html = '<div style="max-height: 400px; overflow-y: auto; text-align: left;" class="px-2" id="aiQPreviewList">';
+    let html = '<div style="max-height: 450px; overflow-y: auto; text-align: left;" class="px-2" id="aiQPreviewList">';
     questions.forEach((q, i) => {
         html += `
-            <div class="mb-3">
-                <label class="small fw-bold text-primary">ข้อที่ ${i+1}</label>
-                <textarea class="form-control ai-q-edit shadow-sm border-primary" rows="2">${q}</textarea>
+            <div class="card mb-3 border-primary shadow-sm rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white py-2 fw-bold">
+                    <i class="bi bi-question-circle"></i> คำถามข้อที่ ${i+1}
+                </div>
+                <div class="card-body p-2 bg-light">
+                    <textarea class="form-control ai-q-edit border-0 shadow-none bg-light fw-bold text-dark" rows="2" style="resize:none;">${q}</textarea>
+                </div>
             </div>
         `;
     });
     html += '</div>';
 
     Swal.fire({
-        title: '<i class="bi bi-eye"></i> ตรวจสอบคำถามก่อนขึ้นวงล้อ',
+        title: '<i class="bi bi-eye"></i> ตรวจสอบและแก้ไขคำถาม',
         html: html,
         showCancelButton: true,
         showDenyButton: true,
@@ -2671,7 +2675,6 @@ window.showAiQuestionPreview = function(topic, questions) {
             if(result.value.length === 0) return Swal.fire('เตือน', 'คำถามห้ามว่างเปล่าครับ', 'warning');
             launchAiWheelFinal(topic, result.value);
         } else if (result.isDenied) {
-            // ถ้ากดปุ่มสีแดงให้สุ่มใหม่ทั้งหมด (ใช้ค่าเดิมส่งไป)
             generateAiQuestionsForPreview(topic, questions.length, "ปานกลาง"); 
         }
     });
@@ -2709,16 +2712,15 @@ window.launchAiWheelFinal = function(topic, questions) {
             </div>
 
             <div id="studentResultArea" class="mt-3 p-3 bg-light rounded-4 border border-2 border-warning shadow-sm" style="display: none;">
-                <h5 class="fw-bold text-dark mb-2">🎉 ผู้โชคดีคือ: <span id="luckyStudentName" class="text-primary fs-4 ms-2 d-block mt-2"></span></h5>
+                <h5 class="fw-bold text-dark mb-2">🎉 ผู้โชคดีคือ: <span id="luckyStudentName" class="text-primary fs-3 ms-2 d-block mt-2" style="min-height: 40px;">กำลังสุ่ม...</span></h5>
                 
-                <div class="d-flex justify-content-center align-items-center gap-2 mt-3 flex-wrap">
+                <div id="spinActionButtons" class="justify-content-center align-items-center gap-2 mt-3 flex-wrap" style="display: none;">
                     <div class="input-group shadow-sm" style="max-width: 150px;">
                         <input type="number" id="luckyStudentExp" class="form-control text-center fw-bold text-success fs-5" value="500">
                         <span class="input-group-text bg-success text-white border-success">EXP</span>
                     </div>
-                    <button class="btn btn-success fw-bold px-3 shadow-sm" onclick="giveExpToLuckyStudent(this)"><i class="bi bi-gift-fill"></i> มอบรางวัล</button>
-                    <button class="btn btn-danger fw-bold px-3 shadow-sm" onclick="removeDrawnStudents()"><i class="bi bi-person-x-fill"></i> เอาชื่อเหล่านี้ออก</button>
-                    <button class="btn btn-secondary fw-bold shadow-sm px-3" onclick="resetSpinStudent()"><i class="bi bi-arrow-clockwise"></i> ปิด</button>
+                    <button class="btn btn-success fw-bold px-3 shadow-sm" onclick="giveExpToLuckyStudent(this)"><i class="bi bi-gift-fill"></i> มอบรางวัล (ดึงชื่อออก)</button>
+                    <button class="btn btn-danger fw-bold px-3 shadow-sm" onclick="removeDrawnStudents()"><i class="bi bi-person-x-fill"></i> ไม่แจก แต่ดึงชื่อออก</button>
                 </div>
                 <input type="hidden" id="luckyStudentId"> 
             </div>
@@ -2739,10 +2741,9 @@ window.spinStudentForQuestion = function(mode) {
     let drawnIds = [];
     let drawnNames = [];
 
-    // สลับตำแหน่งชื่อแบบสุ่ม
+    // สลับตำแหน่งชื่อแบบสุ่มเพื่อหาผู้โชคดีตัวจริง
     let shuffled = [...window.wheelAvailableStudents].sort(() => 0.5 - Math.random());
 
-    // ถ้ากดสุ่มแพ็คคู่แต่เหลือคนเดียว ก็ให้สุ่มแบบเดี่ยวไปเลย
     if (mode === 'single' || shuffled.length === 1) {
         let lucky = shuffled[0];
         drawnIds.push(lucky[0]);
@@ -2764,9 +2765,46 @@ window.spinStudentForQuestion = function(mode) {
     }
 
     document.getElementById('spinStudentBtnArea').style.display = 'none';
-    document.getElementById('luckyStudentName').innerHTML = drawnNames.join(', ');
-    document.getElementById('luckyStudentId').value = drawnIds.join(','); 
     document.getElementById('studentResultArea').style.display = 'block';
+    
+    // ซ่อนปุ่มต่างๆ ไว้ก่อนเริ่มแอนิเมชัน
+    document.getElementById('spinActionButtons').style.display = 'none';
+    document.getElementById('spinActionButtons').classList.remove('d-flex');
+    
+    let nameEl = document.getElementById('luckyStudentName');
+    let ticks = 0;
+    let maxTicks = 25; // หมุน 25 จังหวะ
+    let currentDelay = 40; // ความเร็วเริ่มต้น (ยิ่งน้อยยิ่งเร็ว)
+    
+    function spinTick() {
+        // เอาชื่อมาโชว์มั่วๆ ให้ดูเหมือนกำลังสุ่ม
+        let r = window.wheelAvailableStudents[Math.floor(Math.random() * window.wheelAvailableStudents.length)];
+        let disp = r[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
+        
+        if (mode === 'duo' && window.wheelAvailableStudents.length > 1) {
+            let r2 = window.wheelAvailableStudents[Math.floor(Math.random() * window.wheelAvailableStudents.length)];
+            disp += " <b class='text-danger'>&</b> " + r2[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
+        }
+        
+        nameEl.innerHTML = disp;
+        ticks++;
+        
+        if (ticks < maxTicks) {
+            currentDelay += 12; // บวกเวลาเพิ่มขึ้นทีละนิด ให้มันค่อยๆ ช้าลง
+            setTimeout(spinTick, currentDelay);
+        } else {
+            // หยุดแอนิเมชัน และโชว์ชื่อผู้โชคดีตัวจริง
+            nameEl.innerHTML = drawnNames.join(', ');
+            document.getElementById('luckyStudentId').value = drawnIds.join(','); 
+            
+            // แสดงปุ่มดำเนินการ
+            document.getElementById('spinActionButtons').style.display = 'flex';
+            document.getElementById('spinActionButtons').classList.add('d-flex');
+        }
+    }
+    
+    // เริ่มแอนิเมชัน
+    setTimeout(spinTick, currentDelay);
 };
 
 window.removeDrawnStudents = function() {
@@ -2800,7 +2838,6 @@ window.giveExpToLuckyStudent = function(btn) {
     
     if(!sidStr || !exp || exp <= 0) return Swal.fire({ toast: true, position: 'top', icon: 'warning', title: 'ข้อมูลแต้มไม่ถูกต้อง', showConfirmButton: false, timer: 2000 });
 
-    // รองรับการแจกแต้มทีละหลายคนถ้าสุ่มแบบแพ็คคู่
     let idsToReward = sidStr.split(',');
 
     const oldHtml = btn.innerHTML;
@@ -2811,7 +2848,15 @@ window.giveExpToLuckyStudent = function(btn) {
         btn.innerHTML = oldHtml; 
         btn.disabled = false;
         if(res.success) {
-            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `แจก ${exp} EXP สำเร็จ!`, showConfirmButton: false, timer: 2500 });
+            // 🌟 เตะชื่อออกจากกองสุ่มอัตโนมัติ
+            window.wheelAvailableStudents = window.wheelAvailableStudents.filter(s => !idsToReward.includes(s[0]));
+            let count = window.wheelAvailableStudents.length;
+            let c1 = document.getElementById('wheelCountText1');
+            let c2 = document.getElementById('wheelCountText2');
+            if(c1) c1.innerText = `(${count} คน)`;
+            if(c2) c2.innerText = `(${count} คน)`;
+            
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `แจก EXP และเอาชื่อออกสำเร็จ!`, showConfirmButton: false, timer: 2500 });
             resetSpinStudent();
         } else {
             Swal.fire({ toast: true, position: 'top', icon: 'error', title: res.message, showConfirmButton: false, timer: 3000 });
