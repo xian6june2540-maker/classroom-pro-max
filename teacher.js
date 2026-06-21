@@ -726,8 +726,10 @@
             let dailyClothes = Math.floor(clothesExpMs * 86400000);
             let dailyTotal = dailyBg + dailyItem + dailyClothes;
 
-            let breakdownText = `รายได้พาสซีฟต่อวัน:\n👗 เสื้อผ้า: +${dailyClothes}\n🪄 ของตกแต่ง: +${dailyItem}\n🏞️ ฉาก: +${dailyBg}`;
-            let dailyBadgeHtml = dailyTotal > 0 ? `<div class="glowing-exp-badge mt-2" style="font-size:0.75rem;" title="${breakdownText}">[⚡ +${dailyTotal}/วัน]</div>` : '';
+            // 🌟 เปลี่ยนจาก Tooltip เดิม มาใช้ปุ่มกดแล้วเด้งแทน
+            let breakdownHtml = `<div style="text-align:left; line-height:1.5;">👗 เสื้อผ้า: <b class="text-success">+${dailyClothes}</b><br>🪄 ของตกแต่ง: <b class="text-success">+${dailyItem}</b><br>🏞️ ฉาก: <b class="text-success">+${dailyBg}</b></div>`.replace(/"/g, "&quot;");
+            
+            let dailyBadgeHtml = dailyTotal > 0 ? `<div class="glowing-exp-badge mt-2" style="font-size:0.75rem;" onclick="Swal.fire({toast:true, position:'top', icon:'info', title:'EXP ฟรีต่อวัน ⚡', html:'${breakdownHtml}', showConfirmButton:false, timer:4000})">[⚡ +${dailyTotal}/วัน]</div>` : '';
             // ------------------------------------------
             
             // 📍 ตรวจสอบว่ามีพิกัดบ้านไหม ถ้ามีให้ปุ่มเป็นสีส้ม ถ้าไม่มีให้เป็นสีเทา
