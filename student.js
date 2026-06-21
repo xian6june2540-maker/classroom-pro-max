@@ -492,20 +492,33 @@
             let eqBg = s.equipped_bg||"bg0";
             let lastPass = parseInt(s.last_passive_update)||Date.now();
             
-            // --- แก้ไขการคำนวณให้ตรงตามการสวมใส่จริง ---
+            // --- แก้ไขการคำนวณให้ตรงตามการสวมใส่จริง (พร้อมแยกประเภท) ---
             let totalExpPerMs = 0; 
-            
-            // 1. คำนวณจากฉากหลังที่สวมอยู่ (ถ้าเป็น bg0 ฟังก์ชันจะคืนค่า 0)
-            totalExpPerMs += getExpPerMs(eqBg);
+            let bgExpMs = getExpPerMs(eqBg);
+            let itemExpMs = 0;
+            let clothesExpMs = 0;
 
-            // 2. คำนวณจากไอเทมชิ้นสุดท้ายที่ "สวมใส่" (ดูจาก Inventory ตัวสุดท้ายที่เป็น 'i')
-            // หมายเหตุ: หากคุณฟลุ๊คต้องการให้ต้องกดสวมใส่ก่อนถึงจะได้แต้ม โค้ดส่วนนี้ถูกต้องแล้วครับ
-            // แต่ต้องระวังว่า getExpPerMs ต้องคืนค่า 0 หาก id ไม่ถูกต้อง
+            totalExpPerMs += bgExpMs;
+
             let myItems = inv.filter(x => x.startsWith('i'));
-            if(myItems.length > 0) totalExpPerMs += getExpPerMs(myItems[myItems.length-1]);
+            if(myItems.length > 0) {
+                itemExpMs = getExpPerMs(myItems[myItems.length-1]);
+                totalExpPerMs += itemExpMs;
+            }
 
             let myClothes = inv.filter(x => x.startsWith('m') || x.startsWith('w')); 
-            if(myClothes.length > 0) totalExpPerMs += getExpPerMs(myClothes[myClothes.length-1]);
+            if(myClothes.length > 0) {
+                clothesExpMs = getExpPerMs(myClothes[myClothes.length-1]);
+                totalExpPerMs += clothesExpMs;
+            }
+
+            // คำนวณออกมาเป็นแต้มต่อ 1 วัน (24 ชม. = 86,400,000 มิลลิวินาที)
+            let dailyBg = Math.floor(bgExpMs * 86400000);
+            let dailyItem = Math.floor(itemExpMs * 86400000);
+            let dailyClothes = Math.floor(clothesExpMs * 86400000);
+            let dailyTotal = dailyBg + dailyItem + dailyClothes;
+
+            let breakdownText = `รายละเอียดรับ EXP ฟรีต่อวัน:\n👗 เสื้อผ้า: +${dailyClothes}\n🪄 ของตกแต่ง: +${dailyItem}\n🏞️ ฉากหลัง: +${dailyBg}`;
             // ------------------------------------------
             
 // --- เริ่มระบบคำนวณ Passive EXP + บัฟอาหาร ---
@@ -697,7 +710,11 @@
             document.getElementById('stuLevelBadge').innerHTML = data.level.emoji + ' Lv.' + data.level.current + ' ' + data.level.name;
             
             document.getElementById('stuScoreText').innerText = data.accumulatedScore || 0;
-            document.getElementById('expText').innerText = data.exp;
+            
+            // เพิ่มป้าย Glowing Badge แจกแจง EXP ต่อวัน
+            let dailyBadgeHtml = dailyTotal > 0 ? `<span class="glowing-exp-badge" title="${breakdownText}">[⚡ +${dailyTotal} EXP/วัน]</span>` : '';
+            document.getElementById('expText').innerHTML = `${data.exp} ${dailyBadgeHtml}`;
+            
             document.getElementById('nextExpText').innerText = data.level.next;
             
             let expPct = (data.level.next === "Max") ? 100 : Math.min(100, Math.round((data.exp / data.level.next) * 100));
