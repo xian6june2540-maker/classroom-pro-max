@@ -518,7 +518,8 @@
             let dailyClothes = Math.floor(clothesExpMs * 86400000);
             let dailyTotal = dailyBg + dailyItem + dailyClothes;
 
-            let breakdownText = `รายละเอียดรับ EXP ฟรีต่อวัน:\n👗 เสื้อผ้า: +${dailyClothes}\n🪄 ของตกแต่ง: +${dailyItem}\n🏞️ ฉากหลัง: +${dailyBg}`;
+            // 🌟 เตรียม HTML สำหรับกล่องเด้งเมื่อกดคลิก
+            let breakdownHtml = `<div style="text-align:left; line-height:1.5;">👗 เสื้อผ้า: <b class="text-success">+${dailyClothes}</b><br>🪄 ของตกแต่ง: <b class="text-success">+${dailyItem}</b><br>🏞️ ฉากหลัง: <b class="text-success">+${dailyBg}</b></div>`.replace(/"/g, "&quot;");
             // ------------------------------------------
             
 // --- เริ่มระบบคำนวณ Passive EXP + บัฟอาหาร ---
@@ -711,11 +712,13 @@
             
             document.getElementById('stuScoreText').innerText = data.accumulatedScore || 0;
             
-            // เพิ่มป้าย Glowing Badge แจกแจง EXP ต่อวัน
-            let dailyBadgeHtml = dailyTotal > 0 ? `<span class="glowing-exp-badge" title="${breakdownText}">[⚡ +${dailyTotal} EXP/วัน]</span>` : '';
-            document.getElementById('expText').innerHTML = `${data.exp} ${dailyBadgeHtml}`;
+            // 🌟 คืนค่าเป็นตัวเลข EXP ปกติ ไม่ให้ป้ายมาแทรกตรงกลาง
+            document.getElementById('expText').innerText = data.exp; 
             
-            document.getElementById('nextExpText').innerText = data.level.next;
+            // 🌟 ย้ายป้าย Glowing Badge มาต่อท้ายสุด (หลังแต้มเต็ม) และใช้ Swal แจ้งเตือนเมื่อกด
+            let dailyBadgeHtml = dailyTotal > 0 ? `<span class="glowing-exp-badge" onclick="Swal.fire({toast:true, position:'top', icon:'info', title:'EXP ฟรีต่อวัน ⚡', html:'${breakdownHtml}', showConfirmButton:false, timer:4000})">[⚡ +${dailyTotal} EXP/วัน]</span>` : '';
+            
+            document.getElementById('nextExpText').innerHTML = data.level.next + dailyBadgeHtml;
             
             let expPct = (data.level.next === "Max") ? 100 : Math.min(100, Math.round((data.exp / data.level.next) * 100));
             document.getElementById('expProgressBar').style.width = expPct + '%';
