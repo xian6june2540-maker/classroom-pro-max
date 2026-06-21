@@ -527,6 +527,11 @@
 
             if (totalExpPerMs > 0) {
                 let msPassed = now - lastPass;
+                
+                // 🌟 [เพิ่มโค้ดนี้]: จำกัดเวลาออฟไลน์ฟาร์มสูงสุด 24 ชั่วโมง (86,400,000 มิลลิวินาที)
+                const maxOfflineMs = 86400000;
+                if (msPassed > maxOfflineMs) msPassed = maxOfflineMs;
+
                 // สูตรใหม่: (เวลา * อัตราพื้นฐาน) * ตัวคูณจากอาหาร
                 let gained = Math.floor((msPassed * totalExpPerMs) * currentBuffMultiplier);
                 
