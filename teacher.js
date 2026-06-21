@@ -879,6 +879,8 @@
             bg.className = 'badge ' + getBadgeColor(st) + ' text-white';
             Toast.fire({ icon: 'success', title: st });
             updateDashboardStats();
+            // 🌟 เพิ่มคำสั่งนี้ เพื่อให้ตารางโหลดข้อมูลดึงแต้ม EXP ล่าสุดมาโชว์ทันที
+            loadStudents(); 
         }).saveSingleAttendance(d, id, name, currentRoom, st);
     }
 
