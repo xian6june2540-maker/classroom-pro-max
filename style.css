@@ -1575,7 +1575,7 @@
     margin-left: 8px;
     box-shadow: 0 0 10px rgba(56, 239, 125, 0.5);
     animation: pulseGlow 2s infinite alternate;
-    cursor: help;
+    cursor: pointer; /* 🌟 เปลี่ยนเป็นรูปมือ (นิ้วชี้) ตามปกติ */
     border: 1px solid #fff;
     white-space: nowrap;
 }
