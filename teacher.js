@@ -2487,7 +2487,9 @@ window.processGenerateWheel = function(mode) {
                 showCancelButton: true,
                 cancelButtonText: 'ปิดหน้าต่างวงล้อ',
                 width: '80%', 
-                customClass: { popup: 'rounded-4 bg-light' }
+                customClass: { popup: 'rounded-4 bg-light' },
+                allowOutsideClick: false, // 🔒 ล็อกไม่ให้คลิกพื้นหลัง
+                allowEscapeKey: false     // 🔒 ล็อกปุ่ม ESC
             });
         } else {
             Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
@@ -2573,7 +2575,9 @@ window.generateGroupWheel = function(targetMode, groupSize) {
         showCancelButton: true,
         cancelButtonText: 'ปิดหน้าต่างวงล้อ',
         width: '80%', 
-        customClass: { popup: 'rounded-4 bg-light' }
+        customClass: { popup: 'rounded-4 bg-light' },
+        allowOutsideClick: false, // 🔒 ล็อกไม่ให้คลิกพื้นหลัง
+        allowEscapeKey: false     // 🔒 ล็อกปุ่ม ESC
     });
 };
 
@@ -2640,6 +2644,10 @@ window.generateAiQuestionsForPreview = function(topic, count, difficulty) {
 };
 
 window.showAiQuestionPreview = function(topic, questions) {
+    // 🌟 จดจำหัวข้อและคำถามไว้เผื่อครูกดปุ่ม "ย้อนกลับ"
+    window.currentAiTopic = topic;
+    window.currentAiQuestions = questions;
+
     let html = '<div style="max-height: 450px; overflow-y: auto; text-align: left;" class="px-2" id="aiQPreviewList">';
     questions.forEach((q, i) => {
         html += `
@@ -2664,6 +2672,8 @@ window.showAiQuestionPreview = function(topic, questions) {
         denyButtonText: '<i class="bi bi-arrow-clockwise"></i> สร้างใหม่ทั้งหมด',
         cancelButtonText: 'ยกเลิก',
         width: '600px',
+        allowOutsideClick: false, // 🔒 ล็อกไม่ให้คลิกพื้นหลัง
+        allowEscapeKey: false,    // 🔒 ล็อกปุ่ม ESC
         preConfirm: () => {
             let inputs = document.querySelectorAll('.ai-q-edit');
             let finalQ = [];
@@ -2681,6 +2691,9 @@ window.showAiQuestionPreview = function(topic, questions) {
 };
 
 window.launchAiWheelFinal = function(topic, questions) {
+    // 🌟 อัปเดตข้อมูลการแก้ไขล่าสุดเผื่อครูกดปุ่มย้อนกลับ
+    window.currentAiQuestions = questions;
+
     const entriesStr = encodeURIComponent(questions.join(','));
     const finalUrl = `https://wheelofnames.com/view?entries=${entriesStr}`;
 
@@ -2690,7 +2703,12 @@ window.launchAiWheelFinal = function(topic, questions) {
 
     Swal.fire({
         title: `<div class="d-flex justify-content-between align-items-center w-100">
-                    <span class="text-primary fw-bold"><i class="bi bi-patch-question-fill"></i> คำถาม: ${topic}</span>
+                    <div class="d-flex align-items-center">
+                        <button class="btn btn-sm btn-outline-primary me-3 fw-bold shadow-sm" onclick="showAiQuestionPreview(window.currentAiTopic, window.currentAiQuestions)">
+                            <i class="bi bi-arrow-left"></i> กลับไปแก้ไข
+                        </button>
+                        <span class="text-primary fw-bold"><i class="bi bi-patch-question-fill"></i> คำถาม: ${topic}</span>
+                    </div>
                     <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('aiWheelContainer').requestFullscreen().catch(e=>console.log(e))">
                         <i class="bi bi-arrows-fullscreen"></i> ขยายเต็มจอ
                     </button>
@@ -2720,7 +2738,8 @@ window.launchAiWheelFinal = function(topic, questions) {
                         <span class="input-group-text bg-success text-white border-success">EXP</span>
                     </div>
                     <button class="btn btn-success fw-bold px-3 shadow-sm" onclick="giveExpToLuckyStudent(this)"><i class="bi bi-gift-fill"></i> มอบรางวัล (ดึงชื่อออก)</button>
-                    <button class="btn btn-danger fw-bold px-3 shadow-sm" onclick="removeDrawnStudents()"><i class="bi bi-person-x-fill"></i> ไม่แจก แต่ดึงชื่อออก</button>
+                    <button class="btn btn-danger fw-bold px-3 shadow-sm" onclick="removeDrawnStudents()"><i class="bi bi-person-x-fill"></i> ไม่แจก (ดึงชื่อออก)</button>
+                    <button class="btn btn-secondary fw-bold px-3 shadow-sm" onclick="resetSpinStudent()"><i class="bi bi-arrow-clockwise"></i> ข้าม (เก็บชื่อไว้สุ่มใหม่)</button>
                 </div>
                 <input type="hidden" id="luckyStudentId"> 
             </div>
@@ -2729,7 +2748,9 @@ window.launchAiWheelFinal = function(topic, questions) {
         showCancelButton: true,
         cancelButtonText: 'ปิดหน้าต่างวงล้อ',
         width: '80%',
-        customClass: { popup: 'rounded-4 bg-white' }
+        customClass: { popup: 'rounded-4 bg-white' },
+        allowOutsideClick: false, // 🔒 ล็อกไม่ให้คลิกพื้นหลัง
+        allowEscapeKey: false     // 🔒 ล็อกปุ่ม ESC
     });
 };
 
