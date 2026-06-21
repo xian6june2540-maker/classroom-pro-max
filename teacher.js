@@ -830,13 +830,23 @@
         updateDashboardStats();
     }
 
-    function renderAttendanceUI(f) {
+   function renderAttendanceUI(f) {
         let aHtml = '';
         f.forEach(function(s) {
             let st = attendanceData[s[0]];
             let displayName = s[1];
             if (s[2] && s[2].trim() !== "") displayName += ' <small class="text-muted">(' + s[2] + ')</small>';
-            aHtml += '<tr><td>' + s[0] + '</td><td>' + displayName + '</td><td class="text-center"><div class="btn-group shadow-sm"><button id="btn-มา-' + s[0] + '" class="btn ' + (st === 'มา' ? 'btn-success text-white' : 'btn-outline-success') + ' btn-sm" onclick="setAtt(\'' + s[0] + '\',\'' + s[1] + '\',\'มา\')">มา</button><button id="btn-ลา-' + s[0] + '" class="btn ' + (st === 'ลา' ? 'btn-warning text-dark' : 'btn-outline-warning') + ' btn-sm" onclick="setAtt(\'' + s[0] + '\',\'' + s[1] + '\',\'ลา\')">ลา</button><button id="btn-ขาด-' + s[0] + '" class="btn ' + (st === 'ขาด' ? 'btn-danger text-white' : 'btn-outline-danger') + ' btn-sm" onclick="setAtt(\'' + s[0] + '\',\'' + s[1] + '\',\'ขาด\')">ขาด</button></div></td><td class="text-center"><span id="badge-' + s[0] + '" class="badge ' + getBadgeColor(st) + ' badge-status text-white">' + st + '</span></td></tr>';
+
+            // 🌟 สร้างป้ายสถานะแบบใหม่ (กดเพื่อล้างได้)
+            let badgeHtml = '';
+            if (st === 'รอเช็ค' || !st) {
+                badgeHtml = '<span id="badge-' + s[0] + '" class="badge bg-secondary badge-status text-white">รอเช็ค</span>';
+            } else {
+                let bColor = getBadgeColor(st);
+                badgeHtml = '<span id="badge-' + s[0] + '" class="badge ' + bColor + ' badge-status text-white shadow-sm" style="cursor: pointer; transition: 0.2s; min-width: 65px;" onmouseover="this.innerHTML=\'คลิกยกเลิก\'; this.classList.remove(\'' + bColor + '\'); this.classList.add(\'bg-secondary\');" onmouseout="this.innerHTML=\'' + st + '\'; this.classList.remove(\'bg-secondary\'); this.classList.add(\'' + bColor + '\');" onclick="resetSingleAttendance(\'' + s[0] + '\')">' + st + '</span>';
+            }
+
+            aHtml += '<tr><td>' + s[0] + '</td><td>' + displayName + '</td><td class="text-center"><div class="btn-group shadow-sm"><button id="btn-มา-' + s[0] + '" class="btn ' + (st === 'มา' ? 'btn-success text-white' : 'btn-outline-success') + ' btn-sm" onclick="setAtt(\'' + s[0] + '\',\'' + s[1] + '\',\'มา\')">มา</button><button id="btn-ลา-' + s[0] + '" class="btn ' + (st === 'ลา' ? 'btn-warning text-dark' : 'btn-outline-warning') + ' btn-sm" onclick="setAtt(\'' + s[0] + '\',\'' + s[1] + '\',\'ลา\')">ลา</button><button id="btn-ขาด-' + s[0] + '" class="btn ' + (st === 'ขาด' ? 'btn-danger text-white' : 'btn-outline-danger') + ' btn-sm" onclick="setAtt(\'' + s[0] + '\',\'' + s[1] + '\',\'ขาด\')">ขาด</button></div></td><td class="text-center">' + badgeHtml + '</td></tr>';
         });
         document.getElementById('attTableBody').innerHTML = aHtml;
     }
@@ -871,7 +881,49 @@
             updateDashboardStats();
         }).saveSingleAttendance(d, id, name, currentRoom, st);
     }
-    
+
+    window.resetSingleAttendance = function(studentId) {
+        let dateStr = document.getElementById('attDate').value;
+        if (!dateStr) return;
+        
+        Swal.fire({ title: 'กำลังยกเลิกสถานะ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+        google.script.run.withSuccessHandler(function(res) {
+            Swal.close();
+            // รีเฟรชหน้าจอกลับเป็นรอเช็คทันที
+            attendanceData[studentId] = 'รอเช็ค';
+            renderAttendanceUI(studentsData.filter(function(s) { return s[4] === currentRoom; }));
+            updateDashboardStats();
+            loadStudents(); 
+        }).deleteSingleAttendance(dateStr, studentId);
+    };
+
+    window.resetRoomAttendance = function() {
+        let dateStr = document.getElementById('attDate').value;
+        if (!dateStr) return Swal.fire('เตือน', 'กรุณาเลือกวันที่ก่อนครับ', 'warning');
+        
+        Swal.fire({
+            title: 'ยืนยันการล้างข้อมูล?',
+            text: `ต้องการล้างข้อมูลเช็คชื่อของวันที่ ${dateStr} ใช่หรือไม่?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="bi bi-trash"></i> ใช่, ล้างข้อมูลเลย!',
+            cancelButtonText: 'ยกเลิก'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({ title: 'กำลังล้างข้อมูลทั้งห้อง...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+                google.script.run.withSuccessHandler(function(res) {
+                    Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'ล้างข้อมูลสำเร็จ', showConfirmButton: false, timer: 2000 });
+                    // รีเซ็ตทั้งห้องกลับเป็นรอเช็คทันที
+                    Object.keys(attendanceData).forEach(k => attendanceData[k] = 'รอเช็ค');
+                    renderAttendanceUI(studentsData.filter(function(s) { return s[4] === currentRoom; }));
+                    updateDashboardStats();
+                    loadStudents();
+                }).deleteRoomAttendance(dateStr, currentRoom);
+            }
+        });
+    };
     // =====================================
     // INDIVIDUAL ASSIGNMENTS
     // =====================================
