@@ -1560,3 +1560,90 @@
     background-color: #dc3545 !important; /* เปลี่ยนเป็นสีแดงถ้าเลือกผู้ปกครอง */
     box-shadow: 0 4px 10px rgba(220,53,69,0.3) !important;
 }
+
+/* =========================================
+   ⚡ Glowing Badge & Tooltip (ป้ายไฟพาสซีฟรายวัน)
+   ========================================= */
+.daily-exp-badge {
+    background: linear-gradient(135deg, #11998e, #38ef7d);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 0 10px rgba(56, 239, 125, 0.6);
+    animation: pulseExpBadge 2s infinite;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+}
+
+@keyframes pulseExpBadge {
+    0% { box-shadow: 0 0 5px rgba(56, 239, 125, 0.4); transform: scale(1); }
+    50% { box-shadow: 0 0 15px rgba(56, 239, 125, 0.8); transform: scale(1.05); }
+    100% { box-shadow: 0 0 5px rgba(56, 239, 125, 0.4); transform: scale(1); }
+}
+
+.exp-tooltip {
+    visibility: hidden;
+    opacity: 0;
+    background-color: #2c3e50;
+    color: #fff;
+    text-align: left;
+    border-radius: 10px;
+    padding: 10px 15px;
+    position: absolute;
+    z-index: 9999;
+    bottom: 135%;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+    width: max-content;
+    font-size: 0.8rem;
+    font-weight: normal;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+    pointer-events: none;
+    line-height: 1.5;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.exp-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -6px;
+    border-width: 6px;
+    border-style: solid;
+    border-color: #2c3e50 transparent transparent transparent;
+}
+
+.daily-exp-badge:hover .exp-tooltip,
+.daily-exp-badge:active .exp-tooltip {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    border-bottom: 1px dashed rgba(255,255,255,0.2);
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+}
+
+.tooltip-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.tooltip-sum {
+    color: #38ef7d;
+    font-weight: bold;
+}
