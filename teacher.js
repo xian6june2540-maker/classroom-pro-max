@@ -4,6 +4,24 @@
     let groupTasksData = [];
     let currentGroupsListCache = []; 
 
+    // ฟังก์ชันช่วยคำนวณ EXP (นำมาจากฝั่งนักเรียน)
+    function getExpPerMs(id) {
+        if (!id || id === 'bg0') return 0;
+        let num = parseInt(id.replace(/\D/g, '')) || 0;
+        let rate = 0;
+        let unitMs = 3600000; 
+        if (id.startsWith('bg')) {
+            const bgRates = [0, 5, 7, 9, 11, 13, 15, 18, 21, 25, 30, 35, 40, 50, 60, 75, 100, 150, 200, 300, 500];
+            if (num < bgRates.length) rate = bgRates[num];
+        } else if (id.startsWith('i')) { 
+            if (num <= 20) rate = Math.ceil(num / 2);
+            else if (num <= 30) rate = 10 + Math.ceil((num - 20) / 2) * 2;
+        } else if (id.startsWith('m') || id.startsWith('w')) { 
+            rate = num + 1;
+        } 
+        return rate / unitMs;
+    }
+
     // --- โค้ดหลังแก้ไข ---
     function mapStudentToArr(s) {
         return [
@@ -688,9 +706,32 @@
             if (hasConsult) {
                 displayName += ` <span class="badge bg-danger pulse-text ms-1" style="cursor:pointer" onclick="openConsultDetail('${studentId}', '${s[1]}')"><i class="bi bi-telephone-outbound-fill"></i> ผปค. ติดต่อมา!</span>`;
             }
+
+            // --- คำนวณแต้ม Daily EXP สำหรับหน้าจอครู ---
+            let inv = [];
+            try { inv = JSON.parse(s[25]); } catch(e) { inv = []; }
+            let eqBg = s[26] || "bg0";
+            
+            let bgExpMs = getExpPerMs(eqBg);
+            let itemExpMs = 0; let clothesExpMs = 0;
+
+            let myItems = (inv||[]).filter(x => x.startsWith('i'));
+            if(myItems.length > 0) itemExpMs = getExpPerMs(myItems[myItems.length-1]);
+
+            let myClothes = (inv||[]).filter(x => x.startsWith('m') || x.startsWith('w')); 
+            if(myClothes.length > 0) clothesExpMs = getExpPerMs(myClothes[myClothes.length-1]);
+
+            let dailyBg = Math.floor(bgExpMs * 86400000);
+            let dailyItem = Math.floor(itemExpMs * 86400000);
+            let dailyClothes = Math.floor(clothesExpMs * 86400000);
+            let dailyTotal = dailyBg + dailyItem + dailyClothes;
+
+            let breakdownText = `รายได้พาสซีฟต่อวัน:\n👗 เสื้อผ้า: +${dailyClothes}\n🪄 ของตกแต่ง: +${dailyItem}\n🏞️ ฉาก: +${dailyBg}`;
+            let dailyBadgeHtml = dailyTotal > 0 ? `<div class="glowing-exp-badge mt-2" style="font-size:0.75rem;" title="${breakdownText}">[⚡ +${dailyTotal}/วัน]</div>` : '';
+            // ------------------------------------------
             
             // 📍 ตรวจสอบว่ามีพิกัดบ้านไหม ถ้ามีให้ปุ่มเป็นสีส้ม ถ้าไม่มีให้เป็นสีเทา
-            const locationBtn = (hLat && hLng) 
+            const locationBtn = (hLat && hLng)
                 ? `<button class="btn btn-outline-warning btn-sm me-1" title="นำทางไปบ้านนักเรียน" onclick="navigateToStudentHome(${hLat}, ${hLng})"><i class="bi bi-geo-alt-fill text-danger"></i></button>`
                 : `<button class="btn btn-outline-secondary btn-sm me-1 opacity-50" title="ยังไม่มีพิกัดบ้าน" disabled><i class="bi bi-geo-alt"></i></button>`;
 
@@ -700,6 +741,7 @@
                 '<td class="text-center">' +
                     '<span class="badge bg-primary fw-bold px-2 py-2 mb-1 d-block border border-white shadow-sm">' + accScore + ' คะแนน</span>' +
                     '<span class="badge bg-success fw-bold px-2 py-2 d-block border border-white shadow-sm"><i class="bi bi-star-fill text-warning"></i> ' + totalDisplayExp.toLocaleString() + ' EXP</span>' +
+                    dailyBadgeHtml +
                 '</td>' +
                 '<td class="text-center">' +
                     '<button class="btn btn-outline-danger btn-sm me-1" title="ส่งข้อความส่วนตัว" onclick="promptSendDM(\'' + studentId + '\', \'' + s[1] + '\')"><i class="bi bi-envelope-heart"></i></button>' +
