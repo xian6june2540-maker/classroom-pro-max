@@ -405,37 +405,37 @@ const powerupData = [
         id: 's1', 
         name: 'แลกคะแนน +1', 
         icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">①</span>', 
-        price: 10000, 
+        price: 500000, 
         type: 'score_exchange', 
         amount: 1, 
-        msg: 'ใช้ 10,000 EXP แลก 1 แต้ม (ความพยายามอยู่ที่ไหน คะแนนอยู่ที่นั่น!)' 
+        msg: 'ใช้ 500,000 EXP แลก 1 แต้ม (ความพยายามอยู่ที่ไหน คะแนนอยู่ที่นั่น!)' 
     },
     { 
         id: 's5', 
         name: 'แลกคะแนน +5', 
         icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑤</span>', 
-        price: 45000, 
+        price: 2250000, 
         type: 'score_exchange', 
         amount: 5, 
-        msg: 'แพ็กเกจขยัน! ประหยัดทันที 5,000 EXP' 
+        msg: 'แพ็กเกจขยัน! ประหยัดทันที 250,000 EXP' 
     },
     { 
         id: 's10', 
         name: 'แลกคะแนน +10', 
         icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑩</span>', 
-        price: 85000, 
+        price: 4200000, 
         type: 'score_exchange', 
         amount: 10, 
-        msg: 'แพ็กเกจสุดคุ้ม! ประหยัดมหาศาล 15,000 EXP' 
+        msg: 'แพ็กเกจสุดคุ้ม! ประหยัดมหาศาล 800,000 EXP' 
     },
     { 
         id: 's20', 
         name: 'แลกคะแนน +20', 
         icon: '<span style="color: #0d6efd; font-size: 2.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(13, 110, 253, 0.2);">⑳</span>', 
-        price: 150000, 
+        price: 8000000, 
         type: 'score_exchange', 
         amount: 20, 
-        msg: 'แพ็กเกจจอมเทพ! ประหยัดสุดขีด 50,000 EXP (สำหรับสุดยอดนักฟาร์ม)' 
+        msg: 'แพ็กเกจจอมเทพ! ประหยัดสุดขีด 2,000,000 EXP (สำหรับสุดยอดนักฟาร์ม)' 
     }
 ];
 
