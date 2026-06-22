@@ -2680,13 +2680,78 @@ window.generateGroupWheel = function(targetMode, groupSize) {
 };
 
 // =========================================================
-// 🤖 โหมดวงล้อคำถาม AI + พรีวิวคำถามก่อนเริ่ม + สุ่มเด็กตอบ
+// 🤖 โหมดวงล้อคำถาม AI + พรีวิวคำถามก่อนเริ่ม + สุ่มเด็กตอบ (เวอร์ชันฝังระบบพับจอ & จำคำถาม)
 // =========================================================
-window.wheelAvailableStudents = []; // เก็บตัวแปรสเตทของนักเรียนที่รันวงล้ออยู่
+window.wheelAvailableStudents = []; 
+window.wheelSessionState = { savedTopic: '', savedQuestions: null }; // 🌟 ความจำสำรอง
+
+// 1. ฟังก์ชันดึงรายชื่อเด็กที่เพิ่งเช็คชื่อ "มา" ล่าสุด เข้ากองสุ่ม
+window.syncLatestPresentStudents = async function() {
+    if (!window.currentRoomId) return;
+    try {
+        const { data: students } = await supabaseClient.from('students').select('id, name').eq('room_id', window.currentRoomId);
+        if (!students) return;
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: attendance } = await supabaseClient.from('attendance').select('student_id, status').eq('date', todayStr);
+        if (!attendance) return;
+
+        const presentIds = attendance.filter(a => a.status === 'มา' || a.status === 'PRESENT' || a.status === 'สาย').map(a => a.student_id);
+        const latestPresentList = students.filter(s => presentIds.includes(s.id)).map(s => [s.id, s.name]);
+
+        if (!window.wheelAvailableStudents) window.wheelAvailableStudents = [];
+
+        latestPresentList.forEach(latestStudent => {
+            if (!window.wheelAvailableStudents.some(s => s[0] === latestStudent[0])) {
+                window.wheelAvailableStudents.push(latestStudent);
+            }
+        });
+
+        let count = window.wheelAvailableStudents.length;
+        let c1 = document.getElementById('wheelCountText1');
+        let c2 = document.getElementById('wheelCountText2');
+        if(c1) c1.innerText = `(${count} คน)`;
+        if(c2) c2.innerText = `(${count} คน)`;
+    } catch (e) { console.error("บักการซิงค์: ", e); }
+};
 
 window.promptAiQuestionWheel = function() {
     hideAppModal('randomWheelModal'); 
 
+    // 🌟 เช็คก่อนเลยว่ามีความจำคำถามเก่าค้างอยู่ไหม (ถ้าครูเผลอปิดหน้าต่าง)
+    if (window.wheelSessionState.savedQuestions && window.wheelSessionState.savedQuestions.length > 0) {
+        Swal.fire({
+            title: 'พบชุดคำถามเดิมค้างอยู่!',
+            text: 'คุณต้องการเล่นคำถามชุดเดิมต่อ หรือสร้างชุดใหม่ทั้งหมด?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-play-fill"></i> เล่นชุดเดิมต่อ',
+            cancelButtonText: '<i class="bi bi-plus-circle"></i> สร้างใหม่',
+            confirmButtonColor: '#0d6efd',
+            cancelButtonColor: '#dc3545',
+            allowOutsideClick: false
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                // เล่นชุดเดิม: โหลดเด็กมาสาย แล้วเปิดวงล้อเดิม
+                Swal.fire({ title: 'กำลังอัปเดตรายชื่อเด็ก...', didOpen: () => Swal.showLoading() });
+                await window.syncLatestPresentStudents();
+                Swal.close();
+                launchAiWheelFinal(window.wheelSessionState.savedTopic, window.wheelSessionState.savedQuestions);
+            } else {
+                // สร้างใหม่: ล้างความจำทิ้ง แล้วไปหน้าตั้งค่า
+                window.wheelSessionState.savedQuestions = null;
+                window.wheelSessionState.savedTopic = '';
+                showAiQuestionSetup();
+            }
+        });
+        return; // หยุดทำงานแค่นี้
+    }
+
+    // ถ้าไม่มีความจำค้าง ให้เปิดหน้าตั้งค่าปกติ
+    showAiQuestionSetup();
+};
+
+window.showAiQuestionSetup = function() {
     Swal.fire({
         title: '🤖 สร้างวงล้อคำถาม AI',
         html: `
@@ -2742,7 +2807,6 @@ window.generateAiQuestionsForPreview = function(topic, count, difficulty) {
 };
 
 window.showAiQuestionPreview = function(topic, questions) {
-    // 🌟 จดจำหัวข้อและคำถามไว้เผื่อครูกดปุ่ม "ย้อนกลับ"
     window.currentAiTopic = topic;
     window.currentAiQuestions = questions;
 
@@ -2770,8 +2834,8 @@ window.showAiQuestionPreview = function(topic, questions) {
         denyButtonText: '<i class="bi bi-arrow-clockwise"></i> สร้างใหม่ทั้งหมด',
         cancelButtonText: 'ยกเลิก',
         width: '600px',
-        allowOutsideClick: false, // 🔒 ล็อกไม่ให้คลิกพื้นหลัง
-        allowEscapeKey: false,    // 🔒 ล็อกปุ่ม ESC
+        allowOutsideClick: false, 
+        allowEscapeKey: false,   
         preConfirm: () => {
             let inputs = document.querySelectorAll('.ai-q-edit');
             let finalQ = [];
@@ -2788,8 +2852,39 @@ window.showAiQuestionPreview = function(topic, questions) {
     });
 };
 
+// 🌟 ฟังก์ชันพับหน้าจอเก็บเป็นปุ่มลอย
+window.minimizeAiWheel = function() {
+    // แอบเซฟคำถามไว้ก่อน
+    window.wheelSessionState.savedQuestions = window.currentAiQuestions;
+    window.wheelSessionState.savedTopic = window.currentAiTopic;
+    
+    Swal.close(); // ปิดหน้าต่างให้ครูไปทำงานอื่นได้
+
+    // สร้างปุ่มลอยมุมจอ
+    let fab = document.getElementById('wheelFloatingFab');
+    if (!fab) {
+        fab = document.createElement('button');
+        fab.id = 'wheelFloatingFab';
+        fab.className = 'wheel-floating-fab';
+        fab.innerHTML = '<i class="bi bi-compass-fill"></i>'; 
+        fab.title = 'กดตรงนี้เพื่อกลับไปเล่นวงล้อคำถามต่อ';
+        document.body.appendChild(fab);
+    }
+    fab.style.display = 'flex'; 
+
+    // พอกดปุ่มลอยปุ๊บ ให้ดึงเด็กมาสายเข้าห้อง แล้วโชว์วงล้อต่อ
+    fab.onclick = async function() {
+        fab.style.display = 'none'; 
+        Swal.fire({ title: 'กำลังอัปเดตรายชื่อเด็กที่มาใหม่...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        await window.syncLatestPresentStudents();
+        Swal.close();
+        
+        launchAiWheelFinal(window.wheelSessionState.savedTopic, window.wheelSessionState.savedQuestions);
+    };
+};
+
 window.launchAiWheelFinal = function(topic, questions) {
-    // 🌟 อัปเดตข้อมูลการแก้ไขล่าสุดเผื่อครูกดปุ่มย้อนกลับ
+    window.currentAiTopic = topic;
     window.currentAiQuestions = questions;
 
     const entriesStr = encodeURIComponent(questions.join(','));
@@ -2807,9 +2902,14 @@ window.launchAiWheelFinal = function(topic, questions) {
                         </button>
                         <span class="text-primary fw-bold"><i class="bi bi-patch-question-fill"></i> คำถาม: ${topic}</span>
                     </div>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('aiWheelContainer').requestFullscreen().catch(e=>console.log(e))">
-                        <i class="bi bi-arrows-fullscreen"></i> ขยายเต็มจอ
-                    </button>
+                    <div>
+                        <button class="btn btn-sm btn-outline-dark me-2 shadow-sm fw-bold" onclick="minimizeAiWheel()" title="พับเก็บเพื่อไปเช็คชื่อ">
+                            <i class="bi bi-dash-lg"></i> พับเก็บ
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('aiWheelContainer').requestFullscreen().catch(e=>console.log(e))">
+                            <i class="bi bi-arrows-fullscreen"></i> ขยายเต็มจอ
+                        </button>
+                    </div>
                 </div>`,
         html: `
             <div id="aiWheelContainer" style="width: 100%; height: 60vh; min-height: 450px; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #0d6efd; background-color: #fff;">
@@ -2847,8 +2947,14 @@ window.launchAiWheelFinal = function(topic, questions) {
         cancelButtonText: 'ปิดหน้าต่างวงล้อ',
         width: '80%',
         customClass: { popup: 'rounded-4 bg-white' },
-        allowOutsideClick: false, // 🔒 ล็อกไม่ให้คลิกพื้นหลัง
-        allowEscapeKey: false     // 🔒 ล็อกปุ่ม ESC
+        allowOutsideClick: false, 
+        allowEscapeKey: false     
+    }).then((result) => {
+        // 🌟 ดักจับถ้าครูเผลอกด "ปิดหน้าต่างวงล้อ" (ปุ่ม Cancel) ให้แอบจำข้อมูลคำถามไว้!
+        if (result.dismiss === Swal.DismissReason.cancel) {
+            window.wheelSessionState.savedQuestions = window.currentAiQuestions;
+            window.wheelSessionState.savedTopic = window.currentAiTopic;
+        }
     });
 };
 
@@ -2860,7 +2966,6 @@ window.spinStudentForQuestion = function(mode) {
     let drawnIds = [];
     let drawnNames = [];
 
-    // สลับตำแหน่งชื่อแบบสุ่มเพื่อหาผู้โชคดีตัวจริง
     let shuffled = [...window.wheelAvailableStudents].sort(() => 0.5 - Math.random());
 
     if (mode === 'single' || shuffled.length === 1) {
@@ -2886,17 +2991,15 @@ window.spinStudentForQuestion = function(mode) {
     document.getElementById('spinStudentBtnArea').style.display = 'none';
     document.getElementById('studentResultArea').style.display = 'block';
     
-    // ซ่อนปุ่มต่างๆ ไว้ก่อนเริ่มแอนิเมชัน
     document.getElementById('spinActionButtons').style.display = 'none';
     document.getElementById('spinActionButtons').classList.remove('d-flex');
     
     let nameEl = document.getElementById('luckyStudentName');
     let ticks = 0;
-    let maxTicks = 25; // หมุน 25 จังหวะ
-    let currentDelay = 40; // ความเร็วเริ่มต้น (ยิ่งน้อยยิ่งเร็ว)
+    let maxTicks = 25; 
+    let currentDelay = 40; 
     
     function spinTick() {
-        // เอาชื่อมาโชว์มั่วๆ ให้ดูเหมือนกำลังสุ่ม
         let r = window.wheelAvailableStudents[Math.floor(Math.random() * window.wheelAvailableStudents.length)];
         let disp = r[1].replace(/^(เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|นาย|นางสาว|นาง|คุณ)/g, '').trim();
         
@@ -2909,20 +3012,17 @@ window.spinStudentForQuestion = function(mode) {
         ticks++;
         
         if (ticks < maxTicks) {
-            currentDelay += 12; // บวกเวลาเพิ่มขึ้นทีละนิด ให้มันค่อยๆ ช้าลง
+            currentDelay += 12; 
             setTimeout(spinTick, currentDelay);
         } else {
-            // หยุดแอนิเมชัน และโชว์ชื่อผู้โชคดีตัวจริง
             nameEl.innerHTML = drawnNames.join(', ');
             document.getElementById('luckyStudentId').value = drawnIds.join(','); 
             
-            // แสดงปุ่มดำเนินการ
             document.getElementById('spinActionButtons').style.display = 'flex';
             document.getElementById('spinActionButtons').classList.add('d-flex');
         }
     }
     
-    // เริ่มแอนิเมชัน
     setTimeout(spinTick, currentDelay);
 };
 
@@ -2932,10 +3032,8 @@ window.removeDrawnStudents = function() {
     
     let idsToRemove = drawnIdsStr.split(',');
     
-    // คัดชื่อที่ถูกเรียกแล้วออกจากกองสุ่ม
     window.wheelAvailableStudents = window.wheelAvailableStudents.filter(s => !idsToRemove.includes(s[0]));
     
-    // อัปเดตตัวเลขแสดงจำนวนบนปุ่มทันที
     let count = window.wheelAvailableStudents.length;
     let c1 = document.getElementById('wheelCountText1');
     let c2 = document.getElementById('wheelCountText2');
@@ -2967,7 +3065,6 @@ window.giveExpToLuckyStudent = function(btn) {
         btn.innerHTML = oldHtml; 
         btn.disabled = false;
         if(res.success) {
-            // 🌟 เตะชื่อออกจากกองสุ่มอัตโนมัติ
             window.wheelAvailableStudents = window.wheelAvailableStudents.filter(s => !idsToReward.includes(s[0]));
             let count = window.wheelAvailableStudents.length;
             let c1 = document.getElementById('wheelCountText1');
@@ -2982,206 +3079,3 @@ window.giveExpToLuckyStudent = function(btn) {
         }
     }).giveBulkExp(idsToReward, exp, 'ตอบคำถามจากวงล้อ AI ได้อย่างยอดเยี่ยม! 💡');
 };
-
-// ==========================================================================
-// 🎡 SMART VISUAL PAUSE & RESUME SYSTEM (ระบบย่อหน้าจอ + ถามเมื่อเผลอปิด + ซิงค์เด็กมาสาย)
-// ==========================================================================
-
-// 1. ฟังก์ชันดึงรายชื่อเด็กที่เพิ่งเช็คชื่อว่า "มา" ล่าสุด ยัดเข้ากองสุ่มทันที
-window.syncLatestPresentStudents = async function() {
-    if (!window.currentRoomId) return;
-    try {
-        const { data: students, error } = await supabaseClient
-            .from('students')
-            .select('id, name')
-            .eq('room_id', window.currentRoomId);
-            
-        if (error || !students) return;
-
-        const todayStr = new Date().toISOString().split('T')[0];
-        const { data: attendance } = await supabaseClient
-            .from('attendance')
-            .select('student_id, status')
-            .eq('date', todayStr);
-
-        if (!attendance) return;
-
-        const presentIds = attendance
-            .filter(a => a.status === 'มา' || a.status === 'PRESENT' || a.status === 'สาย')
-            .map(a => a.student_id);
-
-        const latestPresentList = students
-            .filter(s => presentIds.includes(s.id))
-            .map(s => [s.id, s.name]);
-
-        if (!window.wheelAvailableStudents) window.wheelAvailableStudents = [];
-
-        latestPresentList.forEach(latestStudent => {
-            const alreadyInWheel = window.wheelAvailableStudents.some(s => s[0] === latestStudent[0]);
-            if (!alreadyInWheel) {
-                window.wheelAvailableStudents.push(latestStudent);
-            }
-        });
-
-        let count = window.wheelAvailableStudents.length;
-        let c1 = document.getElementById('wheelCountText1');
-        let c2 = document.getElementById('wheelCountText2');
-        if(c1) c1.innerText = `(${count} คน)`;
-        if(c2) c2.innerText = `(${count} คน)`;
-
-        console.log("🔄 ซิงค์เด็กมาสายเรียบร้อย ยอดรวมปัจจุบัน: ", count);
-    } catch (e) {
-        console.error("บักการซิงค์รายชื่อเด็ก: ", e);
-    }
-};
-
-// 2. ฟังก์ชันฝังปุ่ม "ย่อหน้าต่าง (-)" แบบระบุตำแหน่งลอยตัวอิสระ ไม่เบียดปุ่มอื่น
-window.injectMinimizeButtonToModal = function(modalId) {
-    const modalEl = document.getElementById(modalId);
-    if (!modalEl) return;
-
-    const modalContent = modalEl.querySelector('.modal-content');
-    if (modalContent && !modalContent.querySelector('.btn-minimize-wheel')) {
-        
-        const minBtn = document.createElement('button');
-        minBtn.className = 'btn-minimize-wheel';
-        minBtn.type = 'button';
-        minBtn.innerHTML = '<i class="bi bi-dash-lg"></i>'; 
-        // 🌟 ตั้งค่าให้ลอยอยู่มุมขวาบน ถัดมาจากปุ่มกากบาทตัวเดิม
-        minBtn.style = 'position: absolute; top: 15px; right: 90px; z-index: 1060; background: #e9ecef; border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #495057; font-size: 16px; cursor: pointer; transition: 0.2s;';
-        minBtn.title = 'ย่อหน้าต่างนี้ไว้ชั่วคราวเพื่อไปเช็คชื่อ';
-
-        minBtn.onmouseover = () => minBtn.style.background = '#dee2e6';
-        minBtn.onmouseout = () => minBtn.style.background = '#e9ecef';
-        
-        modalContent.appendChild(minBtn);
-
-        // ⚡ เมื่อคุณครูกดปุ่ม ย่อหน้าต่าง (-) 
-        minBtn.onclick = function(e) {
-            e.stopPropagation();
-
-            // ทำการซ่อนแบบล่องหน (Visual Hide) เพื่อคงสถานะหน้าจอและคำถามคำตอบไว้ 100%
-            modalEl.style.setProperty('opacity', '0', 'important');
-            modalEl.style.setProperty('pointer-events', 'none', 'important');
-            
-            document.querySelectorAll('.modal-backdrop').forEach(b => {
-                b.style.setProperty('opacity', '0', 'important');
-                b.style.setProperty('pointer-events', 'none', 'important');
-            });
-            
-            window.createAndShowWheelFloatingFab(modalId);
-        };
-    }
-};
-
-// 3. ฟังก์ชันสร้างและจัดการ "ปุ่มลอย (Floating FAB)" เมื่อคลิกจะเรียกหน้าจอดั้งเดิมกลับมา
-window.createAndShowWheelFloatingFab = function(modalId) {
-    let fab = document.getElementById('wheelFloatingFab');
-    if (!fab) {
-        fab = document.createElement('button');
-        fab.id = 'wheelFloatingFab';
-        fab.className = 'wheel-floating-fab';
-        fab.innerHTML = '<i class="bi bi-compass-fill"></i>'; 
-        fab.title = 'กดตรงนี้เพื่อกลับไปเล่นวงล้อคำถามต่อ';
-        document.body.appendChild(fab);
-    }
-    
-    fab.style.display = 'flex'; 
-
-    fab.onclick = async function() {
-        fab.style.display = 'none'; 
-
-        Swal.fire({
-            title: 'กำลังอัปเดตรายชื่อเด็กที่มาใหม่...',
-            allowOutsideClick: false,
-            didOpen: () => Swal.showLoading()
-        });
-        
-        await window.syncLatestPresentStudents();
-        Swal.close();
-
-        const modalEl = document.getElementById(modalId);
-        if (modalEl) {
-            modalEl.style.removeProperty('opacity');
-            modalEl.style.removeProperty('pointer-events');
-        }
-        document.querySelectorAll('.modal-backdrop').forEach(b => {
-            b.style.removeProperty('opacity');
-            b.style.removeProperty('pointer-events');
-        });
-    };
-};
-
-// 4. 🌟 ระบบสแกนเบื้องหลัง: ล็อกเป้าหมายเฉพาะหน้าที่มีคำว่า "สุ่มคำถาม AI" ในหัวข้อเท่านั้น
-setInterval(() => {
-    const activeModals = document.querySelectorAll('.modal.show');
-    activeModals.forEach(modalEl => {
-        const titleEl = modalEl.querySelector('.modal-title');
-        // ตรวจสอบจากชื่อหัวข้อ ถ้าตรงถึงจะฝังปุ่มให้
-        if (titleEl && titleEl.innerText.includes('สุ่มคำถาม AI')) {
-            window.injectMinimizeButtonToModal(modalEl.id);
-        }
-    });
-}, 1000);
-
-
-// ==========================================================================
-// 5. ระบบความจำสำรอง (Resume Session) กันเผลอกดกากบาทปิดหน้าต่าง
-// ==========================================================================
-window.wheelSessionState = { savedQuestions: null };
-window.isResumingSession = false;
-
-// 1️⃣ ดักจับตอนหน้าต่างปิด: ถ้ามีคำถาม AI เหลืออยู่ ให้ระบบแอบจำไว้ทันที
-document.addEventListener('hidden.bs.modal', function (event) {
-    const titleEl = event.target.querySelector('.modal-title');
-    if (titleEl && titleEl.innerText.includes('สุ่มคำถาม AI')) {
-        if (typeof window.currentAiQuestions !== 'undefined' && window.currentAiQuestions.length > 0) {
-            window.wheelSessionState.savedQuestions = [...window.currentAiQuestions];
-        } else {
-            window.wheelSessionState.savedQuestions = null; // เล่นหมดแล้วให้ล้างทิ้ง
-        }
-    }
-});
-
-// 2️⃣ ดักจับตอนครูกดเปิดสุ่มคำถามใหม่อีกครั้ง: ให้เด้งถามก่อนเปิดหน้าต่าง
-document.addEventListener('show.bs.modal', function (event) {
-    if (window.isResumingSession) return; // ถ้ากำลังโหลดของเก่าให้ข้ามไป
-
-    const titleEl = event.target.querySelector('.modal-title');
-
-    if (titleEl && titleEl.innerText.includes('สุ่มคำถาม AI') && window.wheelSessionState.savedQuestions && window.wheelSessionState.savedQuestions.length > 0) {
-        event.preventDefault(); // เบรกการเปิดหน้าต่างไว้ก่อน
-
-        Swal.fire({
-            title: 'พบชุดคำถามเดิมค้างอยู่!',
-            text: 'คุณต้องการเล่นคำถามชุดเดิมต่อ หรือสร้างชุดใหม่ทั้งหมด?',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'เล่นชุดเดิมต่อ',
-            cancelButtonText: 'สร้างใหม่',
-            confirmButtonColor: '#0d6efd',
-            cancelButtonColor: '#dc3545',
-            allowOutsideClick: false
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                // 👉 เลือกเล่นต่อ: ดึงคำถามเก่ากลับมา และซิงค์เด็กมาสายเข้ากองสุ่ม
-                window.currentAiQuestions = [...window.wheelSessionState.savedQuestions];
-                
-                Swal.fire({ title: 'กำลังอัปเดตรายชื่อเด็ก...', didOpen: () => Swal.showLoading() });
-                if(typeof window.syncLatestPresentStudents === 'function') {
-                    await window.syncLatestPresentStudents();
-                }
-                Swal.close();
-            } else {
-                // 👉 เลือกสร้างใหม่: ล้างความจำเก่าทิ้งทั้งหมด
-                window.wheelSessionState.savedQuestions = null;
-                if(typeof window.currentAiQuestions !== 'undefined') window.currentAiQuestions = [];
-            }
-            
-            // เปิดหน้าต่างขึ้นมาตามตัวเลือกที่กด
-            window.isResumingSession = true;
-            bootstrap.Modal.getOrCreateInstance(event.target).show();
-            setTimeout(() => window.isResumingSession = false, 500);
-        });
-    }
-});
