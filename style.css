@@ -1584,3 +1584,40 @@
     0% { box-shadow: 0 0 5px rgba(56, 239, 125, 0.4); transform: scale(1); }
     100% { box-shadow: 0 0 15px rgba(56, 239, 125, 0.9); transform: scale(1.05); }
 }
+
+/* =========================================================
+   🎡 SMART PAUSE SYSTEM: Floating FAB Button 
+   ========================================================= */
+.wheel-floating-fab {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    z-index: 9999;
+    width: 65px;
+    height: 65px;
+    background: linear-gradient(135deg, #6f42c1, #0d6efd);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    box-shadow: 0 4px 15px rgba(111, 66, 193, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    animation: pulseFAB 2s infinite;
+}
+
+/* เอฟเฟกต์ตอนคุณครูเอาเมาส์ไปชี้ปุ่มลอย */
+.wheel-floating-fab:hover {
+    transform: scale(1.1) rotate(15deg);
+    box-shadow: 0 6px 20px rgba(111, 66, 193, 0.7);
+}
+
+/* แอนิเมชันวงแสงกระพริบเตือนความจำรอบๆ ปุ่ม */
+@keyframes pulseFAB {
+    0% { box-shadow: 0 0 0 0 rgba(111, 66, 193, 0.5); }
+    70% { box-shadow: 0 0 0 15px rgba(111, 66, 193, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(111, 66, 193, 0); }
+}
