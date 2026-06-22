@@ -720,10 +720,8 @@
             // 🌟 คืนค่าเป็นตัวเลข EXP ปกติ ไม่ให้ป้ายมาแทรกตรงกลาง
             document.getElementById('expText').innerText = data.exp; 
             
-            // 🌟 ย้ายป้าย Glowing Badge มาต่อท้ายสุด (หลังแต้มเต็ม) และใช้ Swal แจ้งเตือนเมื่อกด
-            let dailyBadgeHtml = dailyTotal > 0 ? `<span class="glowing-exp-badge" onclick="Swal.fire({toast:true, position:'top', icon:'info', title:'EXP ฟรีต่อวัน ⚡', html:'${breakdownHtml}', showConfirmButton:false, timer:4000})">[⚡ +${dailyTotal} EXP/วัน]</span>` : '';
-            
-            document.getElementById('nextExpText').innerHTML = data.level.next + dailyBadgeHtml;
+            // 🌟 โชว์แค่ตัวเลขแต้มถัดไปเพียวๆ ปิดการแสดงป้ายเรืองแสงบอกเรทรายวัน
+            document.getElementById('nextExpText').innerHTML = data.level.next;
             
             let expPct = (data.level.next === "Max") ? 100 : Math.min(100, Math.round((data.exp / data.level.next) * 100));
             document.getElementById('expProgressBar').style.width = expPct + '%';
