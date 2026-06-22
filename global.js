@@ -163,10 +163,20 @@ function handleRealtimeEvent(payload) {
             loadFullDashboard(globalPortalStudent.id, true);
         }
 
-        if ( (table === 'students' && payload.new && payload.new.id === globalPortalStudent.id) ||
-                (table === 'attendance' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
-                (table === 'submissions' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
-                (table === 'tasks') || (table === 'group_tasks') || (table === 'announcements') ) {
+        // 🛑 ตัดลูปนรก: แยกระบบตรวจจับตาราง students ออกมาต่างหาก
+        if (table === 'students' && payload.new && payload.new.id === globalPortalStudent.id) {
+            // ถ้าตารางเปลี่ยนแค่ EXP อย่างเดียว ให้เปลี่ยนตัวเลขโชว์หน้าจอเฉยๆ ห้ามโหลดหน้าเว็บใหม่เด็ดขาด
+            if (payload.old && Math.floor(payload.old.exp) !== Math.floor(payload.new.exp)) {
+                let expText = document.getElementById('expText');
+                if (expText) expText.innerText = Math.floor(payload.new.exp);
+                return; // ให้ออกจากฟังก์ชันไปเลย
+            }
+        }
+
+        // ตารางอื่นๆ ยังคงให้โหลดหน้าเว็บใหม่ตามปกติ
+        if ( (table === 'attendance' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
+             (table === 'submissions' && payload.new && payload.new.student_id === globalPortalStudent.id) ||
+             (table === 'tasks') || (table === 'group_tasks') || (table === 'announcements') ) {
                 
                 clearTimeout(autoRefreshInterval);
                 autoRefreshInterval = setTimeout(() => { loadFullDashboard(globalPortalStudent.id, true); }, 2000);
