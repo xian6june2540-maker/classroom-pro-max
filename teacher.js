@@ -2984,7 +2984,7 @@ window.giveExpToLuckyStudent = function(btn) {
 };
 
 // ==========================================================================
-// 🎡 SMART VISUAL PAUSE SYSTEM (ระบบย่อหน้าจอแบบล่องหน + ซิงค์เด็กมาสาย)
+// 🎡 SMART VISUAL PAUSE & RESUME SYSTEM (ระบบย่อหน้าจอ + ถามเมื่อเผลอปิด + ซิงค์เด็กมาสาย)
 // ==========================================================================
 
 // 1. ฟังก์ชันดึงรายชื่อเด็กที่เพิ่งเช็คชื่อว่า "มา" ล่าสุด ยัดเข้ากองสุ่มทันที
@@ -3047,7 +3047,7 @@ window.injectMinimizeButtonToModal = function(modalId) {
         minBtn.className = 'btn-minimize-wheel';
         minBtn.type = 'button';
         minBtn.innerHTML = '<i class="bi bi-dash-lg"></i>'; 
-        // 🌟 ตั้งค่าให้ลอยอยู่มุมขวาบน ถัดมาจากปุ่มกากบาทตัวเดิมเพื่อไม่ให้ทับกัน
+        // 🌟 ตั้งค่าให้ลอยอยู่มุมขวาบน ถัดมาจากปุ่มกากบาทตัวเดิม
         minBtn.style = 'position: absolute; top: 15px; right: 90px; z-index: 1060; background: #e9ecef; border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #495057; font-size: 16px; cursor: pointer; transition: 0.2s;';
         minBtn.title = 'ย่อหน้าต่างนี้ไว้ชั่วคราวเพื่อไปเช็คชื่อ';
 
@@ -3060,23 +3060,21 @@ window.injectMinimizeButtonToModal = function(modalId) {
         minBtn.onclick = function(e) {
             e.stopPropagation();
 
-            // ทำการซ่อนแบบล่องหน (Visual Hide) เพื่อคงสถานะหน้าจอและคำถามคำตอบไว้ 100% ไม่ให้โดนล้างข้อมูล
+            // ทำการซ่อนแบบล่องหน (Visual Hide) เพื่อคงสถานะหน้าจอและคำถามคำตอบไว้ 100%
             modalEl.style.setProperty('opacity', '0', 'important');
             modalEl.style.setProperty('pointer-events', 'none', 'important');
             
-            // ซ่อนฉากหลังสีดำล็อกจอด้วย
             document.querySelectorAll('.modal-backdrop').forEach(b => {
                 b.style.setProperty('opacity', '0', 'important');
                 b.style.setProperty('pointer-events', 'none', 'important');
             });
             
-            // เปิดทำงานปุ่มวงกลมลอยมุมจอขึ้นมาแทน
             window.createAndShowWheelFloatingFab(modalId);
         };
     }
 };
 
-// 3. ฟังก์ชันสร้างและจัดการ "ปุ่มลอย (Floating FAB)" เมื่อคลิกจะเรียกหน้าจอดั้งเดิมกลับมาทันที
+// 3. ฟังก์ชันสร้างและจัดการ "ปุ่มลอย (Floating FAB)" เมื่อคลิกจะเรียกหน้าจอดั้งเดิมกลับมา
 window.createAndShowWheelFloatingFab = function(modalId) {
     let fab = document.getElementById('wheelFloatingFab');
     if (!fab) {
@@ -3090,7 +3088,6 @@ window.createAndShowWheelFloatingFab = function(modalId) {
     
     fab.style.display = 'flex'; 
 
-    // ⚡ เมื่อคุณครูคลิกปุ่มลอยเพื่อกลับเข้าสู่เกมเดิมที่ค้างไว้
     fab.onclick = async function() {
         fab.style.display = 'none'; 
 
@@ -3100,11 +3097,9 @@ window.createAndShowWheelFloatingFab = function(modalId) {
             didOpen: () => Swal.showLoading()
         });
         
-        // ดึงเด็กมาสายยัดเข้ากองสุ่ม
         await window.syncLatestPresentStudents();
         Swal.close();
 
-        // คืนค่าความชัดเจนให้หน้าต่างเดิมกลับมาแสดงผลต่อทันที ข้อมูลไม่หายแน่นอน
         const modalEl = document.getElementById(modalId);
         if (modalEl) {
             modalEl.style.removeProperty('opacity');
@@ -3117,13 +3112,76 @@ window.createAndShowWheelFloatingFab = function(modalId) {
     };
 };
 
-// 4. 🌟 ระบบสแกนเบื้องหลังอัตโนมัติ (Background Scanner) เพื่อคอยตรวจจับฝังปุ่มย่อทันทีเมื่อหน้าต่างถูกเปิด
+// 4. 🌟 ระบบสแกนเบื้องหลัง: ล็อกเป้าหมายเฉพาะหน้าที่มีคำว่า "สุ่มคำถาม AI" ในหัวข้อเท่านั้น
 setInterval(() => {
     const activeModals = document.querySelectorAll('.modal.show');
     activeModals.forEach(modalEl => {
-        const id = modalEl.id;
-        if (id === 'wheelModal' || id === 'aiQuestionModal' || id.toLowerCase().includes('wheel') || id.toLowerCase().includes('ai')) {
-            window.injectMinimizeButtonToModal(id);
+        const titleEl = modalEl.querySelector('.modal-title');
+        // ตรวจสอบจากชื่อหัวข้อ ถ้าตรงถึงจะฝังปุ่มให้
+        if (titleEl && titleEl.innerText.includes('สุ่มคำถาม AI')) {
+            window.injectMinimizeButtonToModal(modalEl.id);
         }
     });
 }, 1000);
+
+
+// ==========================================================================
+// 5. ระบบความจำสำรอง (Resume Session) กันเผลอกดกากบาทปิดหน้าต่าง
+// ==========================================================================
+window.wheelSessionState = { savedQuestions: null };
+window.isResumingSession = false;
+
+// 1️⃣ ดักจับตอนหน้าต่างปิด: ถ้ามีคำถาม AI เหลืออยู่ ให้ระบบแอบจำไว้ทันที
+document.addEventListener('hidden.bs.modal', function (event) {
+    const titleEl = event.target.querySelector('.modal-title');
+    if (titleEl && titleEl.innerText.includes('สุ่มคำถาม AI')) {
+        if (typeof window.currentAiQuestions !== 'undefined' && window.currentAiQuestions.length > 0) {
+            window.wheelSessionState.savedQuestions = [...window.currentAiQuestions];
+        } else {
+            window.wheelSessionState.savedQuestions = null; // เล่นหมดแล้วให้ล้างทิ้ง
+        }
+    }
+});
+
+// 2️⃣ ดักจับตอนครูกดเปิดสุ่มคำถามใหม่อีกครั้ง: ให้เด้งถามก่อนเปิดหน้าต่าง
+document.addEventListener('show.bs.modal', function (event) {
+    if (window.isResumingSession) return; // ถ้ากำลังโหลดของเก่าให้ข้ามไป
+
+    const titleEl = event.target.querySelector('.modal-title');
+
+    if (titleEl && titleEl.innerText.includes('สุ่มคำถาม AI') && window.wheelSessionState.savedQuestions && window.wheelSessionState.savedQuestions.length > 0) {
+        event.preventDefault(); // เบรกการเปิดหน้าต่างไว้ก่อน
+
+        Swal.fire({
+            title: 'พบชุดคำถามเดิมค้างอยู่!',
+            text: 'คุณต้องการเล่นคำถามชุดเดิมต่อ หรือสร้างชุดใหม่ทั้งหมด?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'เล่นชุดเดิมต่อ',
+            cancelButtonText: 'สร้างใหม่',
+            confirmButtonColor: '#0d6efd',
+            cancelButtonColor: '#dc3545',
+            allowOutsideClick: false
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                // 👉 เลือกเล่นต่อ: ดึงคำถามเก่ากลับมา และซิงค์เด็กมาสายเข้ากองสุ่ม
+                window.currentAiQuestions = [...window.wheelSessionState.savedQuestions];
+                
+                Swal.fire({ title: 'กำลังอัปเดตรายชื่อเด็ก...', didOpen: () => Swal.showLoading() });
+                if(typeof window.syncLatestPresentStudents === 'function') {
+                    await window.syncLatestPresentStudents();
+                }
+                Swal.close();
+            } else {
+                // 👉 เลือกสร้างใหม่: ล้างความจำเก่าทิ้งทั้งหมด
+                window.wheelSessionState.savedQuestions = null;
+                if(typeof window.currentAiQuestions !== 'undefined') window.currentAiQuestions = [];
+            }
+            
+            // เปิดหน้าต่างขึ้นมาตามตัวเลือกที่กด
+            window.isResumingSession = true;
+            bootstrap.Modal.getOrCreateInstance(event.target).show();
+            setTimeout(() => window.isResumingSession = false, 500);
+        });
+    }
+});
