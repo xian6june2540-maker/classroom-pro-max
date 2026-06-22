@@ -540,22 +540,27 @@
             let needsUpdate = false;
 
             if (totalExpPerMs > 0) {
+                // 🛑 ดักบัคเวลาเพี้ยน: ถ้า lastPass เป็นเวลาในอดีตที่ลึกเกินไป (เกิด Error ในฐานข้อมูล) ให้รีเซ็ตนับใหม่เลย
+                if (lastPass < 1704067200000) lastPass = now;
+
                 let msPassed = now - lastPass;
                 
-                // 🌟 [เพิ่มโค้ดนี้]: จำกัดเวลาออฟไลน์ฟาร์มสูงสุด 24 ชั่วโมง (86,400,000 มิลลิวินาที)
                 const maxOfflineMs = 86400000;
                 if (msPassed > maxOfflineMs) msPassed = maxOfflineMs;
 
-                // สูตรใหม่: (เวลา * อัตราพื้นฐาน) * ตัวคูณจากอาหาร
-                let gained = Math.floor((msPassed * totalExpPerMs) * currentBuffMultiplier);
-                
-                if (gained > 0) {
-                    exp += gained;
-                    updatePayload.exp = exp;
-                    updatePayload.last_passive_update = now;
-                    needsUpdate = true;
+                // 🛑 หน่วงการอัปเดต: จะให้ EXP และเซฟลงฐานข้อมูลก็ต่อเมื่อเวลาผ่านไป "อย่างน้อย 3 นาที" (180,000 ms) หรือ บัฟอาหารหมดอายุ
+                // ป้องกันระบบเซฟเศษ EXP ทีละนิดทุกครั้งที่เด็กกดเปลี่ยนหน้าต่าง
+                if (msPassed >= 180000 || isBuffExpired) { 
+                    let gained = Math.floor((msPassed * totalExpPerMs) * currentBuffMultiplier);
+                    if (gained > 0) {
+                        exp += gained;
+                        updatePayload.exp = exp;
+                        updatePayload.last_passive_update = now;
+                        needsUpdate = true;
+                    }
                 }
-            } else if (lastPass !== now) {
+            } else if (lastPass !== now && isBuffExpired) {
+                // ไม่ต้องเซฟอะไรยิบย่อยถ้าไม่มี EXP ขึ้น ยกเว้นบัฟหมด
                 updatePayload.last_passive_update = now;
                 needsUpdate = true;
             }
