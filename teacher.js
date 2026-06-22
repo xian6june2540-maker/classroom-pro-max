@@ -2982,3 +2982,164 @@ window.giveExpToLuckyStudent = function(btn) {
         }
     }).giveBulkExp(idsToReward, exp, 'ตอบคำถามจากวงล้อ AI ได้อย่างยอดเยี่ยม! 💡');
 };
+
+// ==========================================================================
+// 🎡 SMART PAUSE & RESUME SYSTEM (ระบบย่อจอ + ดึงรายชื่อเด็กมาสายเข้ากองสุ่มอัจฉริยะ)
+// ==========================================================================
+
+// 1. ตัวแปรส่วนกลางสำหรับเก็บความจำสำรอง กันคำถาม AI หายตอนกดออก
+window.wheelSessionState = {
+    savedQuestions: null,
+    isActive: false
+};
+
+// 2. ฟังก์ชันหลักในการดึงรายชื่อเด็กที่เพิ่งเช็คชื่อว่า "มา" ล่าสุด ณ วินาทีนั้น ยัดเข้ากองสุ่มทันที
+window.syncLatestPresentStudents = async function() {
+    if (!window.currentRoomId) return; // ตรวจสอบว่าครูเลือกห้องเรียนอยู่หรือไม่
+    
+    try {
+        // ดึงรายชื่อเด็กทั้งหมดในห้องนี้จากฐานข้อมูล Supabase
+        const { data: students, error } = await supabaseClient
+            .from('students')
+            .select('id, name')
+            .eq('room_id', window.currentRoomId);
+            
+        if (error || !students) return;
+
+        // ดึงข้อมูลการเช็คชื่อเข้าเรียนของวันนี้
+        const todayStr = new Date().toISOString().split('T')[0]; // ฟอร์แมต YYYY-MM-DD
+        const { data: attendance } = await supabaseClient
+            .from('attendance')
+            .select('student_id, status')
+            .eq('date', todayStr);
+
+        if (!attendance) return;
+
+        // กรองหาเฉพาะไอดีเด็กที่ถูกเช็คชื่อว่า "มา" หรือ "สาย" ในระบบของคุณ
+        const presentIds = attendance
+            .filter(a => a.status === 'มา' || a.status === 'PRESENT' || a.status === 'สาย')
+            .map(a => a.student_id);
+
+        // แปลงรายชื่อเด็กให้อยู่ในรูปแบบ [id, name] เพื่อให้เข้ากับระบบวงล้อเดิมของคุณ
+        const latestPresentList = students
+            .filter(s => presentIds.includes(s.id))
+            .map(s => [s.id, s.name]);
+
+        if (!window.wheelAvailableStudents) window.wheelAvailableStudents = [];
+
+        // 🛑 ทำการเติมรายชื่อเด็กที่เพิ่งมาสาย (ที่ยังไม่มีชื่อในโหลสุ่มเดิม) ยัดเพิ่มเข้าไปเงียบๆ หลังบ้าน
+        latestPresentList.forEach(latestStudent => {
+            const alreadyInWheel = window.wheelAvailableStudents.some(s => s[0] === latestStudent[0]);
+            if (!alreadyInWheel) {
+                window.wheelAvailableStudents.push(latestStudent);
+            }
+        });
+
+        // อัปเดตตัวเลขจำนวนคนบนปุ่มสุ่มหน้าจอให้เป็นยอดล่าสุดทันที
+        let count = window.wheelAvailableStudents.length;
+        let c1 = document.getElementById('wheelCountText1');
+        let c2 = document.getElementById('wheelCountText2');
+        if(c1) c1.innerText = `(${count} คน)`;
+        if(c2) c2.innerText = `(${count} คน)`;
+
+        console.log("🔄 ซิงค์เด็กมาสายเข้ากองสุ่มสำเร็จ! ยอดรวมปัจจุบัน: ", count);
+    } catch (e) {
+        console.error("บักการซิงค์รายชื่อเด็กในวงล้อ: ", e);
+    }
+};
+
+// 3. ฟังก์ชันสร้างและฝังปุ่ม "ย่อหน้าต่าง (-)" เข้าไปในหัวข้อโมดอลอัตโนมัติ
+window.injectMinimizeButtonToModal = function(modalId) {
+    const modalEl = document.getElementById(modalId);
+    if (!modalEl) return;
+
+    const header = modalEl.querySelector('.modal-header');
+    // ถ้ามีส่วนหัวและยังไม่มีปุ่มย่อหน้าต่าง ให้ทำการสร้างขึ้นมาวางข้างๆ ปุ่มกากบาท (X)
+    if (header && !modalEl.querySelector('.btn-minimize-wheel')) {
+        const closeBtn = header.querySelector('.btn-close');
+        
+        const minBtn = document.createElement('button');
+        minBtn.className = 'btn-minimize-wheel me-2';
+        minBtn.type = 'button';
+        minBtn.innerHTML = '<i class="bi bi-dash-lg"></i>'; // ไอคอนขีดลบย่อจอ
+        minBtn.style = 'background: #e9ecef; border: none; border-radius: 50%; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: #495057; font-size: 14px; transition: 0.2s;';
+        minBtn.title = 'ย่อหน้าต่างนี้ไว้ชั่วคราวเพื่อไปเช็คชื่อ';
+
+        minBtn.onmouseover = () => minBtn.style.background = '#dee2e6';
+        minBtn.onmouseout = () => minBtn.style.background = '#e9ecef';
+        
+        if (closeBtn) {
+            header.insertBefore(minBtn, closeBtn);
+        } else {
+            header.appendChild(minBtn);
+        }
+
+        // ⚡ เมื่อคุณครูกดปุ่ม ย่อหน้าต่าง (-)
+        minBtn.onclick = function() {
+            // เซฟคำถาม AI เก็บไว้ในความจำสำรองทันทีกันพัง
+            if (window.currentAiQuestions && window.currentAiQuestions.length > 0) {
+                window.wheelSessionState.savedQuestions = [...window.currentAiQuestions];
+                window.wheelSessionState.isActive = true;
+            }
+
+            // สั่งซ่อนหน้าต่าง Modal ปัจจุบันลงไป
+            const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modalInstance.hide();
+            
+            // เรียกเปิดปุ่มลอยมุมจอขึ้นมาโชว์แทน
+            window.createAndShowWheelFloatingFab(modalId);
+        };
+    }
+};
+
+// 4. ฟังก์ชันสร้างและเปิดทำงาน "ปุ่มลอย (Floating FAB)" มุมขวาล่างของจอ
+window.createAndShowWheelFloatingFab = function(modalId) {
+    let fab = document.getElementById('wheelFloatingFab');
+    if (!fab) {
+        fab = document.createElement('button');
+        fab.id = 'wheelFloatingFab';
+        fab.className = 'wheel-floating-fab';
+        fab.innerHTML = '<i class="bi bi-compass-fill"></i>'; // ใช้ไอคอนเข็มทิศ/วงล้อสุ่ม
+        fab.title = 'กดตรงนี้เพื่อกลับไปเล่นวงล้อคำถามต่อ';
+        document.body.appendChild(fab);
+    }
+    
+    fab.style.display = 'flex'; // แสดงปุ่มลอยขึ้นมา
+
+    // ⚡ เมื่อคุณครูคลิกที่ปุ่มลอย (เพื่อกลับเข้าเกม)
+    fab.onclick = async function() {
+        fab.style.display = 'none'; // ซ่อนปุ่มลอยไปก่อน
+
+        // แจ้งเตือนโหลดดิ้งสั้นๆ ระหว่างดึงเด็กมาสายเข้ากองสุ่ม
+        Swal.fire({
+            title: 'กำลังอัปเดตรายชื่อเด็กที่มาใหม่...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+        
+        // รันฟังก์ชันกวาดเด็กมาสายเข้าโหลสุ่มอัตโนมัติ
+        await window.syncLatestPresentStudents();
+        Swal.close();
+
+        // คืนค่าคำถามเดิมที่เซฟไว้กลับเข้าสู่ระบบหลัก
+        if (window.wheelSessionState.savedQuestions) {
+            window.currentAiQuestions = [...window.wheelSessionState.savedQuestions];
+        }
+
+        // ดีดหน้าต่างวงล้อสุ่มกลับขึ้นมาในสถานะล่าสุดเป๊ะๆ
+        const modalEl = document.getElementById(modalId);
+        if (modalEl) {
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modalInstance.show();
+        }
+    };
+};
+
+// 5. ดักจับเหตุการณ์ระบบ: เมื่อใดก็ตามที่คุณครูเปิดหน้าต่างสุ่มคำถาม ให้เปิดระบบย่อหน้าต่างขึ้นมาทำงานทันที
+document.addEventListener('shown.bs.modal', function (event) {
+    const activeModalId = event.target.id;
+    // ตรวจจับชื่อไอดีหน้าต่างวงล้อสุ่มของคุณ (รองรับทั้ง wheelModal, aiQuestionModal หรือหน้าต่างที่มีคำว่า wheel)
+    if (activeModalId === 'wheelModal' || activeModalId === 'aiQuestionModal' || activeModalId.toLowerCase().includes('wheel')) {
+        window.injectMinimizeButtonToModal(activeModalId);
+    }
+});
