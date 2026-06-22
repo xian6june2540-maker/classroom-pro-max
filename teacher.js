@@ -2984,21 +2984,13 @@ window.giveExpToLuckyStudent = function(btn) {
 };
 
 // ==========================================================================
-// 🎡 SMART PAUSE & RESUME SYSTEM (ระบบย่อจอ + ดึงรายชื่อเด็กมาสายเข้ากองสุ่มอัจฉริยะ)
+// 🎡 SMART VISUAL PAUSE SYSTEM (ระบบย่อหน้าจอแบบล่องหน + ซิงค์เด็กมาสาย)
 // ==========================================================================
 
-// 1. ตัวแปรส่วนกลางสำหรับเก็บความจำสำรอง กันคำถาม AI หายตอนกดออก
-window.wheelSessionState = {
-    savedQuestions: null,
-    isActive: false
-};
-
-// 2. ฟังก์ชันหลักในการดึงรายชื่อเด็กที่เพิ่งเช็คชื่อว่า "มา" ล่าสุด ณ วินาทีนั้น ยัดเข้ากองสุ่มทันที
+// 1. ฟังก์ชันดึงรายชื่อเด็กที่เพิ่งเช็คชื่อว่า "มา" ล่าสุด ยัดเข้ากองสุ่มทันที
 window.syncLatestPresentStudents = async function() {
-    if (!window.currentRoomId) return; // ตรวจสอบว่าครูเลือกห้องเรียนอยู่หรือไม่
-    
+    if (!window.currentRoomId) return;
     try {
-        // ดึงรายชื่อเด็กทั้งหมดในห้องนี้จากฐานข้อมูล Supabase
         const { data: students, error } = await supabaseClient
             .from('students')
             .select('id, name')
@@ -3006,8 +2998,7 @@ window.syncLatestPresentStudents = async function() {
             
         if (error || !students) return;
 
-        // ดึงข้อมูลการเช็คชื่อเข้าเรียนของวันนี้
-        const todayStr = new Date().toISOString().split('T')[0]; // ฟอร์แมต YYYY-MM-DD
+        const todayStr = new Date().toISOString().split('T')[0];
         const { data: attendance } = await supabaseClient
             .from('attendance')
             .select('student_id, status')
@@ -3015,19 +3006,16 @@ window.syncLatestPresentStudents = async function() {
 
         if (!attendance) return;
 
-        // กรองหาเฉพาะไอดีเด็กที่ถูกเช็คชื่อว่า "มา" หรือ "สาย" ในระบบของคุณ
         const presentIds = attendance
             .filter(a => a.status === 'มา' || a.status === 'PRESENT' || a.status === 'สาย')
             .map(a => a.student_id);
 
-        // แปลงรายชื่อเด็กให้อยู่ในรูปแบบ [id, name] เพื่อให้เข้ากับระบบวงล้อเดิมของคุณ
         const latestPresentList = students
             .filter(s => presentIds.includes(s.id))
             .map(s => [s.id, s.name]);
 
         if (!window.wheelAvailableStudents) window.wheelAvailableStudents = [];
 
-        // 🛑 ทำการเติมรายชื่อเด็กที่เพิ่งมาสาย (ที่ยังไม่มีชื่อในโหลสุ่มเดิม) ยัดเพิ่มเข้าไปเงียบๆ หลังบ้าน
         latestPresentList.forEach(latestStudent => {
             const alreadyInWheel = window.wheelAvailableStudents.some(s => s[0] === latestStudent[0]);
             if (!alreadyInWheel) {
@@ -3035,111 +3023,107 @@ window.syncLatestPresentStudents = async function() {
             }
         });
 
-        // อัปเดตตัวเลขจำนวนคนบนปุ่มสุ่มหน้าจอให้เป็นยอดล่าสุดทันที
         let count = window.wheelAvailableStudents.length;
         let c1 = document.getElementById('wheelCountText1');
         let c2 = document.getElementById('wheelCountText2');
         if(c1) c1.innerText = `(${count} คน)`;
         if(c2) c2.innerText = `(${count} คน)`;
 
-        console.log("🔄 ซิงค์เด็กมาสายเข้ากองสุ่มสำเร็จ! ยอดรวมปัจจุบัน: ", count);
+        console.log("🔄 ซิงค์เด็กมาสายเรียบร้อย ยอดรวมปัจจุบัน: ", count);
     } catch (e) {
-        console.error("บักการซิงค์รายชื่อเด็กในวงล้อ: ", e);
+        console.error("บักการซิงค์รายชื่อเด็ก: ", e);
     }
 };
 
-// 3. ฟังก์ชันสร้างและฝังปุ่ม "ย่อหน้าต่าง (-)" เข้าไปในหัวข้อโมดอลอัตโนมัติ
+// 2. ฟังก์ชันฝังปุ่ม "ย่อหน้าต่าง (-)" แบบระบุตำแหน่งลอยตัวอิสระ ไม่เบียดปุ่มอื่น
 window.injectMinimizeButtonToModal = function(modalId) {
     const modalEl = document.getElementById(modalId);
     if (!modalEl) return;
 
-    const header = modalEl.querySelector('.modal-header');
-    // ถ้ามีส่วนหัวและยังไม่มีปุ่มย่อหน้าต่าง ให้ทำการสร้างขึ้นมาวางข้างๆ ปุ่มกากบาท (X)
-    if (header && !modalEl.querySelector('.btn-minimize-wheel')) {
-        const closeBtn = header.querySelector('.btn-close');
+    const modalContent = modalEl.querySelector('.modal-content');
+    if (modalContent && !modalContent.querySelector('.btn-minimize-wheel')) {
         
         const minBtn = document.createElement('button');
-        minBtn.className = 'btn-minimize-wheel me-2';
+        minBtn.className = 'btn-minimize-wheel';
         minBtn.type = 'button';
-        minBtn.innerHTML = '<i class="bi bi-dash-lg"></i>'; // ไอคอนขีดลบย่อจอ
-        minBtn.style = 'background: #e9ecef; border: none; border-radius: 50%; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; color: #495057; font-size: 14px; transition: 0.2s;';
+        minBtn.innerHTML = '<i class="bi bi-dash-lg"></i>'; 
+        // 🌟 ตั้งค่าให้ลอยอยู่มุมขวาบน ถัดมาจากปุ่มกากบาทตัวเดิมเพื่อไม่ให้ทับกัน
+        minBtn.style = 'position: absolute; top: 15px; right: 90px; z-index: 1060; background: #e9ecef; border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #495057; font-size: 16px; cursor: pointer; transition: 0.2s;';
         minBtn.title = 'ย่อหน้าต่างนี้ไว้ชั่วคราวเพื่อไปเช็คชื่อ';
 
         minBtn.onmouseover = () => minBtn.style.background = '#dee2e6';
         minBtn.onmouseout = () => minBtn.style.background = '#e9ecef';
         
-        if (closeBtn) {
-            header.insertBefore(minBtn, closeBtn);
-        } else {
-            header.appendChild(minBtn);
-        }
+        modalContent.appendChild(minBtn);
 
-        // ⚡ เมื่อคุณครูกดปุ่ม ย่อหน้าต่าง (-)
-        minBtn.onclick = function() {
-            // เซฟคำถาม AI เก็บไว้ในความจำสำรองทันทีกันพัง
-            if (window.currentAiQuestions && window.currentAiQuestions.length > 0) {
-                window.wheelSessionState.savedQuestions = [...window.currentAiQuestions];
-                window.wheelSessionState.isActive = true;
-            }
+        // ⚡ เมื่อคุณครูกดปุ่ม ย่อหน้าต่าง (-) 
+        minBtn.onclick = function(e) {
+            e.stopPropagation();
 
-            // สั่งซ่อนหน้าต่าง Modal ปัจจุบันลงไป
-            const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-            modalInstance.hide();
+            // ทำการซ่อนแบบล่องหน (Visual Hide) เพื่อคงสถานะหน้าจอและคำถามคำตอบไว้ 100% ไม่ให้โดนล้างข้อมูล
+            modalEl.style.setProperty('opacity', '0', 'important');
+            modalEl.style.setProperty('pointer-events', 'none', 'important');
             
-            // เรียกเปิดปุ่มลอยมุมจอขึ้นมาโชว์แทน
+            // ซ่อนฉากหลังสีดำล็อกจอด้วย
+            document.querySelectorAll('.modal-backdrop').forEach(b => {
+                b.style.setProperty('opacity', '0', 'important');
+                b.style.setProperty('pointer-events', 'none', 'important');
+            });
+            
+            // เปิดทำงานปุ่มวงกลมลอยมุมจอขึ้นมาแทน
             window.createAndShowWheelFloatingFab(modalId);
         };
     }
 };
 
-// 4. ฟังก์ชันสร้างและเปิดทำงาน "ปุ่มลอย (Floating FAB)" มุมขวาล่างของจอ
+// 3. ฟังก์ชันสร้างและจัดการ "ปุ่มลอย (Floating FAB)" เมื่อคลิกจะเรียกหน้าจอดั้งเดิมกลับมาทันที
 window.createAndShowWheelFloatingFab = function(modalId) {
     let fab = document.getElementById('wheelFloatingFab');
     if (!fab) {
         fab = document.createElement('button');
         fab.id = 'wheelFloatingFab';
         fab.className = 'wheel-floating-fab';
-        fab.innerHTML = '<i class="bi bi-compass-fill"></i>'; // ใช้ไอคอนเข็มทิศ/วงล้อสุ่ม
+        fab.innerHTML = '<i class="bi bi-compass-fill"></i>'; 
         fab.title = 'กดตรงนี้เพื่อกลับไปเล่นวงล้อคำถามต่อ';
         document.body.appendChild(fab);
     }
     
-    fab.style.display = 'flex'; // แสดงปุ่มลอยขึ้นมา
+    fab.style.display = 'flex'; 
 
-    // ⚡ เมื่อคุณครูคลิกที่ปุ่มลอย (เพื่อกลับเข้าเกม)
+    // ⚡ เมื่อคุณครูคลิกปุ่มลอยเพื่อกลับเข้าสู่เกมเดิมที่ค้างไว้
     fab.onclick = async function() {
-        fab.style.display = 'none'; // ซ่อนปุ่มลอยไปก่อน
+        fab.style.display = 'none'; 
 
-        // แจ้งเตือนโหลดดิ้งสั้นๆ ระหว่างดึงเด็กมาสายเข้ากองสุ่ม
         Swal.fire({
             title: 'กำลังอัปเดตรายชื่อเด็กที่มาใหม่...',
             allowOutsideClick: false,
             didOpen: () => Swal.showLoading()
         });
         
-        // รันฟังก์ชันกวาดเด็กมาสายเข้าโหลสุ่มอัตโนมัติ
+        // ดึงเด็กมาสายยัดเข้ากองสุ่ม
         await window.syncLatestPresentStudents();
         Swal.close();
 
-        // คืนค่าคำถามเดิมที่เซฟไว้กลับเข้าสู่ระบบหลัก
-        if (window.wheelSessionState.savedQuestions) {
-            window.currentAiQuestions = [...window.wheelSessionState.savedQuestions];
-        }
-
-        // ดีดหน้าต่างวงล้อสุ่มกลับขึ้นมาในสถานะล่าสุดเป๊ะๆ
+        // คืนค่าความชัดเจนให้หน้าต่างเดิมกลับมาแสดงผลต่อทันที ข้อมูลไม่หายแน่นอน
         const modalEl = document.getElementById(modalId);
         if (modalEl) {
-            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
-            modalInstance.show();
+            modalEl.style.removeProperty('opacity');
+            modalEl.style.removeProperty('pointer-events');
         }
+        document.querySelectorAll('.modal-backdrop').forEach(b => {
+            b.style.removeProperty('opacity');
+            b.style.removeProperty('pointer-events');
+        });
     };
 };
 
-// 5. ดักจับเหตุการณ์ระบบ: เมื่อใดก็ตามที่คุณครูเปิดหน้าต่างสุ่มคำถาม ให้เปิดระบบย่อหน้าต่างขึ้นมาทำงานทันที
-document.addEventListener('shown.bs.modal', function (event) {
-    const activeModalId = event.target.id;
-    // ตรวจจับชื่อไอดีหน้าต่างวงล้อสุ่มของคุณ (รองรับทั้ง wheelModal, aiQuestionModal หรือหน้าต่างที่มีคำว่า wheel)
-    if (activeModalId === 'wheelModal' || activeModalId === 'aiQuestionModal' || activeModalId.toLowerCase().includes('wheel')) {
-        window.injectMinimizeButtonToModal(activeModalId);
-    }
-});
+// 4. 🌟 ระบบสแกนเบื้องหลังอัตโนมัติ (Background Scanner) เพื่อคอยตรวจจับฝังปุ่มย่อทันทีเมื่อหน้าต่างถูกเปิด
+setInterval(() => {
+    const activeModals = document.querySelectorAll('.modal.show');
+    activeModals.forEach(modalEl => {
+        const id = modalEl.id;
+        if (id === 'wheelModal' || id === 'aiQuestionModal' || id.toLowerCase().includes('wheel') || id.toLowerCase().includes('ai')) {
+            window.injectMinimizeButtonToModal(id);
+        }
+    });
+}, 1000);
